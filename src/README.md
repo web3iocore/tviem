@@ -130,7 +130,43 @@ const { txID } = await wallet.sendTrx({
 
 Prefer to build and sign **offline**? Every write action has a `buildX`
 counterpart that returns an unsigned transaction you can hand to
-`account.signTransaction(...)` yourself.
+`account.signTransaction(...)` yourself. Signing methods may return a
+`Promise`, so always `await` them:
+
+```ts
+const unsigned = await wallet.buildSendTrx({ to: 'T…', amount: parseTrx('1') })
+const signedTransaction = await account.signTransaction(unsigned)
+const { txid } = await wallet.broadcastTransaction({ signedTransaction })
+```
+
+### Sign with a wallet (custom async signer)
+
+`toAccount` turns any signer into an account — its methods may be sync or
+async. A wallet adapter should map the user declining a request onto
+`UserRejectedRequestError`; whatever a signer throws reaches your `await`
+unchanged, and nothing is broadcast.
+
+```ts
+import { toAccount, UserRejectedRequestError } from '@tronweb3/tviem'
+
+const account = toAccount({
+  address: 'T…',
+  publicKey: '0x04…',
+  async signTransaction(transaction) {
+    try {
+      return await injectedWallet.signTransaction(transaction)
+    } catch (error) {
+      if ((error as { code?: number }).code === 4001)
+        throw new UserRejectedRequestError({ cause: error as Error })
+      throw error
+    }
+  },
+  // These resolve to a `Signature` object (see `sign`); map
+  // rejections the same way.
+  signMessage: (parameters) => injectedWallet.signMessage(parameters),
+  signTypedData: (parameters) => injectedWallet.signTypedData(parameters),
+})
+```
 
 ## Package layout
 
