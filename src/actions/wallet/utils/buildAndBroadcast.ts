@@ -101,7 +101,7 @@ export async function buildAndBroadcast(
   })
 
   // Sign locally (recomputes txID, owner guard, txCheck, appends sig).
-  const signed = account.signTransaction(unsigned)
+  const signed = await account.signTransaction(unsigned)
 
   // Broadcast; the local txID is authoritative. The acknowledgement's `txid`
   // is that same local id (broadcastTransaction never reads the node's echo),

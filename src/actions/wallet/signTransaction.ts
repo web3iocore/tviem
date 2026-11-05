@@ -54,5 +54,5 @@ export async function signTransaction(
   const { transaction, account: source = client.account } = parameters
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
-  return account.signTransaction(transaction)
+  return await account.signTransaction(transaction)
 }

@@ -46,5 +46,5 @@ export async function signTypedData(
   const { account: source = client.account, ...rest } = parameters
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
-  return account.signTypedData(rest)
+  return await account.signTypedData(rest)
 }

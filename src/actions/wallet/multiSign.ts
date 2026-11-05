@@ -98,5 +98,5 @@ export async function multiSign(
     throw new BaseError(
       `The account (${account.address}) does not implement \`multiSign\`.`,
     )
-  return account.multiSign(transaction, { permissionId })
+  return await account.multiSign(transaction, { permissionId })
 }

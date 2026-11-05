@@ -45,5 +45,5 @@ export async function signMessage(
   const { account: source = client.account, ...rest } = parameters
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
-  return account.signMessage(rest)
+  return await account.signMessage(rest)
 }
