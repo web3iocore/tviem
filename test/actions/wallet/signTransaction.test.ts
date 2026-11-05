@@ -12,8 +12,15 @@ import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import {
   AccountNotFoundError,
+  TransactionTamperedError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
+import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
+import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
+import {
+  type RawData,
+  toRawDataHex,
+} from '../../../src/utils/transaction/serializeRawData.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
@@ -122,7 +129,7 @@ async function unhandledRejectionsDuring(fn: () => Promise<unknown>) {
   return seen
 }
 
-test('an async custom signer resolves to the transaction it produced', async () => {
+test('an async custom signer resolves to a checked copy of the transaction it produced', async () => {
   const { unsigned } = await buildUnsigned(pk1)
   const produced: SignableTransaction = {
     ...unsigned,
@@ -139,7 +146,9 @@ test('an async custom signer resolves to the transaction it produced', async () 
     transaction: unsigned,
     account,
   })
-  expect(result).toBe(produced)
+  // A snapshot of what the signer returned: equal, but never its own object.
+  expect(result).toStrictEqual(produced)
+  expect(result).not.toBe(produced)
   expect(seen).toEqual([unsigned])
   expect(calls).toHaveLength(0)
 })
@@ -259,4 +268,209 @@ test('a UserRejectedRequestError keeps its code and cause through the action', a
   expect(err).toBeInstanceOf(BaseError)
   expect(err.code).toBe(4001)
   expect(err.cause).toBe(cause)
+})
+
+// ---- What the signer hands back ---------------------------------------------
+// The action keeps only a checked snapshot of the signer's result. A wallet may
+// rebuild the transaction before signing (fresh TaPoS, a new expiration, an
+// adjusted fee_limit) — new bytes, new txID — and that must keep working. What
+// it may not do is return a transaction for another owner, or an unsigned one.
+
+/**
+ * `transaction` re-serialized with `patch` applied to its raw_data — a
+ * self-consistent triple, as a wallet that rebuilds before signing produces.
+ */
+function rebuilt(
+  transaction: SignableTransaction,
+  patch: Partial<RawData>,
+): SignableTransaction {
+  const raw_data_hex = toRawDataHex({ ...transaction.raw_data, ...patch })
+  const raw_data = decodeRawData(raw_data_hex)
+  return { txID: getTransactionId(raw_data), raw_data, raw_data_hex }
+}
+
+const walletPatch = {
+  ref_block_bytes: 'beef',
+  ref_block_hash: 'a1b2c3d4e5f60718',
+  expiration: 1_800_000_060_000,
+  fee_limit: 30_000_000,
+} as const
+
+test('a wallet that rebuilds the transaction before signing is accepted with its values', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  const local = privateKeyToAccount(pk1)
+  const expected = await local.signTransaction(rebuilt(unsigned, walletPatch))
+  const account = customAccountWith(async (transaction) =>
+    local.signTransaction(rebuilt(transaction, walletPatch)),
+  )
+  const { client, calls } = silentClient()
+
+  const signed = await signTransaction(client, {
+    transaction: unsigned,
+    account,
+  })
+  // The wallet's bytes win: a new txID, the refreshed fields, its signature.
+  expect(signed).toStrictEqual(expected)
+  expect(signed.txID).not.toBe(unsigned.txID)
+  expect(signed.raw_data_hex).not.toBe(unsigned.raw_data_hex)
+  expect(signed.raw_data.ref_block_bytes).toBe('beef')
+  expect(signed.raw_data.ref_block_hash).toBe('a1b2c3d4e5f60718')
+  expect(String(signed.raw_data.expiration)).toBe('1800000060000')
+  expect(String(signed.raw_data.fee_limit)).toBe('30000000')
+  expect(signed.signature).toHaveLength(1)
+  expect(calls).toHaveLength(0)
+})
+
+test('a signer that spells owner_address in Base58 is the same owner', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  const local = privateKeyToAccount(pk1)
+  const account = customAccountWith(async (transaction) => {
+    const signed = await local.signTransaction(transaction)
+    const contract = signed.raw_data.contract[0]!
+    const value = contract.parameter.value as { owner_address: string }
+    // Same bytes, owner re-spelled: raw_data_hex / txID still agree.
+    return {
+      ...signed,
+      raw_data: {
+        ...signed.raw_data,
+        contract: [
+          {
+            ...contract,
+            parameter: {
+              ...contract.parameter,
+              value: { ...value, owner_address: local.address },
+            },
+          },
+        ],
+      },
+    }
+  })
+  const { client } = silentClient()
+  const signed = await signTransaction(client, {
+    transaction: unsigned,
+    account,
+  })
+  expect(signed.txID).toBe(unsigned.txID)
+  expect(signed.signature).toHaveLength(1)
+})
+
+test('a signer returning a validly signed transaction for another owner is rejected', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  // pk2's own transfer, signed by pk2: consistent and genuinely signed, but
+  // not the account the caller asked to sign for.
+  const { unsigned: other } = await buildUnsigned(pk2)
+  const swapped = await privateKeyToAccount(pk2).signTransaction(other)
+  const account = customAccountWith(async () => swapped)
+  const { client, calls } = silentClient(account)
+
+  const err = (await client
+    .signTransaction({ transaction: unsigned })
+    .catch((e) => e)) as TransactionTamperedError
+  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(err.shortMessage).toMatch(/different owner_address/)
+  expect(calls).toHaveLength(0)
+})
+
+test('a signer returning an unsigned transaction is rejected', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  const { client } = silentClient()
+  for (const produced of [
+    { ...unsigned },
+    { ...unsigned, signature: [] },
+    rebuilt(unsigned, walletPatch),
+  ]) {
+    const err = (await signTransaction(client, {
+      transaction: unsigned,
+      account: customAccountWith(async () => produced),
+    }).catch((e) => e)) as TransactionTamperedError
+    expect(err).toBeInstanceOf(TransactionTamperedError)
+    expect(err.shortMessage).toMatch(/without a signature/)
+  }
+})
+
+test('a signer returning inconsistent bytes is rejected', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  const signed = await privateKeyToAccount(pk1).signTransaction(unsigned)
+  const { client } = silentClient()
+  const err = (await signTransaction(client, {
+    transaction: unsigned,
+    account: customAccountWith(async () => ({
+      ...signed,
+      txID: 'ab'.repeat(32),
+    })),
+  }).catch((e) => e)) as TransactionTamperedError
+  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(err.shortMessage).toMatch(/do not agree/)
+})
+
+test('the signer receives a copy: neither side mutating its object reaches the other', async () => {
+  const { unsigned } = await buildUnsigned(pk1)
+  const before = structuredClone(unsigned)
+  const local = privateKeyToAccount(pk1)
+  const pk2Hex = (
+    (await buildUnsigned(pk2)).unsigned.raw_data.contract[0]!.parameter
+      .value as { owner_address: string }
+  ).owner_address
+  let received: SignableTransaction | undefined
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  // An in-place signer: it signs, then attaches the signature to its argument
+  // and returns that same object — common in wallet adapters.
+  const account = customAccountWith(async (transaction) => {
+    received = transaction
+    await gate
+    const signed = await local.signTransaction(transaction)
+    transaction.signature = signed.signature!
+    return transaction
+  })
+  const { client } = silentClient()
+
+  const pending = signTransaction(client, { transaction: unsigned, account })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(received).toStrictEqual(before)
+  expect(received).not.toBe(unsigned)
+  // The caller retargets its own object while the wallet is still signing:
+  // the check runs against what the signer was handed, not this.
+  ;(
+    unsigned.raw_data.contract[0]!.parameter.value as { owner_address: string }
+  ).owner_address = pk2Hex
+  release()
+  const signed = await pending
+
+  expect(signed).toStrictEqual(
+    await local.signTransaction(structuredClone(before)),
+  )
+  expect(signed).not.toBe(received)
+  // The signer's in-place signature never reached the caller's object.
+  expect(unsigned.signature).toBeUndefined()
+
+  // Mutating either object afterwards leaves the returned snapshot intact.
+  const snapshot = structuredClone(signed)
+  received!.signature!.push('ff')
+  ;(unsigned.raw_data as { expiration?: number }).expiration = 1
+  expect(signed).toStrictEqual(snapshot)
+})
+
+test('a signer retargeting its own argument cannot move the owner check', async () => {
+  // The signer is handed a copy; rewriting that copy's owner_address to pk2
+  // and returning pk2's signed transfer must still be caught.
+  const { unsigned } = await buildUnsigned(pk1)
+  const { unsigned: other } = await buildUnsigned(pk2)
+  const swapped = await privateKeyToAccount(pk2).signTransaction(other)
+  const account = customAccountWith(async (transaction) => {
+    transaction.raw_data = structuredClone(other.raw_data)
+    transaction.raw_data_hex = other.raw_data_hex
+    transaction.txID = other.txID
+    return swapped
+  })
+  const { client } = silentClient()
+  const err = await signTransaction(client, {
+    transaction: unsigned,
+    account,
+  }).catch((e) => e)
+  expect(err).toBeInstanceOf(TransactionTamperedError)
+  // The caller's object is untouched either way.
+  expect(unsigned.txID).not.toBe(other.txID)
 })

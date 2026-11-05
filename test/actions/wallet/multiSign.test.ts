@@ -7,6 +7,7 @@ import type {
   SignableTransaction,
   TronLocalAccount,
 } from '../../../src/accounts/types.js'
+import { multiSignTransaction } from '../../../src/accounts/utils/multiSignTransaction.js'
 import { signTransaction } from '../../../src/accounts/utils/signTransaction.js'
 import { multiSign } from '../../../src/actions/wallet/multiSign.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
@@ -14,8 +15,10 @@ import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import {
   AccountNotFoundError,
+  TransactionTamperedError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
+import { addressToHex } from '../../../src/utils/address/addressToHex.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import { toRawDataHex } from '../../../src/utils/transaction/serializeRawData.js'
@@ -444,7 +447,7 @@ async function unhandledRejectionsDuring(fn: () => Promise<unknown>) {
   return seen
 }
 
-test('an async custom multiSign resolves to the transaction it produced', async () => {
+test('an async custom multiSign resolves to a checked copy of the transaction it produced', async () => {
   const { client, calls } = silentClient()
   const produced = { ...boundTriple(), signature: ['cd'.repeat(65)] }
   const seen: unknown[] = []
@@ -458,7 +461,9 @@ test('an async custom multiSign resolves to the transaction it produced', async 
     account,
     permissionId: 2,
   })
-  expect(result).toBe(produced)
+  // A snapshot of what the signer returned: equal, but never its own object.
+  expect(result).toStrictEqual(produced)
+  expect(result).not.toBe(produced)
   expect(seen).toEqual([[unboundTriple(), { permissionId: 2 }]])
   expect(calls).toHaveLength(0)
 })
@@ -620,4 +625,201 @@ test('the missing-multiSign guard still fires for an async custom source, before
   }
   expect(signed).toEqual([])
   expect(calls).toHaveLength(0)
+})
+
+// ---- What the co-signer hands back -----------------------------------------
+// On the `account` path the action keeps only a checked snapshot of what the
+// account's multiSign returned: consistent bytes, at least one signature, and
+// the same owner_address it was asked to co-sign. The co-signer itself need
+// not be that owner, and a fresh permission bind legitimately changes the
+// txID — both must keep working.
+
+/** The unbound transfer re-serialized for `owner` (hex) — another account's transaction. */
+function transferFor(
+  owner: ReturnType<typeof addressToHex>,
+): SignableTransaction {
+  const raw = unboundTriple().raw_data
+  const contract = raw.contract[0]!
+  const raw_data_hex = toRawDataHex({
+    ...raw,
+    contract: [
+      {
+        ...contract,
+        parameter: {
+          ...contract.parameter,
+          value: {
+            ...(contract.parameter.value as object),
+            owner_address: owner,
+          },
+        },
+      },
+    ],
+  })
+  const raw_data = decodeRawData(raw_data_hex)
+  return { txID: getTransactionId(raw_data), raw_data, raw_data_hex }
+}
+
+/** pk2's address as raw_data spells it (41-prefixed hex). */
+const pk2Owner = addressToHex(privateKeyToAccount(pk2).address)
+
+test('a non-owner co-signer account succeeds — the owner check is on owner_address, not the signer', async () => {
+  const { client, calls } = silentClient()
+  const inner = privateKeyToAccount(pk2)
+  const owner = (
+    local.raw_data.contract[0]!.parameter.value as { owner_address: string }
+  ).owner_address
+  expect(owner).not.toBe(pk2Owner) // pk1 owns it; pk2 only co-signs
+
+  for (const account of [
+    inner,
+    customAccountWith(asyncMultiSignOf(inner), inner),
+  ]) {
+    const second = await multiSign(client, { transaction: local, account })
+    expect(second).toStrictEqual(
+      multiSignTransaction({ transaction: local, privateKey: pk2 }),
+    )
+    expect(second.signature).toHaveLength(2)
+    expect(second.signature?.[0]).toBe(local.signature?.[0])
+    expect(second.txID).toBe(local.txID)
+  }
+  expect(calls).toHaveLength(0)
+})
+
+test('a fresh permission bind through an account succeeds though the txID changes', async () => {
+  const { client, calls } = silentClient()
+  const inner = privateKeyToAccount(pk2)
+  for (const account of [
+    inner,
+    customAccountWith(asyncMultiSignOf(inner), inner),
+  ]) {
+    const transaction = unboundTriple()
+    const signed = await multiSign(client, {
+      transaction,
+      account,
+      permissionId: 2,
+    })
+    expect(signed.txID).toBe(transferBound!.txID)
+    expect(signed.txID).not.toBe(transfer!.txID)
+    expect(signed.raw_data_hex).toBe(transferBound!.rawDataHex)
+    expect(signed.raw_data.contract[0]?.Permission_id).toBe(2)
+    expect(signed.signature).toHaveLength(1)
+    // The caller's handoff is untouched.
+    expect(transaction).toStrictEqual(unboundTriple())
+  }
+  expect(calls).toHaveLength(0)
+})
+
+test('a co-signer returning a validly signed transaction for another owner is rejected', async () => {
+  const { client, calls } = silentClient()
+  // pk2's own transfer, genuinely signed by pk2 — consistent bytes, a real
+  // signature, but not the owner the caller handed over.
+  const swapped = multiSignTransaction({
+    transaction: transferFor(pk2Owner),
+    privateKey: pk2,
+    permissionId: 2,
+  })
+  const err = (await multiSign(client, {
+    transaction: unboundTriple(),
+    account: customAccountWith(async () => swapped),
+    permissionId: 2,
+  }).catch((e) => e)) as TransactionTamperedError
+  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(err.shortMessage).toMatch(/different owner_address/)
+  expect(calls).toHaveLength(0)
+})
+
+test('a co-signer returning an unsigned transaction is rejected', async () => {
+  const { client } = silentClient()
+  for (const produced of [boundTriple(), { ...boundTriple(), signature: [] }]) {
+    const err = (await multiSign(client, {
+      transaction: unboundTriple(),
+      account: customAccountWith(async () => produced),
+      permissionId: 2,
+    }).catch((e) => e)) as TransactionTamperedError
+    expect(err).toBeInstanceOf(TransactionTamperedError)
+    expect(err.shortMessage).toMatch(/without a signature/)
+  }
+})
+
+test('the privateKey path is unchanged: the core result, no snapshot check', async () => {
+  const { client, calls } = silentClient()
+  const transaction = unboundTriple()
+  const viaAction = await multiSign(client, {
+    transaction,
+    privateKey: pk2,
+    permissionId: 2,
+  })
+  expect(viaAction).toStrictEqual(
+    multiSignTransaction({
+      transaction: unboundTriple(),
+      privateKey: pk2,
+      permissionId: 2,
+    }),
+  )
+  // A non-owner key co-signs the owner's bound bytes, as before.
+  expect(viaAction.txID).toBe(transferBound!.txID)
+  expect(transaction).toStrictEqual(unboundTriple())
+  // …and its own integrity guard still speaks, not the snapshot check.
+  await expect(
+    multiSign(client, {
+      transaction: { ...local, txID: 'ab'.repeat(32) },
+      privateKey: pk2,
+    }),
+  ).rejects.toThrow('The transaction failed its integrity check (txCheck).')
+  expect(calls).toHaveLength(0)
+})
+
+test('the co-signer receives a copy: neither side mutating its object reaches the other', async () => {
+  const { client } = silentClient()
+  const inner = privateKeyToAccount(pk2)
+  const transaction = boundTriple()
+  let received: SignableTransaction | undefined
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const pending = multiSign(client, {
+    transaction,
+    account: customAccountWith(async (handed, options) => {
+      received = handed
+      await gate
+      const signed = await inner.multiSign(handed, options)
+      // An in-place co-signer: attaches its signature to the argument.
+      handed.signature = signed.signature!
+      return handed
+    }),
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(received).toStrictEqual(boundTriple())
+  expect(received).not.toBe(transaction)
+  // The caller retargets its own object while the co-signer is signing.
+  ;(
+    transaction.raw_data.contract[0]!.parameter.value as {
+      owner_address: string
+    }
+  ).owner_address = 'ff'.repeat(21)
+  release()
+  const result = await pending
+
+  expect(result).toStrictEqual(await inner.multiSign(boundTriple()))
+  expect(result).not.toBe(received)
+  expect(transaction.signature).toBeUndefined()
+})
+
+test('a co-signer retargeting its own argument cannot move the owner check', async () => {
+  // The account is handed a copy; rewriting that copy to pk2's transfer and
+  // returning pk2's signed one must still be caught.
+  const { client } = silentClient()
+  const other = transferFor(pk2Owner)
+  const swapped = multiSignTransaction({ transaction: other, privateKey: pk2 })
+  const transaction = unboundTriple()
+  const err = await multiSign(client, {
+    transaction,
+    account: customAccountWith(async (handed) => {
+      Object.assign(handed, structuredClone(other))
+      return swapped
+    }),
+  }).catch((e) => e)
+  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(transaction).toStrictEqual(unboundTriple())
 })

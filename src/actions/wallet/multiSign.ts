@@ -19,6 +19,10 @@ import {
   parseAccount,
 } from '../../types/account.js'
 import type { Hex } from '../../types/misc.js'
+import {
+  type AssertSignedTransactionErrorType,
+  signWithCheck,
+} from '../utils/assertSignedTransaction.js'
 
 export type MultiSignParameters = {
   /** The transaction to co-sign — fresh or already carrying other signatures. */
@@ -49,6 +53,7 @@ export type MultiSignReturnType = SignableTransaction
 
 export type MultiSignErrorType =
   | AccountNotFoundErrorType
+  | AssertSignedTransactionErrorType
   | MultiSignTransactionErrorType
   | ParseAccountErrorType
   | BaseErrorType
@@ -94,9 +99,12 @@ export async function multiSign(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
   // Optional on a custom account: a caller-supplied signer may not co-sign.
-  if (typeof account.multiSign !== 'function')
+  const coSign = account.multiSign?.bind(account)
+  if (typeof coSign !== 'function')
     throw new BaseError(
       `The account (${account.address}) does not implement \`multiSign\`.`,
     )
-  return await account.multiSign(transaction, { permissionId })
+  return signWithCheck(transaction, (unsigned) =>
+    coSign(unsigned, { permissionId }),
+  )
 }
