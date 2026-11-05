@@ -2,19 +2,28 @@ import { expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../../../src/accounts/toAccount.js'
 import type {
+  SignableTransaction,
   TronAccount,
   TronCustomSource,
 } from '../../../../src/accounts/types.js'
 import { buildAndBroadcast } from '../../../../src/actions/wallet/utils/buildAndBroadcast.js'
 import { createPublicClient } from '../../../../src/clients/createPublicClient.js'
-import { UserRejectedRequestError } from '../../../../src/errors/rpc.js'
+import {
+  TransactionTamperedError,
+  UserRejectedRequestError,
+} from '../../../../src/errors/rpc.js'
 import { parseAccount } from '../../../../src/types/account.js'
 import { addressToHex } from '../../../../src/utils/address/addressToHex.js'
+import { getTransactionId } from '../../../../src/utils/transaction/getTransactionId.js'
 import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../../../src/utils/transaction/registry.js'
-import type { RawContract } from '../../../../src/utils/transaction/serializeRawData.js'
+import {
+  type RawContract,
+  type RawData,
+  toRawDataHex,
+} from '../../../../src/utils/transaction/serializeRawData.js'
 import { rpc } from '../../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../../mock/createMockTransport.js'
@@ -303,4 +312,204 @@ test('a sync custom signer that throws propagates the error and never broadcasts
   })
   expect(unhandled).toEqual([])
   expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
+})
+
+// ---------------------------------------------------------------------------
+// What the signer hands back (assertSignedTransaction). Wallets rebuild
+// transactions before signing (fresh ref_block_* / expiration, adjusted
+// fee_limit), so a re-derived txID for the SAME owner is broadcast and
+// returned as-is — that is the compatibility contract. A transaction for a
+// different owner, or one without a signature, is refused before any
+// broadcast; and the broadcast body and the returned txID come from one
+// snapshot of the signer's object, never two reads of it.
+// ---------------------------------------------------------------------------
+
+// pk = 2 → a second, unrelated fixture key (signs validly, wrong owner).
+const pk2 = `0x${'0'.repeat(63)}2` as const
+const other = privateKeyToAccount(pk2)
+
+/** Re-derives `raw_data_hex` and `txID` after patching `raw_data` — unsigned. */
+function rebuild(
+  transaction: SignableTransaction,
+  patch: (raw: RawData) => RawData,
+): SignableTransaction {
+  const raw_data = patch(structuredClone(transaction.raw_data))
+  return {
+    txID: getTransactionId(raw_data),
+    raw_data,
+    raw_data_hex: toRawDataHex(raw_data),
+  }
+}
+
+/** What a wallet does: new TaPoS reference, later expiration, own fee_limit. */
+const walletRebuild = (raw: RawData): RawData => ({
+  ...raw,
+  ref_block_bytes: 'abcd',
+  ref_block_hash: '1122334455667788',
+  expiration: BigInt(raw.expiration ?? 0) + 120_000n,
+  fee_limit: 30_000_000n,
+})
+
+/** Same transaction, every contract's owner swapped for pk2's address. */
+const reown = (raw: RawData): RawData => ({
+  ...raw,
+  contract: raw.contract.map((c) => ({
+    ...c,
+    parameter: {
+      ...c.parameter,
+      value: {
+        ...(c.parameter.value as object),
+        owner_address: addressToHex(other.address),
+      } as never,
+    },
+  })),
+})
+
+test('a wallet that rebuilds the transaction (same owner) is broadcast and its txID returned', async () => {
+  let rebuilt: SignableTransaction | undefined
+  let handed: SignableTransaction | undefined
+  const { response, body, mock } = await broadcastWith(
+    customSigner(async (tx) => {
+      await tick()
+      handed = tx
+      rebuilt = rebuild(tx, walletRebuild)
+      return local.signTransaction(rebuilt)
+    }),
+  )
+
+  expect(rebuilt).toBeDefined()
+  // A genuinely different transaction from the one handed to the signer.
+  expect(rebuilt?.txID).not.toBe(handed?.txID)
+  expect(rebuilt?.txID).not.toBe(bandwidth?.txID)
+
+  const raw = body as { txID: string; raw_data_hex: string }
+  const parsed = parseBroadcast(body)
+  expect(raw.txID).toBe(rebuilt?.txID)
+  expect(raw.raw_data_hex).toBe(rebuilt?.raw_data_hex)
+  expect(parsed.txID).toBe(rebuilt?.txID)
+  expect(parsed.raw_data.fee_limit).toBe(30_000_000)
+  expect(parsed.raw_data.ref_block_bytes).toBe('abcd')
+  expect(parsed.signature).toHaveLength(1)
+
+  expect(response.txID).toBe(rebuilt?.txID)
+  expect(response.transaction.txID).toBe(rebuilt?.txID)
+  expect(mock.calls.map((c) => c.path)).toEqual([
+    'getnowblock',
+    'broadcasttransaction',
+  ])
+})
+
+test('a sync wallet rebuild is accepted too (compat)', async () => {
+  let rebuilt: SignableTransaction | undefined
+  const { response, body } = await broadcastWith(
+    customSigner((tx) => {
+      rebuilt = rebuild(tx, walletRebuild)
+      return local.signTransaction(rebuilt)
+    }),
+  )
+  expect((body as { txID: string }).txID).toBe(rebuilt?.txID)
+  expect(response.txID).toBe(rebuilt?.txID)
+})
+
+test('a validly signed transaction for a different owner is refused and never broadcast', async () => {
+  const { transport, calls } = writeMock()
+  const client = createPublicClient({ transport })
+  const account = customSigner(async (tx) => {
+    await tick()
+    return other.signTransaction(rebuild(tx, reown))
+  })
+
+  const error = await buildAndBroadcast(client, {
+    contract: freezeContract(),
+    account,
+  }).catch((err: unknown) => err)
+
+  expect(error).toBeInstanceOf(TransactionTamperedError)
+  expect((error as TransactionTamperedError).shortMessage).toMatch(
+    /different owner_address/,
+  )
+  expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
+})
+
+test('a signer retargeting its own argument cannot move the owner check', async () => {
+  const { transport, calls } = writeMock()
+  const client = createPublicClient({ transport })
+  const account = customSigner(async (tx) => {
+    // Rewrite the handed object to another owner's transaction, then return
+    // that owner's validly signed copy of it.
+    const swapped = rebuild(tx, reown)
+    tx.raw_data = structuredClone(swapped.raw_data)
+    tx.raw_data_hex = swapped.raw_data_hex
+    tx.txID = swapped.txID
+    return other.signTransaction(swapped)
+  })
+
+  const error = await buildAndBroadcast(client, {
+    contract: freezeContract(),
+    account,
+  }).catch((err: unknown) => err)
+
+  expect(error).toBeInstanceOf(TransactionTamperedError)
+  expect((error as TransactionTamperedError).shortMessage).toMatch(
+    /different owner_address/,
+  )
+  expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
+})
+
+test.each([
+  [
+    'an empty signature list',
+    (tx: SignableTransaction) => ({ ...tx, signature: [] }),
+  ],
+  [
+    'no signature field',
+    ({ txID, raw_data, raw_data_hex }: SignableTransaction) => ({
+      txID,
+      raw_data,
+      raw_data_hex,
+    }),
+  ],
+])('a signer returning %s is refused and never broadcast', async (_, unsign) => {
+  const { transport, calls } = writeMock()
+  const client = createPublicClient({ transport })
+  const account = customSigner(async (tx) => {
+    await tick()
+    return unsign(await local.signTransaction(tx))
+  })
+
+  const error = await buildAndBroadcast(client, {
+    contract: freezeContract(),
+    account,
+  }).catch((err: unknown) => err)
+
+  expect(error).toBeInstanceOf(TransactionTamperedError)
+  expect((error as TransactionTamperedError).shortMessage).toMatch(
+    /without a signature/,
+  )
+  expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
+})
+
+test('a txID getter that changes on every read: broadcast and returned txID are one value', async () => {
+  const decoy = 'f'.repeat(64)
+  let reads = 0
+  const { response, body } = await broadcastWith(
+    customSigner(async (tx) => {
+      await tick()
+      const signed = await local.signTransaction(tx)
+      const real = signed.txID
+      Object.defineProperty(signed, 'txID', {
+        enumerable: true,
+        configurable: true,
+        get: () => (++reads === 1 ? real : decoy),
+      })
+      return signed
+    }),
+  )
+
+  // Read exactly once — by the snapshot — and that value is used everywhere.
+  expect(reads).toBe(1)
+  expect((body as { txID: string }).txID).toBe(bandwidth?.txID)
+  expect(response.txID).toBe(bandwidth?.txID)
+  expect(response.transaction.txID).toBe(bandwidth?.txID)
+  expect(response.txID).not.toBe(decoy)
 })

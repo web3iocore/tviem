@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../../src/accounts/toAccount.js'
 import type {
+  SignableTransaction,
   TronAccount,
   TronCustomSource,
 } from '../../../src/accounts/types.js'
@@ -10,9 +11,16 @@ import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import {
   AccountNotFoundError,
+  TransactionTamperedError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
+import { addressToHex } from '../../../src/utils/address/addressToHex.js'
+import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
+import {
+  type RawData,
+  toRawDataHex,
+} from '../../../src/utils/transaction/serializeRawData.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 import { parseBroadcast } from '../../mock/parseBroadcast.js'
@@ -302,4 +310,110 @@ test.each(
 
   expect(unhandled).toEqual([])
   expect(mock.calls.some((c) => c.path === 'broadcasttransaction')).toBe(false)
+})
+
+// ---------------------------------------------------------------------------
+// What the signer hands back (assertSignedTransaction). A wallet that
+// rebuilds the transaction before signing (new TaPoS reference, expiration,
+// fee_limit) for the same owner is broadcast as rebuilt and its txID
+// returned — the compatibility contract. A validly signed transaction for a
+// different owner, or one without a signature, is refused before broadcast.
+// ---------------------------------------------------------------------------
+
+// pk = 2 → a second, unrelated fixture key (signs validly, wrong owner).
+const other = privateKeyToAccount(`0x${'0'.repeat(63)}2`)
+
+/** Re-derives `raw_data_hex` and `txID` after patching `raw_data` — unsigned. */
+function rebuild(
+  transaction: SignableTransaction,
+  patch: (raw: RawData) => RawData,
+): SignableTransaction {
+  const raw_data = patch(structuredClone(transaction.raw_data))
+  return {
+    txID: getTransactionId(raw_data),
+    raw_data,
+    raw_data_hex: toRawDataHex(raw_data),
+  }
+}
+
+const walletRebuild = (raw: RawData): RawData => ({
+  ...raw,
+  ref_block_bytes: 'abcd',
+  ref_block_hash: '1122334455667788',
+  expiration: BigInt(raw.expiration ?? 0) + 120_000n,
+  fee_limit: 30_000_000n,
+})
+
+const reown = (raw: RawData): RawData => ({
+  ...raw,
+  contract: raw.contract.map((c) => ({
+    ...c,
+    parameter: {
+      ...c.parameter,
+      value: {
+        ...(c.parameter.value as object),
+        owner_address: addressToHex(other.address),
+      } as never,
+    },
+  })),
+})
+
+async function attemptsendTrx(account: TronAccount) {
+  const mock = writeMock()
+  const client = createWalletClient({ account, transport: mock.transport })
+  const outcome = await client.sendTrx({ to, amount: 1000000n }).then(
+    (result) => ({ result, error: undefined }),
+    (error: unknown) => ({ result: undefined, error }),
+  )
+  return { ...outcome, calls: mock.calls, bodyOf: mock.bodyOf }
+}
+
+test('sendTrx: a wallet that rebuilds the transaction (same owner) is broadcast and its txID returned', async () => {
+  let rebuilt: SignableTransaction | undefined
+  const outcome = await attemptsendTrx(
+    customSigner(async (tx) => {
+      await tick()
+      rebuilt = rebuild(tx, walletRebuild)
+      return local.signTransaction(rebuilt)
+    }),
+  )
+
+  expect(outcome.error).toBeUndefined()
+  expect(rebuilt?.txID).not.toBe(TX_ID)
+  const body = outcome.bodyOf('broadcasttransaction') as {
+    txID: string
+    raw_data_hex: string
+  }
+  expect(body.txID).toBe(rebuilt?.txID)
+  expect(body.raw_data_hex).toBe(rebuilt?.raw_data_hex)
+  expect(parseBroadcast(body).raw_data.fee_limit).toBe(30_000_000)
+  expect(outcome.result?.txID).toBe(rebuilt?.txID)
+})
+
+test('sendTrx: a validly signed transaction for a different owner is refused and never broadcast', async () => {
+  const outcome = await attemptsendTrx(
+    customSigner(async (tx) => {
+      await tick()
+      return other.signTransaction(rebuild(tx, reown))
+    }),
+  )
+  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
+  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+    /different owner_address/,
+  )
+  expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])
+})
+
+test('sendTrx: a signer returning an empty signature list is refused and never broadcast', async () => {
+  const outcome = await attemptsendTrx(
+    customSigner(async (tx) => {
+      await tick()
+      return { ...(await local.signTransaction(tx)), signature: [] }
+    }),
+  )
+  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
+  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+    /without a signature/,
+  )
+  expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])
 })

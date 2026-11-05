@@ -8,6 +8,10 @@ import type { ErrorType } from '../../../errors/utils.js'
 import { getAction } from '../../../utils/getAction.js'
 import type { RawContract } from '../../../utils/transaction/serializeRawData.js'
 import {
+  type AssertSignedTransactionErrorType,
+  signWithCheck,
+} from '../../utils/assertSignedTransaction.js'
+import {
   type BroadcastTransactionErrorType,
   broadcastTransaction,
 } from '../broadcastTransaction.js'
@@ -63,6 +67,7 @@ export type BuildAndBroadcastReturnType = {
 }
 
 export type BuildAndBroadcastErrorType =
+  | AssertSignedTransactionErrorType
   | BroadcastTransactionErrorType
   | BuildTransactionErrorType
   | SignTransactionErrorType
@@ -100,8 +105,12 @@ export async function buildAndBroadcast(
     expirationMs,
   })
 
-  // Sign locally (recomputes txID, owner guard, txCheck, appends sig).
-  const signed = await account.signTransaction(unsigned)
+  // Sign, then work only from a checked snapshot of what the signer returned:
+  // a wallet may rebuild the transaction (new txID), but never for another
+  // owner, and everything below — broadcast, returned txID — reads one copy.
+  const signed = await signWithCheck(unsigned, (transaction) =>
+    account.signTransaction(transaction),
+  )
 
   // Broadcast; the local txID is authoritative. The acknowledgement's `txid`
   // is that same local id (broadcastTransaction never reads the node's echo),
