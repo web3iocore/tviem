@@ -18,5 +18,5 @@ coverage
 .idea
 .pnpm-store
 
-# local agent workspace (internal design docs live in .claude/docs)
+# local agent workspace
 .claude/
