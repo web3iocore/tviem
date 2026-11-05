@@ -306,3 +306,25 @@ export class TransactionTamperedError extends BaseError {
     )
   }
 }
+
+/**
+ * The user declined a signing request in their wallet (EIP-1193 code `4001`).
+ * The SDK never raises this itself — a wallet adapter (e.g. one wrapping
+ * TronLink or TronWallet Adapter into a `TronCustomSource`) maps the wallet's
+ * rejection onto it, so callers can tell a declined request from a failure.
+ * The wallet's original error rides along as `cause`.
+ */
+export type UserRejectedRequestErrorType = UserRejectedRequestError & {
+  name: 'UserRejectedRequestError'
+}
+export class UserRejectedRequestError extends BaseError {
+  static code = 4001 as const
+  readonly code = UserRejectedRequestError.code
+
+  constructor({ cause }: { cause?: BaseError | Error | undefined } = {}) {
+    super('User rejected the request.', {
+      cause,
+      name: 'UserRejectedRequestError',
+    })
+  }
+}

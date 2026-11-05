@@ -727,6 +727,8 @@ export {
   type TransactionTamperedErrorType,
   TronRpcError,
   type TronRpcErrorType,
+  UserRejectedRequestError,
+  type UserRejectedRequestErrorType,
   WaitForTransactionReceiptTimeoutError,
   type WaitForTransactionReceiptTimeoutErrorType,
 } from './errors/rpc.js'

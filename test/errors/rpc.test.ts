@@ -9,6 +9,7 @@ import {
   TransactionExpiredError,
   TransactionTamperedError,
   TronRpcError,
+  UserRejectedRequestError,
   WaitForTransactionReceiptTimeoutError,
 } from '../../src/errors/rpc.js'
 
@@ -181,4 +182,45 @@ test('TransactionTamperedError omits absent fields from its metaMessages', () =>
   const err = new TransactionTamperedError({ localTxId: 'aaaa1111' })
   expect(err.metaMessages).toEqual(['Local txID: aaaa1111'])
   expect(new TransactionTamperedError().metaMessages).toEqual([])
+})
+
+test('UserRejectedRequestError is a BaseError with code 4001 (static and instance)', () => {
+  const err = new UserRejectedRequestError()
+  expect(err).toBeInstanceOf(BaseError)
+  expect(err).toBeInstanceOf(Error)
+  expect(err.name).toBe('UserRejectedRequestError')
+  expect(err.shortMessage).toBe('User rejected the request.')
+  expect(err.message).toContain('User rejected the request.')
+  expect(UserRejectedRequestError.code).toBe(4001)
+  expect(err.code).toBe(4001)
+  expect(err.code).toBe(UserRejectedRequestError.code)
+  // No cause: nothing to walk to and no details line.
+  expect(err.cause).toBeUndefined()
+  expect(err.walk()).toBe(err)
+  expect(err.message).not.toContain('Details:')
+})
+
+test('UserRejectedRequestError carries the wallet error as cause (details / walk)', () => {
+  const walletErr = Object.assign(new Error('User rejected the signature'), {
+    code: 4001,
+  })
+  const err = new UserRejectedRequestError({ cause: walletErr })
+  expect(err.cause).toBe(walletErr)
+  // details is derived from the cause's message.
+  expect(err.details).toBe('User rejected the signature')
+  expect(err.message).toContain('Details: User rejected the signature')
+  // walk() reaches the innermost wallet error; a predicate can find either.
+  expect(err.walk()).toBe(walletErr)
+  expect(err.walk((e) => e instanceof UserRejectedRequestError)).toBe(err)
+  expect(err.walk((e) => e === walletErr)).toBe(walletErr)
+
+  // A BaseError cause contributes its own details.
+  const inner = new TronRpcError('inner', { details: 'inner detail' })
+  const wrapped = new UserRejectedRequestError({ cause: inner })
+  expect(wrapped.details).toBe('inner detail')
+  expect(wrapped.walk()).toBe(inner)
+
+  // Wrapping it in another error still lets a caller find the rejection.
+  const outer = new CallExecutionError(err)
+  expect(outer.walk((e) => e instanceof UserRejectedRequestError)).toBe(err)
 })

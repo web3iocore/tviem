@@ -92,3 +92,11 @@ test('root barrel exposes createTransport / createWalletClient / node errors', (
   expect(new mod.TronNodeError('boom')).toBeInstanceOf(mod.BaseError)
   expect(new mod.AccountNotFoundError()).toBeInstanceOf(mod.BaseError)
 })
+
+test('root barrel exposes UserRejectedRequestError as a BaseError subclass', () => {
+  const err = new mod.UserRejectedRequestError()
+  expect(err).toBeInstanceOf(mod.BaseError)
+  expect(err.name).toBe('UserRejectedRequestError')
+  expect(mod.UserRejectedRequestError.code).toBe(4001)
+  expect(err.code).toBe(4001)
+})
