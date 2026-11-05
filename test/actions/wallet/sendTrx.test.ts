@@ -1,8 +1,17 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
+import { toAccount } from '../../../src/accounts/toAccount.js'
+import type {
+  TronAccount,
+  TronCustomSource,
+} from '../../../src/accounts/types.js'
 import { sendTrx } from '../../../src/actions/wallet/sendTrx.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
-import { AccountNotFoundError } from '../../../src/errors/rpc.js'
+import {
+  AccountNotFoundError,
+  UserRejectedRequestError,
+} from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
@@ -179,4 +188,118 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
   await expect(
     sendTrx(client, { to, amount: 1000000n }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+// ---------------------------------------------------------------------------
+// Async signers (MaybePromise signing surface). The signed transaction an
+// async custom signer resolves to is what gets broadcast — byte-identical to
+// the sync local account — a sync custom signer keeps working, and a
+// rejection surfaces to the caller's await without a broadcast or an
+// unhandledRejection.
+// ---------------------------------------------------------------------------
+
+const local = privateKeyToAccount(pk1)
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+function customSigner(signTransaction: TronCustomSource['signTransaction']) {
+  return toAccount({
+    address: local.address,
+    publicKey: local.publicKey,
+    signMessage: local.signMessage,
+    signTypedData: local.signTypedData,
+    signTransaction,
+  })
+}
+
+const asyncSigner = () =>
+  customSigner(async (tx) => {
+    await tick()
+    return local.signTransaction(tx)
+  })
+const syncSigner = () => customSigner((tx) => local.signTransaction(tx))
+
+/** Runs `run`, flushes a macrotask, and returns every unhandledRejection seen. */
+async function collectUnhandledRejections(run: () => Promise<void>) {
+  const seen: unknown[] = []
+  const onUnhandled = (reason: unknown) => seen.push(reason)
+  process.on('unhandledRejection', onUnhandled)
+  try {
+    await run()
+    await tick()
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+  }
+  return seen
+}
+
+const rejections = [
+  ['a plain Error', () => new Error('signer exploded')],
+  [
+    'a UserRejectedRequestError',
+    () => new UserRejectedRequestError({ cause: new Error('wallet: denied') }),
+  ],
+] as const
+
+async function runsendTrx(account: TronAccount) {
+  const mock = writeMock()
+  const client = createWalletClient({ account, transport: mock.transport })
+  const result = await client.sendTrx({ to, amount: 1000000n })
+  return {
+    result,
+    body: mock.bodyOf('broadcasttransaction'),
+    calls: mock.calls,
+  }
+}
+
+test('sendTrx: an async custom signer broadcasts the same bytes as the local account', async () => {
+  const sync = await runsendTrx(local)
+  const async_ = await runsendTrx(asyncSigner())
+
+  expect(async_.body).toEqual(sync.body)
+  expect(parseBroadcast(async_.body).signature).toEqual(
+    parseBroadcast(sync.body).signature,
+  )
+  expect(async_.result.txID).toBe(sync.result.txID)
+  expect(async_.result.txID).toBe(TX_ID)
+  expect(parseBroadcast(async_.body).signature).toEqual([SIG])
+  expect(async_.calls.map((c) => c.path)).toEqual([
+    'getnowblock',
+    'broadcasttransaction',
+  ])
+})
+
+test('sendTrx: a sync custom signer still works byte-for-byte (compat)', async () => {
+  const sync = await runsendTrx(local)
+  const custom = await runsendTrx(syncSigner())
+  expect(custom.body).toEqual(sync.body)
+  expect(custom.result).toEqual(sync.result)
+})
+
+test.each(
+  rejections,
+)('sendTrx: an async signer rejecting with %s propagates it unchanged and never broadcasts', async (_, makeError) => {
+  const error = makeError()
+  const account = customSigner(async () => {
+    await tick()
+    throw error
+  })
+  const mock = writeMock()
+  const client = createWalletClient({ account, transport: mock.transport })
+
+  const unhandled = await collectUnhandledRejections(async () => {
+    let caught: unknown
+    try {
+      await client.sendTrx({ to, amount: 1000000n })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBe(error)
+    if (error instanceof UserRejectedRequestError) {
+      expect(caught).toBeInstanceOf(UserRejectedRequestError)
+      expect((caught as UserRejectedRequestError).code).toBe(4001)
+    }
+  })
+
+  expect(unhandled).toEqual([])
+  expect(mock.calls.some((c) => c.path === 'broadcasttransaction')).toBe(false)
 })

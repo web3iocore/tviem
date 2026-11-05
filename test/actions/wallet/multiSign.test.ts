@@ -2,13 +2,20 @@ import { expect, test } from 'vitest'
 import { mnemonicToAccount } from '../../../src/accounts/mnemonicToAccount.js'
 import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../../src/accounts/toAccount.js'
-import type { SignableTransaction } from '../../../src/accounts/types.js'
+import type {
+  AccountMultiSignFn,
+  SignableTransaction,
+  TronLocalAccount,
+} from '../../../src/accounts/types.js'
 import { signTransaction } from '../../../src/accounts/utils/signTransaction.js'
 import { multiSign } from '../../../src/actions/wallet/multiSign.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { BaseError } from '../../../src/errors/base.js'
-import { AccountNotFoundError } from '../../../src/errors/rpc.js'
+import {
+  AccountNotFoundError,
+  UserRejectedRequestError,
+} from '../../../src/errors/rpc.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import { toRawDataHex } from '../../../src/utils/transaction/serializeRawData.js'
@@ -392,4 +399,225 @@ test('throws AccountNotFoundError when no signer is available', async () => {
   await expect(
     multiSign(client, { transaction: unboundTriple(), permissionId: 2 }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+// ---- MaybePromise signers --------------------------------------------------
+// An account's `multiSign` may return the co-signed transaction directly
+// (key-backed accounts) or as a Promise (wallets, hardware, KMS). The action
+// awaits it, so both kinds resolve to the same bytes, and a rejection reaches
+// the caller without anything being sent to the node.
+
+/** A custom account whose `multiSign` is `impl`, other members from `inner`. */
+function customAccountWith(
+  impl: AccountMultiSignFn | undefined,
+  inner: TronLocalAccount = privateKeyToAccount(pk2),
+) {
+  return toAccount({
+    address: inner.address,
+    publicKey: inner.publicKey,
+    signMessage: inner.signMessage,
+    signTypedData: inner.signTypedData,
+    signTransaction: inner.signTransaction,
+    ...(impl ? { multiSign: impl } : {}),
+  })
+}
+
+/** Defers `inner.multiSign` across a macrotask, as a remote signer would. */
+function asyncMultiSignOf(inner: TronLocalAccount): AccountMultiSignFn {
+  return async (transaction, options) => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return inner.multiSign(transaction, options)
+  }
+}
+
+/** Runs `fn`, flushes a macrotask, and returns any unhandled rejections seen. */
+async function unhandledRejectionsDuring(fn: () => Promise<unknown>) {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on('unhandledRejection', listener)
+  try {
+    await fn()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  } finally {
+    process.off('unhandledRejection', listener)
+  }
+  return seen
+}
+
+test('an async custom multiSign resolves to the transaction it produced', async () => {
+  const { client, calls } = silentClient()
+  const produced = { ...boundTriple(), signature: ['cd'.repeat(65)] }
+  const seen: unknown[] = []
+  const account = customAccountWith(async (transaction, options) => {
+    seen.push([transaction, options])
+    return produced
+  })
+
+  const result = await multiSign(client, {
+    transaction: unboundTriple(),
+    account,
+    permissionId: 2,
+  })
+  expect(result).toBe(produced)
+  expect(seen).toEqual([[unboundTriple(), { permissionId: 2 }]])
+  expect(calls).toHaveLength(0)
+})
+
+test('an async multiSign wrapping a key is byte-identical to the sync local account', async () => {
+  const { client, calls } = silentClient()
+  const viaKey = await multiSign(client, {
+    transaction: unboundTriple(),
+    privateKey: pk1,
+    permissionId: 2,
+  })
+  const viaLocal = await privateKeyToAccount(pk1).multiSign(unboundTriple(), {
+    permissionId: 2,
+  })
+  const inner = privateKeyToAccount(pk1)
+  const viaAsync = await multiSign(client, {
+    transaction: unboundTriple(),
+    account: customAccountWith(asyncMultiSignOf(inner), inner),
+    permissionId: 2,
+  })
+
+  expect(viaAsync).toEqual(viaKey)
+  expect(viaAsync).toEqual(viaLocal)
+  // …and identical to the Permission_id=2 gold vector, signed directly.
+  expect(viaAsync.raw_data_hex).toBe(transferBound!.rawDataHex)
+  expect(viaAsync.txID).toBe(transferBound!.txID)
+  expect(viaAsync.signature).toEqual(local.signature)
+
+  // A later async co-signer appends to the bound handoff, inheriting id 2.
+  const pk2Account = privateKeyToAccount(pk2)
+  const second = await multiSign(client, {
+    transaction: viaAsync,
+    account: customAccountWith(asyncMultiSignOf(pk2Account), pk2Account),
+  })
+  expect(second).toEqual(
+    await multiSign(client, { transaction: local, privateKey: pk2 }),
+  )
+  expect(second.signature).toHaveLength(2)
+  expect(calls).toHaveLength(0)
+})
+
+test('a client-hoisted async multiSign account works like a per-call one', async () => {
+  const inner = privateKeyToAccount(pk2)
+  const account = customAccountWith(asyncMultiSignOf(inner), inner)
+  const expected = await inner.multiSign(unboundTriple(), { permissionId: 2 })
+
+  const { transport, calls } = createMockTransport({ responses: {} })
+  const hoisted = createWalletClient({ account, transport })
+  expect(
+    await hoisted.multiSign({ transaction: unboundTriple(), permissionId: 2 }),
+  ).toEqual(expected)
+  expect(
+    await multiSign(hoisted, { transaction: unboundTriple(), permissionId: 2 }),
+  ).toEqual(expected)
+
+  const perCall = createWalletClient({ transport })
+  expect(
+    await perCall.multiSign({
+      transaction: unboundTriple(),
+      account,
+      permissionId: 2,
+    }),
+  ).toEqual(expected)
+  expect(calls).toHaveLength(0)
+})
+
+test('an async multiSign rejection propagates the same error object, never unhandled', async () => {
+  const rejected = new UserRejectedRequestError({
+    cause: new Error('declined in wallet'),
+  })
+  const plain = new Error('device disconnected')
+  for (const [error, impl] of [
+    [
+      rejected,
+      async () => {
+        throw rejected
+      },
+    ],
+    [plain, () => Promise.reject(plain)],
+    [
+      plain,
+      () => {
+        throw plain
+      },
+    ],
+  ] as const) {
+    const { transport, calls } = createMockTransport({ responses: {} })
+    const client = createWalletClient({
+      account: customAccountWith(impl),
+      transport,
+    })
+    let caught: unknown
+    const unhandled = await unhandledRejectionsDuring(async () => {
+      try {
+        await client.multiSign({
+          transaction: unboundTriple(),
+          permissionId: 2,
+        })
+      } catch (e) {
+        caught = e
+      }
+    })
+    expect(caught).toBe(error)
+    expect(unhandled).toEqual([])
+    expect(calls).toHaveLength(0)
+  }
+})
+
+test('a UserRejectedRequestError from multiSign keeps its code and cause', async () => {
+  const { client } = silentClient()
+  const cause = new Error('declined in wallet')
+  const err = (await multiSign(client, {
+    transaction: unboundTriple(),
+    account: customAccountWith(async () => {
+      throw new UserRejectedRequestError({ cause })
+    }),
+    permissionId: 2,
+  }).catch((e) => e)) as UserRejectedRequestError
+  expect(err).toBeInstanceOf(UserRejectedRequestError)
+  expect(err).toBeInstanceOf(BaseError)
+  expect(err.code).toBe(4001)
+  expect(err.cause).toBe(cause)
+})
+
+test('the missing-multiSign guard still fires for an async custom source, before any signing', async () => {
+  // A wallet-style source: async signers, no multiSign. The guard must refuse
+  // up front — never fall back to signTransaction — hoisted or per-call.
+  const inner = privateKeyToAccount(pk2)
+  const signed: unknown[] = []
+  const account = toAccount({
+    address: inner.address,
+    publicKey: inner.publicKey,
+    signMessage: async (parameters) => inner.signMessage(parameters),
+    signTypedData: async (parameters) => inner.signTypedData(parameters),
+    signTransaction: async (transaction) => {
+      signed.push(transaction)
+      return inner.signTransaction(transaction)
+    },
+  })
+  expect(account.multiSign).toBeUndefined()
+
+  const { transport, calls } = createMockTransport({ responses: {} })
+  for (const run of [
+    () =>
+      multiSign(createWalletClient({ transport }), {
+        transaction: unboundTriple(),
+        account,
+        permissionId: 2,
+      }),
+    () =>
+      createWalletClient({ account, transport }).multiSign({
+        transaction: unboundTriple(),
+        permissionId: 2,
+      }),
+  ]) {
+    const err = (await run().catch((e) => e)) as BaseError
+    expect(err).toBeInstanceOf(BaseError)
+    expect(err.message).toContain('does not implement `multiSign`')
+  }
+  expect(signed).toEqual([])
+  expect(calls).toHaveLength(0)
 })

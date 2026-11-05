@@ -1,10 +1,18 @@
 import type { Abi } from 'abitype'
 import { expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
+import { toAccount } from '../../../src/accounts/toAccount.js'
+import type {
+  TronAccount,
+  TronCustomSource,
+} from '../../../src/accounts/types.js'
 import { deployContract } from '../../../src/actions/wallet/deployContract.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
-import { AccountNotFoundError } from '../../../src/errors/rpc.js'
+import {
+  AccountNotFoundError,
+  UserRejectedRequestError,
+} from '../../../src/errors/rpc.js'
 import type { Hex } from '../../../src/types/misc.js'
 import { addressToHex } from '../../../src/utils/address/addressToHex.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -193,4 +201,139 @@ test('throws AccountNotFoundError when no account is available', async () => {
   await expect(
     deployContract(client, { abi: [], bytecode: '0x60' }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+// ---------------------------------------------------------------------------
+// Async signers (MaybePromise signing surface). The signed transaction an
+// async custom signer resolves to is what gets broadcast — byte-identical to
+// the sync local account — a sync custom signer keeps working, and a
+// rejection surfaces to the caller's await without a broadcast or an
+// unhandledRejection.
+// ---------------------------------------------------------------------------
+
+const local = privateKeyToAccount(pk1)
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+function customSigner(signTransaction: TronCustomSource['signTransaction']) {
+  return toAccount({
+    address: local.address,
+    publicKey: local.publicKey,
+    signMessage: local.signMessage,
+    signTypedData: local.signTypedData,
+    signTransaction,
+  })
+}
+
+const asyncSigner = () =>
+  customSigner(async (tx) => {
+    await tick()
+    return local.signTransaction(tx)
+  })
+const syncSigner = () => customSigner((tx) => local.signTransaction(tx))
+
+/** Runs `run`, flushes a macrotask, and returns every unhandledRejection seen. */
+async function collectUnhandledRejections(run: () => Promise<void>) {
+  const seen: unknown[] = []
+  const onUnhandled = (reason: unknown) => seen.push(reason)
+  process.on('unhandledRejection', onUnhandled)
+  try {
+    await run()
+    await tick()
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+  }
+  return seen
+}
+
+const rejections = [
+  ['a plain Error', () => new Error('signer exploded')],
+  [
+    'a UserRejectedRequestError',
+    () => new UserRejectedRequestError({ cause: new Error('wallet: denied') }),
+  ],
+] as const
+
+async function rundeployContract(account: TronAccount) {
+  const mock = writeMock()
+  const client = createWalletClient({ account, transport: mock.transport })
+  const result = await deployContract(client, {
+    abi: deployValueOf(basic!).abi,
+    bytecode: `0x${deployValueOf(basic!).bytecode}` as Hex,
+    name: deployValueOf(basic!).name,
+    consumeUserResourcePercent: BigInt(
+      deployValueOf(basic!).consume_user_resource_percent,
+    ),
+    originEnergyLimit: BigInt(deployValueOf(basic!).origin_energy_limit),
+    feeLimit: 1000000000n,
+  })
+  return {
+    result,
+    body: mock.bodyOf('broadcasttransaction'),
+    calls: mock.calls,
+  }
+}
+
+test('deployContract: an async custom signer broadcasts the same bytes as the local account', async () => {
+  const sync = await rundeployContract(local)
+  const async_ = await rundeployContract(asyncSigner())
+
+  expect(async_.body).toEqual(sync.body)
+  expect(parseBroadcast(async_.body).signature).toEqual(
+    parseBroadcast(sync.body).signature,
+  )
+  expect(async_.result.txID).toBe(sync.result.txID)
+  expect(async_.result.txID).toBe(basic?.txID)
+  expect(async_.result.contractAddress).toBe(sync.result.contractAddress)
+  expect(addressToHex(async_.result.contractAddress)).toBe(
+    basic?.contractAddress,
+  )
+  expect(async_.calls.map((c) => c.path)).toEqual([
+    'getnowblock',
+    'broadcasttransaction',
+  ])
+})
+
+test('deployContract: a sync custom signer still works byte-for-byte (compat)', async () => {
+  const sync = await rundeployContract(local)
+  const custom = await rundeployContract(syncSigner())
+  expect(custom.body).toEqual(sync.body)
+  expect(custom.result).toEqual(sync.result)
+})
+
+test.each(
+  rejections,
+)('deployContract: an async signer rejecting with %s propagates it unchanged and never broadcasts', async (_, makeError) => {
+  const error = makeError()
+  const account = customSigner(async () => {
+    await tick()
+    throw error
+  })
+  const mock = writeMock()
+  const client = createWalletClient({ account, transport: mock.transport })
+
+  const unhandled = await collectUnhandledRejections(async () => {
+    let caught: unknown
+    try {
+      await deployContract(client, {
+        abi: deployValueOf(basic!).abi,
+        bytecode: `0x${deployValueOf(basic!).bytecode}` as Hex,
+        name: deployValueOf(basic!).name,
+        consumeUserResourcePercent: BigInt(
+          deployValueOf(basic!).consume_user_resource_percent,
+        ),
+        originEnergyLimit: BigInt(deployValueOf(basic!).origin_energy_limit),
+        feeLimit: 1000000000n,
+      })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBe(error)
+    if (error instanceof UserRejectedRequestError) {
+      expect(caught).toBeInstanceOf(UserRejectedRequestError)
+      expect((caught as UserRejectedRequestError).code).toBe(4001)
+    }
+  })
+
+  expect(unhandled).toEqual([])
+  expect(mock.calls.some((c) => c.path === 'broadcasttransaction')).toBe(false)
 })
