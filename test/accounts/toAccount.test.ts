@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../src/accounts/toAccount.js'
@@ -28,14 +28,14 @@ const canonicalTransaction = () => {
 }
 
 describe('toAccount', () => {
-  test('from a 0x hex private key: delegates to privateKeyToAccount', () => {
+  test('from a 0x hex private key: delegates to privateKeyToAccount', async () => {
     const account = toAccount(pk1)
     expect(account.address).toBe(pk1Address)
     expect(account.source).toBe('privateKey')
     expect(account.type).toBe('local')
-    expect(account.signMessage({ message: 'hello world' }).serialized).toBe(
-      helloWorldSig,
-    )
+    expect(
+      (await account.signMessage({ message: 'hello world' })).serialized,
+    ).toBe(helloWorldSig)
     // No raw-digest signer: blind signing is not part of the account surface.
     expect('sign' in account).toBe(false)
   })
@@ -60,7 +60,7 @@ describe('toAccount', () => {
     expect(account.publicKey).toBe(base.publicKey)
   })
 
-  test('a custom account delegates signing to the supplied functions', () => {
+  test('a custom account delegates signing to the supplied functions', async () => {
     const base = privateKeyToAccount(pk1)
     const account = toAccount({
       address: base.address,
@@ -69,15 +69,15 @@ describe('toAccount', () => {
       signTypedData: base.signTypedData,
       signTransaction: base.signTransaction,
     })
-    expect(account.signMessage({ message: 'hello world' }).serialized).toBe(
-      helloWorldSig,
-    )
-    const signed = account.signTransaction(canonicalTransaction())
+    expect(
+      (await account.signMessage({ message: 'hello world' })).serialized,
+    ).toBe(helloWorldSig)
+    const signed = await account.signTransaction(canonicalTransaction())
     expect(signed.txID).toBe(txID)
     expect(signed.signature).toEqual([canonicalSig])
   })
 
-  test('a class-instance source keeps the signing methods on its prototype', () => {
+  test('a class-instance source keeps the signing methods on its prototype', async () => {
     // The natural shape of a wallet adapter: state on the instance (here a
     // private field), signing methods on the prototype, reaching that state
     // through `this`. Copying only own properties drops every method; copying
@@ -109,12 +109,12 @@ describe('toAccount', () => {
     const account = toAccount(new Signer())
 
     expect(account.address).toBe(pk1Address)
-    expect(account.signMessage({ message: 'hello world' }).serialized).toBe(
-      helloWorldSig,
-    )
-    expect(account.signTransaction(canonicalTransaction()).signature).toEqual([
-      canonicalSig,
-    ])
+    expect(
+      (await account.signMessage({ message: 'hello world' })).serialized,
+    ).toBe(helloWorldSig)
+    expect(
+      (await account.signTransaction(canonicalTransaction())).signature,
+    ).toEqual([canonicalSig])
     expect(account.multiSign).toBeTypeOf('function')
   })
 
@@ -162,4 +162,262 @@ test('pins the address it type-checked, not a later read', () => {
   } as unknown as TronCustomSource
   const account = toAccount(source)
   expect(account.address).toBe('TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC')
+})
+
+describe('toAccount: sync / async custom-source compatibility', () => {
+  const typedData = {
+    domain: { name: 'Example', version: '1', chainId: 728126428n },
+    types: { Msg: [{ name: 'text', type: 'string' }] },
+    primaryType: 'Msg',
+    message: { text: 'hi' },
+  } as const
+
+  /** A source whose every method resolves on a later microtask. */
+  const asyncSourceOf = (
+    base: ReturnType<typeof privateKeyToAccount>,
+  ): TronCustomSource => ({
+    address: base.address,
+    publicKey: base.publicKey,
+    signMessage: async (parameters) => base.signMessage(parameters),
+    signTypedData: async (parameters) => base.signTypedData(parameters),
+    signTransaction: async (transaction) => base.signTransaction(transaction),
+    multiSign: async (transaction, options) =>
+      base.multiSign(transaction, options),
+  })
+
+  const unhandled = vi.fn()
+  afterEach(() => {
+    process.off('unhandledRejection', unhandled)
+    unhandled.mockReset()
+  })
+  const watchUnhandled = () => process.on('unhandledRejection', unhandled)
+  const flushMacrotask = () => new Promise((r) => setTimeout(r, 0))
+
+  test('a sync source stays synchronous: results are returned, not Promises', () => {
+    const base = privateKeyToAccount(pk1)
+    const account = toAccount({
+      address: base.address,
+      publicKey: base.publicKey,
+      signMessage: base.signMessage,
+      signTypedData: base.signTypedData,
+      signTransaction: base.signTransaction,
+      multiSign: base.multiSign,
+    })
+
+    const message = account.signMessage({ message: 'hello world' })
+    const typed = account.signTypedData(typedData)
+    const tx = account.signTransaction(canonicalTransaction())
+    const multi = account.multiSign!(canonicalTransaction())
+    for (const result of [message, typed, tx, multi])
+      expect(result).not.toBeInstanceOf(Promise)
+
+    // Byte-for-byte what the key-backed account itself returns.
+    expect(message).toEqual(base.signMessage({ message: 'hello world' }))
+    expect((message as Awaited<typeof message>).serialized).toBe(helloWorldSig)
+    expect(typed).toEqual(base.signTypedData(typedData))
+    expect(tx).toEqual(base.signTransaction(canonicalTransaction()))
+    expect((tx as Awaited<typeof tx>).signature).toEqual([canonicalSig])
+    expect(multi).toEqual(base.multiSign(canonicalTransaction()))
+  })
+
+  test('a fully async source resolves to the same results as a sync one', async () => {
+    const base = privateKeyToAccount(pk1)
+    const account = toAccount(asyncSourceOf(base))
+
+    const message = account.signMessage({ message: 'hello world' })
+    expect(message).toBeInstanceOf(Promise)
+    expect(await message).toEqual(
+      await base.signMessage({ message: 'hello world' }),
+    )
+    expect((await message).serialized).toBe(helloWorldSig)
+    expect(await account.signTypedData(typedData)).toEqual(
+      await base.signTypedData(typedData),
+    )
+    const signed = await account.signTransaction(canonicalTransaction())
+    expect(signed.txID).toBe(txID)
+    expect(signed.signature).toEqual([canonicalSig])
+    expect(signed).toEqual(await base.signTransaction(canonicalTransaction()))
+  })
+
+  test('a mixed source (some methods async, some sync) works method by method', async () => {
+    const base = privateKeyToAccount(pk1)
+    const account = toAccount({
+      address: base.address,
+      publicKey: base.publicKey,
+      signMessage: async (parameters) => base.signMessage(parameters),
+      signTypedData: base.signTypedData,
+      signTransaction: base.signTransaction,
+    })
+
+    const message = account.signMessage({ message: 'hello world' })
+    expect(message).toBeInstanceOf(Promise)
+    expect((await message).serialized).toBe(helloWorldSig)
+
+    const tx = account.signTransaction(canonicalTransaction())
+    expect(tx).not.toBeInstanceOf(Promise)
+    expect((await tx).signature).toEqual([canonicalSig])
+    expect(await account.signTypedData(typedData)).toEqual(
+      await base.signTypedData(typedData),
+    )
+  })
+
+  test('an async multiSign resolves to the same co-signed transaction', async () => {
+    const base = privateKeyToAccount(pk1)
+    const account = toAccount(asyncSourceOf(base))
+    const unsigned = canonicalTransaction()
+
+    const pending = account.multiSign!(unsigned, { permissionId: 2 })
+    expect(pending).toBeInstanceOf(Promise)
+    const signed = await pending
+    expect(signed).toEqual(
+      await base.multiSign(canonicalTransaction(), { permissionId: 2 }),
+    )
+    expect(signed.signature).toHaveLength(1)
+  })
+
+  test('a class-based async source keeps `this` across awaits', async () => {
+    class AsyncSigner {
+      readonly #inner = privateKeyToAccount(pk1)
+      readonly address = this.#inner.address
+      readonly publicKey = this.#inner.publicKey
+      calls: string[] = []
+      async #tick() {
+        await new Promise((r) => setTimeout(r, 0))
+      }
+      async signMessage(
+        parameters: Parameters<TronCustomSource['signMessage']>[0],
+      ) {
+        await this.#tick()
+        this.calls.push('signMessage')
+        return this.#inner.signMessage(parameters)
+      }
+      async signTypedData(
+        parameters: Parameters<TronCustomSource['signTypedData']>[0],
+      ) {
+        await this.#tick()
+        this.calls.push('signTypedData')
+        return this.#inner.signTypedData(parameters)
+      }
+      async signTransaction(
+        transaction: Parameters<TronCustomSource['signTransaction']>[0],
+      ) {
+        await this.#tick()
+        this.calls.push('signTransaction')
+        return this.#inner.signTransaction(transaction)
+      }
+      async multiSign(
+        ...args: Parameters<NonNullable<TronCustomSource['multiSign']>>
+      ) {
+        await this.#tick()
+        this.calls.push('multiSign')
+        return this.#inner.multiSign(...args)
+      }
+    }
+
+    const signer = new AsyncSigner()
+    const account = toAccount(signer)
+    const { signMessage, signTransaction, multiSign } = account
+
+    // Detached from the account object: still bound to the signer.
+    expect((await signMessage({ message: 'hello world' })).serialized).toBe(
+      helloWorldSig,
+    )
+    expect((await account.signTypedData(typedData)).serialized).toBe(
+      (await privateKeyToAccount(pk1).signTypedData(typedData)).serialized,
+    )
+    expect((await signTransaction(canonicalTransaction())).signature).toEqual([
+      canonicalSig,
+    ])
+    expect((await multiSign!(canonicalTransaction())).signature).toHaveLength(1)
+    expect(signer.calls).toEqual([
+      'signMessage',
+      'signTypedData',
+      'signTransaction',
+      'multiSign',
+    ])
+  })
+
+  test('a rejecting async source propagates the original error object unchanged', async () => {
+    watchUnhandled()
+    class WalletRejected extends Error {
+      code = 4001
+    }
+    const base = privateKeyToAccount(pk1)
+    const errors = {
+      signMessage: new WalletRejected('message rejected'),
+      signTypedData: new WalletRejected('typed data rejected'),
+      signTransaction: new WalletRejected('transaction rejected'),
+      multiSign: new WalletRejected('multisig rejected'),
+    }
+    const account = toAccount({
+      address: base.address,
+      publicKey: base.publicKey,
+      signMessage: async () => {
+        throw errors.signMessage
+      },
+      signTypedData: () => Promise.reject(errors.signTypedData),
+      signTransaction: async () => {
+        await new Promise((r) => setTimeout(r, 0))
+        throw errors.signTransaction
+      },
+      multiSign: async () => {
+        throw errors.multiSign
+      },
+    })
+
+    // Same object identity: not wrapped, not re-created.
+    await expect(account.signMessage({ message: 'x' })).rejects.toBe(
+      errors.signMessage,
+    )
+    await expect(account.signTypedData(typedData)).rejects.toBe(
+      errors.signTypedData,
+    )
+    let caught: unknown
+    try {
+      await account.signTransaction(canonicalTransaction())
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBe(errors.signTransaction)
+    expect((caught as WalletRejected).code).toBe(4001)
+    await expect(account.multiSign!(canonicalTransaction())).rejects.toBe(
+      errors.multiSign,
+    )
+
+    await flushMacrotask()
+    expect(unhandled).not.toHaveBeenCalled()
+  })
+
+  test('a source that throws synchronously still throws synchronously', async () => {
+    watchUnhandled()
+    const base = privateKeyToAccount(pk1)
+    const boom = new Error('device locked')
+    const account = toAccount({
+      address: base.address,
+      publicKey: base.publicKey,
+      signMessage: () => {
+        throw boom
+      },
+      signTypedData: base.signTypedData,
+      signTransaction: () => {
+        throw boom
+      },
+    })
+
+    // Unchanged from the sync-only contract: a plain call throws...
+    expect(() => account.signMessage({ message: 'x' })).toThrow(boom)
+    expect(() => account.signTransaction(canonicalTransaction())).toThrow(boom)
+
+    // ...and an awaiting caller catches the very same object.
+    let caught: unknown
+    try {
+      await account.signTransaction(canonicalTransaction())
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBe(boom)
+
+    await flushMacrotask()
+    expect(unhandled).not.toHaveBeenCalled()
+  })
 })

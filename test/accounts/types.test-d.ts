@@ -7,10 +7,12 @@ import type {
   TronAccount,
   TronCustomAccount,
   TronCustomSource,
+  TronHDAccount,
   TronLocalAccount,
 } from '../../src/accounts/types.js'
 import type { Address } from '../../src/types/address.js'
 import type { Hex } from '../../src/types/misc.js'
+import type { MaybePromise } from '../../src/types/utils.js'
 import type { Signature } from '../../src/utils/signature/sign.js'
 import type { RawData } from '../../src/utils/transaction/serializeRawData.js'
 
@@ -31,21 +33,112 @@ test('account fields are branded/narrowed', () => {
   expectTypeOf(account.type).toEqualTypeOf<'local'>()
 })
 
-test('signing methods are synchronous and return a TRON-wire Signature', () => {
+test('signing methods are typed MaybePromise; the awaited value is the TRON-wire Signature / SignableTransaction', async () => {
   const account = privateKeyToAccount(
     '0x0000000000000000000000000000000000000000000000000000000000000001',
   )
+  // Every account — key-backed included — is typed `MaybePromise<T>`, so
+  // callers always `await`; key-backed accounts happen to resolve sync.
+  expectTypeOf(account.signMessage({ message: 'gm' })).toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
   expectTypeOf(
-    account.signMessage({ message: 'gm' }),
+    await account.signMessage({ message: 'gm' }),
+  ).toEqualTypeOf<Signature>()
+  expectTypeOf(
+    account.signTypedData({ types: {}, primaryType: 'X' }),
+  ).toEqualTypeOf<MaybePromise<Signature>>()
+  expectTypeOf(
+    await account.signTypedData({ types: {}, primaryType: 'X' }),
   ).toEqualTypeOf<Signature>()
   const transaction: SignableTransaction = {
     txID: 'ab',
     raw_data: {} as RawData,
     raw_data_hex: 'ab',
   }
+  expectTypeOf(account.signTransaction(transaction)).toEqualTypeOf<
+    MaybePromise<SignableTransaction>
+  >()
   expectTypeOf(
-    account.signTransaction(transaction),
+    await account.signTransaction(transaction),
   ).toEqualTypeOf<SignableTransaction>()
+  expectTypeOf(account.multiSign(transaction)).toEqualTypeOf<
+    MaybePromise<SignableTransaction>
+  >()
+  expectTypeOf(
+    await account.multiSign(transaction),
+  ).toEqualTypeOf<SignableTransaction>()
+})
+
+test('TronCustomSource signer methods are typed MaybePromise', () => {
+  expectTypeOf<ReturnType<TronCustomSource['signMessage']>>().toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
+  expectTypeOf<ReturnType<TronCustomSource['signTypedData']>>().toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
+  expectTypeOf<ReturnType<TronCustomSource['signTransaction']>>().toEqualTypeOf<
+    MaybePromise<SignableTransaction>
+  >()
+  expectTypeOf<
+    ReturnType<NonNullable<TronCustomSource['multiSign']>>
+  >().toEqualTypeOf<MaybePromise<SignableTransaction>>()
+})
+
+test('compat: key-backed accounts remain assignable to TronCustomSource', () => {
+  expectTypeOf<TronLocalAccount>().toExtend<TronCustomSource>()
+  expectTypeOf<TronHDAccount>().toExtend<TronCustomSource>()
+  const local = privateKeyToAccount(
+    '0x0000000000000000000000000000000000000000000000000000000000000001',
+  )
+  const source: TronCustomSource = local
+  expectTypeOf(toAccount(source)).toEqualTypeOf<TronCustomAccount>()
+})
+
+test('compat: sync and async object literals are both assignable to TronCustomSource', () => {
+  const signature = {} as Signature
+  const signed = {} as SignableTransaction
+  const syncSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    signMessage: () => signature,
+    signTypedData: () => signature,
+    signTransaction: () => signed,
+  }
+  const asyncSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    signMessage: async () => signature,
+    signTypedData: async () => signature,
+    signTransaction: async () => signed,
+    multiSign: async () => signed,
+  }
+  expectTypeOf(syncSource).toExtend<TronCustomSource>()
+  expectTypeOf(asyncSource).toExtend<TronCustomSource>()
+  const asLiteral: TronCustomSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    async signMessage() {
+      return signature
+    },
+    async signTypedData() {
+      return signature
+    },
+    async signTransaction(transaction) {
+      return transaction
+    },
+  }
+  expectTypeOf(toAccount(asLiteral)).toEqualTypeOf<TronCustomAccount>()
+  // A Promise of the wrong value is still rejected.
+  const wrong: TronCustomSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    // @ts-expect-error — must resolve to a Signature, not a string.
+    signMessage: async () => '0xdead',
+    signTypedData: async () => signature,
+    signTransaction: async () => signed,
+  }
+  void wrong
 })
 
 test('SignableTransaction requires the full triple — partial forms are a type error', () => {

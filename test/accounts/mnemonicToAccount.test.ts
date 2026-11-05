@@ -97,9 +97,9 @@ describe('mnemonicToAccount', () => {
     expect(hdKey.publicExtendedKey.startsWith('xpub')).toBe(true)
   })
 
-  test('the derived account can sign messages and typed data', () => {
+  test('the derived account can sign messages and typed data', async () => {
     const account = mnemonicToAccount(mnemonic)
-    const signature = account.signMessage({ message: 'gm from HD' })
+    const signature = await account.signMessage({ message: 'gm from HD' })
     expect(
       verifyMessage({
         message: 'gm from HD',
@@ -114,7 +114,7 @@ describe('mnemonicToAccount', () => {
       primaryType: 'Msg',
       message: { text: 'hi' },
     } as const
-    const tdSig = account.signTypedData(typedData)
+    const tdSig = await account.signTypedData(typedData)
     expect(
       verifyTypedData({
         ...typedData,
@@ -153,5 +153,35 @@ describe('hdKeyToAccount / generateMnemonic', () => {
     expect(account.source).toBe('hd')
     // 24-word phrase (256-bit entropy).
     expect(generateMnemonic(256).split(' ')).toHaveLength(24)
+  })
+})
+
+describe('sync compatibility (signer surface typed MaybePromise)', () => {
+  // HD accounts are key-backed: typed `MaybePromise<Signature>`, but they
+  // still resolve synchronously, and awaiting yields the identical value.
+  const isThenable = (value: unknown) =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+
+  test('signMessage / signTypedData return synchronously; awaiting is identical', async () => {
+    const account = mnemonicToAccount(mnemonic)
+    const message = account.signMessage({ message: 'gm from HD' })
+    expect(isThenable(message)).toBe(false)
+    expect(await account.signMessage({ message: 'gm from HD' })).toEqual(
+      message,
+    )
+    expect(await message).toBe(message)
+
+    const typedData = {
+      domain: { name: 'Example', version: '1', chainId: 728126428n },
+      types: { Msg: [{ name: 'text', type: 'string' }] },
+      primaryType: 'Msg',
+      message: { text: 'hi' },
+    } as const
+    const typed = account.signTypedData(typedData)
+    expect(isThenable(typed)).toBe(false)
+    expect(await account.signTypedData(typedData)).toEqual(typed)
+    expect(await typed).toBe(typed)
   })
 })

@@ -8,6 +8,7 @@ import type {
 } from '../../src/accounts/types.js'
 import type { Address } from '../../src/types/address.js'
 import type { Hex, SignableMessage } from '../../src/types/misc.js'
+import type { MaybePromise } from '../../src/types/utils.js'
 import type { Signature } from '../../src/utils/signature/sign.js'
 
 // pk=1, in both accepted input forms.
@@ -52,12 +53,17 @@ test('privateKeyToAccount: signMessage method signature', () => {
   const account = privateKeyToAccount(pk0x)
 
   expectTypeOf(account.signMessage).toEqualTypeOf<
-    (parameters: AccountSignMessageParameters) => Signature
+    (parameters: AccountSignMessageParameters) => MaybePromise<Signature>
   >()
   expectTypeOf(account.signMessage)
     .parameter(0)
     .toEqualTypeOf<AccountSignMessageParameters>()
-  expectTypeOf(account.signMessage).returns.toEqualTypeOf<Signature>()
+  expectTypeOf(account.signMessage).returns.toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.signMessage>>
+  >().toEqualTypeOf<Signature>()
 
   // the message input is the `SignableMessage` union
   expectTypeOf<
@@ -69,30 +75,38 @@ test('privateKeyToAccount: signTypedData method signature', () => {
   const account = privateKeyToAccount(pk0x)
 
   expectTypeOf(account.signTypedData).toEqualTypeOf<
-    (parameters: AccountSignTypedDataParameters) => Signature
+    (parameters: AccountSignTypedDataParameters) => MaybePromise<Signature>
   >()
   expectTypeOf(account.signTypedData)
     .parameter(0)
     .toEqualTypeOf<AccountSignTypedDataParameters>()
-  expectTypeOf(account.signTypedData).returns.toEqualTypeOf<Signature>()
+  expectTypeOf(account.signTypedData).returns.toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.signTypedData>>
+  >().toEqualTypeOf<Signature>()
 })
 
 test('privateKeyToAccount: signTransaction method signature', () => {
   const account = privateKeyToAccount(pk0x)
 
   expectTypeOf(account.signTransaction).toEqualTypeOf<
-    (transaction: SignableTransaction) => SignableTransaction
+    (transaction: SignableTransaction) => MaybePromise<SignableTransaction>
   >()
   expectTypeOf(account.signTransaction)
     .parameter(0)
     .toEqualTypeOf<SignableTransaction>()
-  expectTypeOf(
-    account.signTransaction,
-  ).returns.toEqualTypeOf<SignableTransaction>()
+  expectTypeOf(account.signTransaction).returns.toEqualTypeOf<
+    MaybePromise<SignableTransaction>
+  >()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.signTransaction>>
+  >().toEqualTypeOf<SignableTransaction>()
 })
 
-test('privateKeyToAccount: returned Signature shape (r/s/v/hex/serialized)', () => {
-  const sig = privateKeyToAccount(pk0x).signMessage({ message: 'gm' })
+test('privateKeyToAccount: returned Signature shape (r/s/v/hex/serialized)', async () => {
+  const sig = await privateKeyToAccount(pk0x).signMessage({ message: 'gm' })
 
   expectTypeOf(sig).toEqualTypeOf<Signature>()
   expectTypeOf(sig.r).toEqualTypeOf<Hex>()
@@ -101,4 +115,14 @@ test('privateKeyToAccount: returned Signature shape (r/s/v/hex/serialized)', () 
   expectTypeOf(sig.recovery).toEqualTypeOf<number>()
   expectTypeOf(sig.hex).toEqualTypeOf<string>()
   expectTypeOf(sig.serialized).toEqualTypeOf<Hex>()
+})
+
+test('privateKeyToAccount: multiSign is typed MaybePromise; awaited is the transaction', () => {
+  const account = privateKeyToAccount(pk0x)
+  expectTypeOf(account.multiSign).returns.toEqualTypeOf<
+    MaybePromise<SignableTransaction>
+  >()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.multiSign>>
+  >().toEqualTypeOf<SignableTransaction>()
 })

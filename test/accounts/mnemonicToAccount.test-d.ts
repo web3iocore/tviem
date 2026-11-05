@@ -2,9 +2,15 @@ import type { HDKey } from '@scure/bip32'
 import { expectTypeOf, test } from 'vitest'
 import { hdKeyToAccount } from '../../src/accounts/hdKeyToAccount.js'
 import { mnemonicToAccount } from '../../src/accounts/mnemonicToAccount.js'
-import type { TronAccount, TronHDAccount } from '../../src/accounts/types.js'
+import type {
+  SignableTransaction,
+  TronAccount,
+  TronCustomSource,
+  TronHDAccount,
+} from '../../src/accounts/types.js'
 import type { Address } from '../../src/types/address.js'
 import type { Hex } from '../../src/types/misc.js'
+import type { MaybePromise } from '../../src/types/utils.js'
 import type { Signature } from '../../src/utils/signature/sign.js'
 
 const mnemonic =
@@ -28,14 +34,32 @@ test('HD account fields are branded/narrowed', () => {
   expectTypeOf(account.getHdKey).toEqualTypeOf<() => HDKey>()
 })
 
-test('HD account exposes the full signing surface', () => {
+test('HD account exposes the full signing surface', async () => {
   const account = mnemonicToAccount(mnemonic)
-  expectTypeOf(
-    account.signMessage({ message: 'gm' }),
-  ).toEqualTypeOf<Signature>()
+  // Typed MaybePromise (like every account); the awaited value is concrete.
+  expectTypeOf(account.signMessage({ message: 'gm' })).toEqualTypeOf<
+    MaybePromise<Signature>
+  >()
   expectTypeOf(
     account.signTypedData({ types: {}, primaryType: 'X' }),
+  ).toEqualTypeOf<MaybePromise<Signature>>()
+  expectTypeOf(
+    await account.signMessage({ message: 'gm' }),
   ).toEqualTypeOf<Signature>()
+  expectTypeOf(
+    await account.signTypedData({ types: {}, primaryType: 'X' }),
+  ).toEqualTypeOf<Signature>()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.signTransaction>>
+  >().toEqualTypeOf<SignableTransaction>()
+  expectTypeOf<
+    Awaited<ReturnType<typeof account.multiSign>>
+  >().toEqualTypeOf<SignableTransaction>()
+})
+
+test('an HD account remains assignable to TronCustomSource', () => {
+  expectTypeOf(mnemonicToAccount(mnemonic)).toExtend<TronCustomSource>()
+  expectTypeOf<TronHDAccount>().toExtend<TronCustomSource>()
 })
 
 test('path option is restricted to the TRON coin type', () => {

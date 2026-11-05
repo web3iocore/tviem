@@ -1,6 +1,7 @@
 import type { HDKey } from '@scure/bip32'
 import type { Address } from '../types/address.js'
 import type { Hex, SignableMessage } from '../types/misc.js'
+import type { MaybePromise } from '../types/utils.js'
 import type { HashTypedDataParameters } from '../utils/signature/hashTypedData.js'
 import type { Signature } from '../utils/signature/sign.js'
 import type { RawData } from '../utils/transaction/serializeRawData.js'
@@ -64,17 +65,20 @@ export type AccountMultiSignOptions = {
  * An account's `multiSign`: adds this signer's signature to a multi-signature
  * transaction under a permission id — binding the id into the bytes when it
  * is fresh — and returns the co-signed transaction. Unlike `signTransaction`,
- * the signer need not be the transaction's `owner_address`.
+ * the signer need not be the transaction's `owner_address`. May resolve
+ * asynchronously (see {@link TronCustomSource}).
  */
 export type AccountMultiSignFn = (
   transaction: SignableTransaction,
   options?: AccountMultiSignOptions,
-) => SignableTransaction
+) => MaybePromise<SignableTransaction>
 
 /**
- * The signing surface shared by every account. Local (private-key) accounts
- * are implemented today; remote/delegated signers land in v0.1c. All methods
- * are synchronous for locally held keys.
+ * The signing surface shared by every account. Each method may return its
+ * result directly or as a `Promise` — wallets, hardware signers and KMS
+ * backends resolve asynchronously — so callers always `await` it. Key-backed
+ * accounts happen to resolve synchronously today, but are typed the same way
+ * so that may change without breaking callers.
  *
  * Deliberately, there is NO raw-digest `sign({ hash })`: signing an opaque
  * 32-byte hash is blind signing — the signer cannot know what it authorizes.
@@ -88,11 +92,17 @@ export type TronCustomSource = {
   /** The uncompressed secp256k1 public key (`0x04…`, 65 bytes). */
   publicKey: Hex
   /** Signs a message per TIP-191. */
-  signMessage: (parameters: AccountSignMessageParameters) => Signature
+  signMessage: (
+    parameters: AccountSignMessageParameters,
+  ) => MaybePromise<Signature>
   /** Signs TIP-712 typed structured data. */
-  signTypedData: (parameters: AccountSignTypedDataParameters) => Signature
+  signTypedData: (
+    parameters: AccountSignTypedDataParameters,
+  ) => MaybePromise<Signature>
   /** Signs a transaction, appending to its `signature` list. */
-  signTransaction: (transaction: SignableTransaction) => SignableTransaction
+  signTransaction: (
+    transaction: SignableTransaction,
+  ) => MaybePromise<SignableTransaction>
   /**
    * Co-signs a multi-signature transaction under a permission id (see
    * {@link AccountMultiSignFn}). Optional for custom sources — a source that
