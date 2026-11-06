@@ -7,8 +7,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC (the fixture owner).
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 // Same gold vector as cancelAllUnfreezeV2 — the build half must produce the
 // identical bytes / id (it is exactly what the full action signs).
@@ -27,7 +28,7 @@ function buildMock() {
 
 test('builds the canonical cancel-all-unfreeze-v2 in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildCancelAllUnfreezeV2(client, {})
 
@@ -45,7 +46,7 @@ test('builds the canonical cancel-all-unfreeze-v2 in TronWeb JSON shape, unsigne
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildCancelAllUnfreezeV2(client, {
     blockHeader: {
@@ -63,7 +64,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data.contract[0].type is the node string CancelAllUnfreezeV2Contract', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildCancelAllUnfreezeV2(client, {})
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
@@ -81,7 +82,7 @@ test('raw_data.contract[0].type is the node string CancelAllUnfreezeV2Contract',
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildCancelAllUnfreezeV2(client, { permissionId: 2 })
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {

@@ -1,8 +1,4 @@
-import type {
-  AccountKey,
-  SignableTransaction,
-  TronAccount,
-} from '../../accounts/types.js'
+import type { SignableTransaction, TronAccount } from '../../accounts/types.js'
 import {
   type MultiSignTransactionErrorType,
   multiSignTransaction,
@@ -18,6 +14,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
 import {
   type AssertSignedTransactionErrorType,
@@ -36,10 +33,11 @@ export type MultiSignParameters = {
    * sign actions. Its own `multiSign` does the signing, so an HD or custom
    * (key-less) account co-signs without its key ever being extracted.
    */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /**
    * A signer's secp256k1 private key, `0x`-prefixed or bare hex — the raw-key
-   * calling convention, equivalent to passing the same string as `account`.
+   * calling convention, equivalent to passing `privateKeyToAccount(key)` as
+   * `account`.
    * Names the signer outright, so it takes precedence over a hoisted
    * `client.account`; passing it together with `account` throws.
    */

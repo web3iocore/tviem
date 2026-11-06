@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { BaseError } from '../../errors/base.js'
 import {
@@ -10,6 +10,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -36,7 +37,7 @@ import {
 
 export type VoteProposalParameters = {
   /** The signing (voter) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Id of the proposal to vote on. */
   proposalId: bigint | number
   /**

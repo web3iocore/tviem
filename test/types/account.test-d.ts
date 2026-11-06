@@ -1,33 +1,44 @@
 import { expectTypeOf, test } from 'vitest'
 import type {
-  AccountKey,
+  JsonRpcAccount,
   TronAccount,
   TronLocalAccount,
 } from '../../src/accounts/types.js'
 import { type ParseAccount, parseAccount } from '../../src/types/account.js'
+import type { Address } from '../../src/types/address.js'
 import type { Hex } from '../../src/types/misc.js'
 
-// pk=1, in both accepted input forms.
+// pk=1, in both private-key string forms, and its Base58Check address.
 const pk0x =
   '0x0000000000000000000000000000000000000000000000000000000000000001'
 const pkBare =
   '0000000000000000000000000000000000000000000000000000000000000001'
+const pk1Address = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
-test('AccountKey: both private-key string forms are assignable', () => {
-  expectTypeOf(pk0x).toExtend<AccountKey>()
-  expectTypeOf(pkBare).toExtend<AccountKey>()
-  expectTypeOf<Hex>().toExtend<AccountKey>()
-  expectTypeOf<string>().toExtend<AccountKey>()
+test('parseAccount: an address resolves to JsonRpcAccount of that literal', () => {
+  expectTypeOf(parseAccount(pk1Address)).toEqualTypeOf<
+    JsonRpcAccount<typeof pk1Address>
+  >()
+  const address: Address = pk1Address
+  expectTypeOf(parseAccount(address)).toEqualTypeOf<JsonRpcAccount>()
 })
 
-test('parseAccount: either private-key form resolves to TronLocalAccount', () => {
-  expectTypeOf(parseAccount(pk0x)).toEqualTypeOf<TronLocalAccount>()
-  expectTypeOf(parseAccount(pkBare)).toEqualTypeOf<TronLocalAccount>()
+test('parseAccount: a private-key string or plain string is rejected', () => {
+  // @ts-expect-error a 0x private key is not an account source
+  parseAccount(pk0x)
+  // @ts-expect-error a bare-hex private key is not an account source
+  parseAccount(pkBare)
+  // @ts-expect-error a `Hex` value is not an account source
+  parseAccount('0x01' as Hex)
+  // @ts-expect-error a plain string is not an account source
+  parseAccount('' as string)
 })
 
 test('parseAccount: an already-built account passes through unchanged', () => {
   const account = {} as TronLocalAccount
   expectTypeOf(parseAccount(account)).toEqualTypeOf<TronLocalAccount>()
+  const jsonRpc = {} as JsonRpcAccount
+  expectTypeOf(parseAccount(jsonRpc)).toEqualTypeOf<JsonRpcAccount>()
 })
 
 test('parseAccount: non-string sources that are not accounts are rejected', () => {
@@ -35,10 +46,14 @@ test('parseAccount: non-string sources that are not accounts are rejected', () =
   parseAccount(123)
 })
 
-test('ParseAccount: string sources infer TronLocalAccount; the rest pass through', () => {
-  expectTypeOf<ParseAccount<typeof pkBare>>().toEqualTypeOf<TronLocalAccount>()
-  expectTypeOf<ParseAccount<Hex>>().toEqualTypeOf<TronLocalAccount>()
-  expectTypeOf<ParseAccount<AccountKey>>().toEqualTypeOf<TronLocalAccount>()
+test('ParseAccount: address sources infer JsonRpcAccount; the rest pass through', () => {
+  expectTypeOf<ParseAccount<Address>>().toEqualTypeOf<JsonRpcAccount>()
+  expectTypeOf<ParseAccount<typeof pk1Address>>().toEqualTypeOf<
+    JsonRpcAccount<typeof pk1Address>
+  >()
   expectTypeOf<ParseAccount<TronAccount>>().toEqualTypeOf<TronAccount>()
   expectTypeOf<ParseAccount<undefined>>().toEqualTypeOf<undefined>()
+  // A non-address string is not an address source, so it is not mapped to
+  // an account (parseAccount itself refuses it — see above).
+  expectTypeOf<ParseAccount<typeof pkBare>>().toEqualTypeOf<typeof pkBare>()
 })

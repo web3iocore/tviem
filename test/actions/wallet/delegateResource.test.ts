@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { delegateResource } from '../../../src/actions/wallet/delegateResource.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -12,6 +13,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 const receiver = 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K' as Address
 
 const [unlocked, locked] = loadTxFixtureFile('delegate-resource-contract.json')
@@ -27,7 +29,7 @@ function writeMock() {
 
 test('delegates BANDWIDTH (lock=false) byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await delegateResource(client, {
     receiverAddress: receiver,
@@ -55,7 +57,7 @@ test('delegates BANDWIDTH (lock=false) byte-for-byte against the gold vector', a
 
 test('delegates ENERGY with lock + lock_period byte-for-byte', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await delegateResource(client, {
     receiverAddress: receiver,
@@ -74,7 +76,7 @@ test('delegates ENERGY with lock + lock_period byte-for-byte', async () => {
 
 test('omitting lock matches the unlocked vector (lock=false is not encoded)', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await delegateResource(client, {
     receiverAddress: receiver,
@@ -93,7 +95,7 @@ test('resolves the per-call account when the client hoists none', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
   const { txID } = await delegateResource(client, {
-    account: pk1,
+    account,
     receiverAddress: receiver,
     balance: 1000000n,
     resource: 'BANDWIDTH',

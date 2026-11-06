@@ -12,8 +12,7 @@ import {
 import type { Address } from '../../../src/types/address.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1 (permitted trivial key).
 const caller = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC' as Address
 const pk1Hex = '417e5f4552091a69125d5dfcb7b8c2659029395bdf'
 const contract = 'TA5DvvvmYbS75o3DKtgy2ATAGVHhpFkRLe' as Address
@@ -79,7 +78,7 @@ test('throws AccountNotFoundError without any account', async () => {
 
 test('falls back to the hoisted client account (bare action)', async () => {
   const { transport, calls } = energyMock()
-  const client = createClient({ transport, account: pk1 })
+  const client = createClient({ transport, account: caller })
 
   await estimateEnergy(client, call)
   expect((calls[0]?.body as { owner_address: string }).owner_address).toBe(

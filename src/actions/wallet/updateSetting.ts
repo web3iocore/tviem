@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
@@ -36,7 +36,7 @@ import {
 
 export type UpdateSettingParameters = {
   /** The signing (deployer/owner) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Contract to update. */
   contractAddress: Address
   /** New percentage of energy consumed by the caller, 0..100. */

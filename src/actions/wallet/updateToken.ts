@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -9,6 +9,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -39,7 +40,7 @@ import {
 
 export type UpdateTokenParameters = {
   /** The signing (issuer) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** New token description (dual string/hex form). */
   description: FlexInput
   /** New token website URL (dual string/hex form). */

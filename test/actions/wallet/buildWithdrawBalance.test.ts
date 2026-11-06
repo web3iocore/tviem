@@ -7,9 +7,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 // Same canonical withdraw gold vectors as withdrawBalance — the build half must
 // produce the identical bytes / id (it is exactly what withdrawBalance signs).
@@ -26,7 +26,7 @@ function buildMock() {
 
 test('builds the canonical withdraw in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildWithdrawBalance(client, {})
 
@@ -44,7 +44,7 @@ test('builds the canonical withdraw in TronWeb JSON shape, unsigned', async () =
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildWithdrawBalance(client, {
     blockHeader: {
@@ -62,7 +62,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data.contract[0].type is the node WithdrawBalanceContract string', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildWithdrawBalance(client, {})
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
@@ -79,7 +79,7 @@ test('raw_data.contract[0].type is the node WithdrawBalanceContract string', asy
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildWithdrawBalance(client, { permissionId: 2 })
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {

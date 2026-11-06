@@ -1,10 +1,10 @@
 import { expectTypeOf, test } from 'vitest'
 import type {
-  AccountKey,
   SignableTransaction,
   TronAccount,
 } from '../../../src/accounts/types.js'
 import type { MultiSignParameters } from '../../../src/actions/wallet/multiSign.js'
+import type { Address } from '../../../src/types/address.js'
 
 test('permissionId accepts an explicitly undefined value', () => {
   // `exactOptionalPropertyTypes` is on, so `permissionId?: number` — without
@@ -23,7 +23,7 @@ test('takes an `account` like the sibling sign actions, and needs no privateKey'
   }>().toExtend<MultiSignParameters>()
   expectTypeOf<{
     transaction: SignableTransaction
-    account: TronAccount | AccountKey | undefined
+    account: TronAccount | Address | undefined
   }>().toExtend<MultiSignParameters>()
   // The original raw-key calling convention still type-checks.
   expectTypeOf<{

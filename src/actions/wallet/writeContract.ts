@@ -1,5 +1,5 @@
 import type { Abi, AbiFunction, ExtractAbiFunction } from 'abitype'
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { defaultFeeLimit } from '../../constants/transaction.js'
 import {
@@ -59,7 +59,7 @@ export type WriteContractParameters<
     : TronAbiParametersToPrimitiveTypes<abiFunction['inputs'], 'inputs'>,
 > = {
   /** The signing account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** The contract's Base58Check address. */
   address: Address
   /** The contract ABI. */

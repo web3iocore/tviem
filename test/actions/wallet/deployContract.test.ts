@@ -32,6 +32,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [basic, withToken] = loadTxFixtureFile('create-smart-contract.json')
 
@@ -60,7 +61,7 @@ function writeMock() {
 
 test('deploys byte-for-byte against the gold vector + backfills the address', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   const value = deployValueOf(basic!)
 
   const { txID, contractAddress } = await deployContract(client, {
@@ -94,7 +95,7 @@ test('deploys byte-for-byte against the gold vector + backfills the address', as
 
 test('carries call_token_value + token_id byte-for-byte', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   const value = deployValueOf(withToken!)
 
   const { txID, contractAddress } = await deployContract(client, {
@@ -123,7 +124,7 @@ test('carries call_token_value + token_id byte-for-byte', async () => {
 // rejects outright.
 test('defaults consume_user_resource_percent to 100 and origin_energy_limit to 1e7', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   const value = deployValueOf(basic!)
 
   await deployContract(client, {
@@ -151,7 +152,7 @@ test('resolves the per-call account when the client hoists none', async () => {
   const value = deployValueOf(basic!)
 
   const { txID } = await deployContract(client, {
-    account: pk1,
+    account,
     abi: value.abi,
     bytecode: `0x${value.bytecode}` as Hex,
     name: value.name,

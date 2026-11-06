@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -9,6 +9,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -33,7 +34,7 @@ import {
 
 export type WithdrawExpireUnfreezeParameters = {
   /** The signing account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /**
    * A pre-derived TaPoS + timing header. When supplied the transaction is built
    * fully offline against it; otherwise it is derived from the latest block.

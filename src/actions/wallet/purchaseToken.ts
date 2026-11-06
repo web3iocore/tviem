@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -39,7 +39,7 @@ import {
 
 export type PurchaseTokenParameters = {
   /** The signing (buyer) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** The token issuer's Base58Check address. */
   issuerAddress: Address
   /**

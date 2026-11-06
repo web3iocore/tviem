@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -43,7 +43,7 @@ export type WitnessVote = {
 
 export type VoteWitnessParameters = {
   /** The signing (voter) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Votes to cast (replaces the account's current votes). */
   votes: WitnessVote[]
   /**

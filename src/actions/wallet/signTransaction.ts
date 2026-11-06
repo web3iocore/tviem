@@ -1,8 +1,4 @@
-import type {
-  AccountKey,
-  SignableTransaction,
-  TronAccount,
-} from '../../accounts/types.js'
+import type { SignableTransaction, TronAccount } from '../../accounts/types.js'
 import type { SignTransactionErrorType as SignTransactionErrorType_account } from '../../accounts/utils/signTransaction.js'
 import type { Client } from '../../clients/createClient.js'
 import {
@@ -14,6 +10,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AssertSignedTransactionErrorType,
   signWithCheck,
@@ -30,7 +27,7 @@ export type SignTransactionParameters = {
    */
   transaction: SignableTransaction
   /** The signing account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
 }
 export type SignTransactionReturnType = SignableTransaction
 

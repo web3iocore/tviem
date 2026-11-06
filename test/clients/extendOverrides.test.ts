@@ -8,12 +8,13 @@
 // verbatim from the upstream extend implementation; if that ever changes,
 // this test is the prompt to revisit the documented contract.
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import { createClient } from '../../src/clients/createClient.js'
 import { createWalletClient } from '../../src/clients/createWalletClient.js'
 import { publicActions } from '../../src/clients/decorators/public.js'
 import { createMockTransport } from '../mock/createMockTransport.js'
 
-const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(`0x${'0'.repeat(63)}1`)
 
 const fixedBlock = {
   blockID: '00000000000012340102030405060708090a0b0c0d0e0f101112131415161718',
@@ -63,7 +64,7 @@ test('an override added after the factory applies to direct calls only', async (
   })
 
   let overrideCalls = 0
-  const client = createWalletClient({ account: pk1, transport }).extend(() => ({
+  const client = createWalletClient({ account, transport }).extend(() => ({
     broadcastTransaction: async () => {
       overrideCalls += 1
       return { txid: 'ff'.repeat(32) }

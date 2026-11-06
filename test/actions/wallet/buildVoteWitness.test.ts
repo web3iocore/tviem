@@ -8,9 +8,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 // The two witnesses (with vote counts) pinned by the gold vector.
 const votes = [
@@ -39,7 +39,7 @@ function buildMock() {
 
 test('builds the canonical vote in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildVoteWitness(client, { votes })
 
@@ -57,7 +57,7 @@ test('builds the canonical vote in TronWeb JSON shape, unsigned', async () => {
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildVoteWitness(client, {
     votes,
@@ -76,7 +76,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data.contract type is the java-tron node string', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildVoteWitness(client, { votes })
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
@@ -88,7 +88,7 @@ test('raw_data.contract type is the java-tron node string', async () => {
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildVoteWitness(client, { votes, permissionId: 2 })
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {

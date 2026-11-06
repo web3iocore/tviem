@@ -20,8 +20,8 @@ const transport: Transport = () =>
 
 const chainWith = (blockTime: number) => ({ blockTime }) as unknown as Chain
 
-// pk=1 → a well-known local account (see privateKeyToAccount).
-const pk1 = '0x0000000000000000000000000000000000000000000000000000000000000001'
+// The address of pk=1 (see privateKeyToAccount).
+const address = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC' as const
 
 test('default fields', () => {
   const client = createClient({ transport })
@@ -67,11 +67,9 @@ test('cacheTime defaults to pollingInterval', () => {
   expect(client.cacheTime).toBe(777)
 })
 
-test('account is parsed from a private-key string', () => {
-  const client = createClient({ account: pk1, transport })
-  expect(client.account?.type).toBe('local')
-  expect(client.account?.source).toBe('privateKey')
-  expect(client.account?.address).toBe('TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC')
+test('account is parsed from an address string', () => {
+  const client = createClient({ account: address, transport })
+  expect(client.account).toEqual({ address, type: 'json-rpc' })
 })
 
 test('transport is flattened into { ...config, ...value }', () => {

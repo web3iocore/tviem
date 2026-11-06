@@ -28,6 +28,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const trc20Abi = [
   {
@@ -84,7 +85,7 @@ function writeMock() {
 
 test('builds, signs and broadcasts a TRC20 transfer byte-for-byte (feeLimit)', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await client.writeContract({
     address: contract,
@@ -114,7 +115,7 @@ test('builds, signs and broadcasts a TRC20 transfer byte-for-byte (feeLimit)', a
 
 test('attaches callValue to the TriggerSmartContract byte-for-byte', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await client.writeContract({
     address: contract,
@@ -136,7 +137,7 @@ test('attaches callValue to the TriggerSmartContract byte-for-byte', async () =>
 
 test('attaches callTokenValue + tokenId to the TriggerSmartContract byte-for-byte', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await client.writeContract({
     address: contract,
@@ -159,7 +160,7 @@ test('attaches callTokenValue + tokenId to the TriggerSmartContract byte-for-byt
 
 test('defaults feeLimit to defaultFeeLimit when omitted', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await client.writeContract({
     address: contract,
@@ -180,7 +181,7 @@ test('defaults feeLimit to defaultFeeLimit when omitted', async () => {
 // raw_data.data and leave the calldata untouched.
 test('memo lands in raw_data.data without touching the calldata', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await client.writeContract({
     address: contract,

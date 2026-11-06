@@ -1,60 +1,73 @@
 import { BaseError, type BaseErrorType } from '../errors/base.js'
 import type { ErrorType } from '../errors/utils.js'
-import type { Hex } from '../types/misc.js'
-import {
-  type PrivateKeyToAccountErrorType,
-  privateKeyToAccount,
-} from './privateKeyToAccount.js'
+import { type ParseAccountErrorType, parseAccount } from '../types/account.js'
+import type { Address } from '../types/address.js'
 import type {
+  JsonRpcAccount,
   TronCustomAccount,
   TronCustomSource,
-  TronLocalAccount,
 } from './types.js'
 
 export type ToAccountErrorType =
-  | PrivateKeyToAccountErrorType
+  | ParseAccountErrorType
   | BaseErrorType
   | ErrorType
 
 /**
- * Creates an account from a private key or a caller-supplied signing source.
+ * Creates an account from an address or a caller-supplied signing source, as
+ * viem's `toAccount` does.
  *
- * - Passing a `0x`-prefixed or bare hex **private key** delegates to
- *   {@link privateKeyToAccount}, yielding a {@link TronLocalAccount}.
+ * - Passing a Base58Check **address** yields an address-only
+ *   {@link JsonRpcAccount}. A private key is not accepted here — use
+ *   `privateKeyToAccount()`.
  * - Passing a **custom source** (an object carrying an `address` plus its own
  *   `signMessage`/`signTypedData`/`signTransaction` functions) completes it into a
  *   {@link TronCustomAccount} by attaching the `source: 'custom'` /
- *   `type: 'local'` discriminants. This is the shape v0.1c delegated and
- *   remote signers plug into. The source may be a plain object or a class
+ *   `type: 'local'` discriminants. This is the shape wallet adapters plug
+ *   into. The source may be a plain object or a class
  *   instance: its methods are bound to it, so ones defined on a prototype
  *   keep their `this`. Only the {@link TronCustomSource} members are carried
  *   over — anything else the source holds stays on the source.
  *
- * @param source A hex private key, or a {@link TronCustomSource}.
+ * @param source A Base58Check address, or a {@link TronCustomSource}.
  * @returns The completed account.
  *
  * @example
- * // From a private key:
- * toAccount('0x...').address // 'T...'
+ * // From an address:
+ * toAccount('T...') // { address: 'T...', type: 'json-rpc' }
  *
  * @example
  * // From a custom source:
  * toAccount({ address, publicKey, signMessage, signTypedData, signTransaction })
  */
-export function toAccount(source: Hex | string): TronLocalAccount
+export function toAccount<address extends Address>(
+  source: address,
+): JsonRpcAccount<address>
 export function toAccount(source: TronCustomSource): TronCustomAccount
 export function toAccount(
-  source: Hex | string | TronCustomSource,
-): TronLocalAccount | TronCustomAccount {
-  if (typeof source === 'string') return privateKeyToAccount(source)
+  source: Address | TronCustomSource,
+): JsonRpcAccount | TronCustomAccount {
+  if (typeof source === 'string') return parseAccount(source)
 
   // Read `address` once and pin that value into the account, so the account
   // can never carry an address the type check did not see.
   const address = source?.address
   if (!source || typeof address !== 'string')
     throw new BaseError(
-      'Invalid account source: expected a hex private key or a custom source with an `address`.',
+      'Invalid account source: expected a Base58Check address or a custom source with an `address`.',
     )
+  // A custom source must be able to sign: an object without the signing
+  // methods (an address-only account, say) would otherwise come out as a
+  // `local` account and get past the checks that refuse non-signers.
+  for (const method of [
+    'signMessage',
+    'signTypedData',
+    'signTransaction',
+  ] as const)
+    if (typeof source[method] !== 'function')
+      throw new BaseError(
+        `Invalid account source: \`${method}\` must be a function. For an address-only account, pass the address string instead.`,
+      )
 
   // The account surface is listed member by member rather than spread from
   // the source. A spread copies own enumerable properties only, so a class

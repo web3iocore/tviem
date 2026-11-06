@@ -7,8 +7,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC (the fixture owner).
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 // Chain time now comes from the pinned reference block, whose own timestamp is
 // exactly this value (getnowblock.fixed), so the gold vectors are unchanged.
 const blockTimestamp = 1700000000000n
@@ -28,7 +29,7 @@ function buildMock() {
 
 test('builds the canonical unfreeze in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildUnfreezeBalanceV2(client, {
     unfreezeBalance: 500000n,
@@ -49,7 +50,7 @@ test('builds the canonical unfreeze in TronWeb JSON shape, unsigned', async () =
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildUnfreezeBalanceV2(client, {
     unfreezeBalance: 500000n,
@@ -69,7 +70,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildUnfreezeBalanceV2(client, {
     unfreezeBalance: 500000n,
@@ -96,7 +97,7 @@ test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async 
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildUnfreezeBalanceV2(client, {
     unfreezeBalance: 500000n,

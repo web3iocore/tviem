@@ -9,9 +9,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 // Chain time now comes from the pinned reference block, whose own timestamp is
 // exactly this value (getnowblock.fixed), so the gold vectors are unchanged.
 const blockTimestamp = 1700000000000n
@@ -35,7 +35,7 @@ function buildMock() {
 
 test('builds the canonical TRC10 transfer in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildSendTrc10(client, {
     to,
@@ -63,7 +63,7 @@ test('builds the canonical TRC10 transfer in TronWeb JSON shape, unsigned', asyn
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildSendTrc10(client, {
     to,
@@ -84,7 +84,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildSendTrc10(client, {
     to,
@@ -116,7 +116,7 @@ test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async 
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildSendTrc10(client, {
     to,
@@ -137,7 +137,7 @@ test('permissionId is baked in as Permission_id and changes the id', async () =>
 
 test('accepts the hex asset_name form and yields the identical bytes', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildSendTrc10(client, {
     to,
@@ -151,7 +151,7 @@ test('accepts the hex asset_name form and yields the identical bytes', async () 
 
 test('refuses an odd-nibble hex asset_name instead of padding it into another asset', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   // The hex form above with its last nibble lost. Left-padded it would be
   // signed as `03 13 03 03 03 23 03 03` — a different asset id entirely.

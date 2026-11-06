@@ -12,7 +12,6 @@ import {
   TransactionTamperedError,
   UserRejectedRequestError,
 } from '../../../../src/errors/rpc.js'
-import { parseAccount } from '../../../../src/types/account.js'
 import { addressToHex } from '../../../../src/utils/address/addressToHex.js'
 import { getTransactionId } from '../../../../src/utils/transaction/getTransactionId.js'
 import {
@@ -31,6 +30,7 @@ import { parseBroadcast } from '../../../mock/parseBroadcast.js'
 
 // pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC (the fixture owner).
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [bandwidth] = loadTxFixtureFile('freeze-balance-v2-contract.json')
 
@@ -45,7 +45,6 @@ function writeMock() {
 
 /** A `FreezeBalanceV2Contract` matching the BANDWIDTH gold vector. */
 function freezeContract(): RawContract {
-  const account = parseAccount(pk1)
   return {
     type: ContractType.FreezeBalanceV2Contract,
     parameter: {
@@ -61,7 +60,6 @@ function freezeContract(): RawContract {
 test('runs getNowBlock → sign → broadcast and returns the local txID', async () => {
   const { transport, calls, bodyOf } = writeMock()
   const client = createPublicClient({ transport })
-  const account = parseAccount(pk1)
 
   const response = await buildAndBroadcast(client, {
     contract: freezeContract(),
@@ -109,7 +107,6 @@ test('passes the broadcast acknowledgement through alongside the local txID', as
     },
   })
   const client = createPublicClient({ transport })
-  const account = parseAccount(pk1)
 
   const response = await buildAndBroadcast(client, {
     contract: freezeContract(),
@@ -138,7 +135,6 @@ test('passes the broadcast acknowledgement through alongside the local txID', as
 test('writes fee_limit into raw_data when supplied', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createPublicClient({ transport })
-  const account = parseAccount(pk1)
 
   await buildAndBroadcast(client, {
     contract: freezeContract(),
@@ -155,7 +151,6 @@ test('writes fee_limit into raw_data when supplied', async () => {
 test('derives timing from the latest block when blockHeader is omitted', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createPublicClient({ transport })
-  const account = parseAccount(pk1)
 
   await buildAndBroadcast(client, { contract: freezeContract(), account })
 

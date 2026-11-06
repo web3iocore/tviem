@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { cancelAllUnfreezeV2 } from '../../../src/actions/wallet/cancelAllUnfreezeV2.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -10,6 +11,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 
 // pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC (the fixture owner).
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [fixture] = loadTxFixtureFile('cancel-all-unfreeze-v2-contract.json')
 
@@ -24,7 +26,7 @@ function writeMock() {
 
 test('cancels all unfreeze v2 byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await cancelAllUnfreezeV2(client, {})
 
@@ -49,7 +51,7 @@ test('cancels all unfreeze v2 byte-for-byte against the gold vector', async () =
 test('resolves the per-call account when the client hoists none', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
-  const { txID } = await cancelAllUnfreezeV2(client, { account: pk1 })
+  const { txID } = await cancelAllUnfreezeV2(client, { account })
   expect(txID).toBe(fixture?.txID)
   expect(
     (parseBroadcast(bodyOf('broadcasttransaction')) as { raw_data_hex: string })

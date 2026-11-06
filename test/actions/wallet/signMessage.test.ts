@@ -32,7 +32,10 @@ const pk1 = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const pk2 = '0x0000000000000000000000000000000000000000000000000000000000000002'
 
 test('signs a message identically to account.signMessage', async () => {
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk1),
+    transport,
+  })
   const viaClient = await client.signMessage({ message: 'gm tviem' })
   const viaAccount = await privateKeyToAccount(pk1).signMessage({
     message: 'gm tviem',
@@ -41,8 +44,14 @@ test('signs a message identically to account.signMessage', async () => {
 })
 
 test('a per-call account overrides the hoisted one', async () => {
-  const client = createWalletClient({ account: pk1, transport })
-  const viaClient = await client.signMessage({ message: 'gm', account: pk2 })
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk1),
+    transport,
+  })
+  const viaClient = await client.signMessage({
+    message: 'gm',
+    account: privateKeyToAccount(pk2),
+  })
   expect(viaClient).toEqual(
     await privateKeyToAccount(pk2).signMessage({ message: 'gm' }),
   )

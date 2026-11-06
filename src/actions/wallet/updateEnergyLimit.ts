@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -35,7 +35,7 @@ import {
 
 export type UpdateEnergyLimitParameters = {
   /** The signing (deployer/owner) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Contract to update. */
   contractAddress: Address
   /** New creator energy limit. */

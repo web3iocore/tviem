@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
@@ -10,6 +10,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -35,7 +36,7 @@ import {
 
 export type UpdateBrokerageParameters = {
   /** The signing (witness) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** New brokerage percentage the SR keeps for its voters, 0..100. */
   brokerage: number
   /**

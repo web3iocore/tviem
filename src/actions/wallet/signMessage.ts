@@ -1,5 +1,4 @@
 import type {
-  AccountKey,
   AccountSignMessageParameters,
   TronAccount,
 } from '../../accounts/types.js'
@@ -13,6 +12,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import type { Signature } from '../../utils/signature/sign.js'
 import type { SignMessageErrorType as SignMessageErrorType_account } from '../../utils/signature/signMessage.js'
 import {
@@ -22,7 +22,7 @@ import {
 
 export type SignMessageParameters = AccountSignMessageParameters & {
   /** The signing account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
 }
 export type SignMessageReturnType = Signature
 

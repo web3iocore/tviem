@@ -12,6 +12,7 @@ import { signTransaction } from '../../../src/accounts/utils/signTransaction.js'
 import { multiSign } from '../../../src/actions/wallet/multiSign.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import { InvalidAddressError } from '../../../src/errors/address.js'
 import { BaseError } from '../../../src/errors/base.js'
 import {
   AccountNotFoundError,
@@ -266,21 +267,38 @@ test('co-signs with an `account`, byte-identical to the raw-key path', async () 
     permissionId: 2,
   })
 
-  // An account object, and the key string every `account` parameter accepts.
-  for (const account of [privateKeyToAccount(pk2), pk2])
-    expect(
-      await multiSign(client, {
-        transaction: unboundTriple(),
-        account,
-        permissionId: 2,
-      }),
-    ).toEqual(viaKey)
+  expect(
+    await multiSign(client, {
+      transaction: unboundTriple(),
+      account: privateKeyToAccount(pk2),
+      permissionId: 2,
+    }),
+  ).toEqual(viaKey)
+  expect(calls).toHaveLength(0)
+})
+
+test('refuses a private-key string as `account`, without echoing it', async () => {
+  // An `account` string is a T-address; the raw key goes in `privateKey` or
+  // through privateKeyToAccount().
+  const { client, calls } = silentClient()
+  const err = (await multiSign(client, {
+    transaction: unboundTriple(),
+    account: pk2 as never,
+    permissionId: 2,
+  }).catch((e) => e)) as BaseError
+  expect(err).toBeInstanceOf(InvalidAddressError)
+  expect(err.message).toContain('Address is invalid.')
+  expect(err.message).not.toContain(pk2)
+  expect(err.message).not.toContain(pk2.slice(2))
   expect(calls).toHaveLength(0)
 })
 
 test('falls back to the account hoisted on the Client', async () => {
   const { transport } = createMockTransport({ responses: {} })
-  const client = createWalletClient({ account: pk2, transport })
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk2),
+    transport,
+  })
   const viaKey = await multiSign(client, {
     transaction: unboundTriple(),
     privateKey: pk2,
@@ -301,7 +319,10 @@ test('an explicit privateKey still wins over the hoisted account', async () => {
   // hoisted) co-signing with ANOTHER party's key. The hoisted account is only
   // a fallback — it must not displace a signer the caller named.
   const { transport } = createMockTransport({ responses: {} })
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk1),
+    transport,
+  })
   const pk2Signed = await multiSign(silentClient().client, {
     transaction: unboundTriple(),
     privateKey: pk2,
@@ -389,7 +410,7 @@ test('refuses an `account` and a `privateKey` together — two named signers', a
 
   const err = (await multiSign(client, {
     transaction: unboundTriple(),
-    account: pk1,
+    account: privateKeyToAccount(pk1),
     privateKey: pk2,
     permissionId: 2,
   }).catch((e) => e)) as BaseError

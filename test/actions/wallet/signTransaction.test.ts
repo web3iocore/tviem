@@ -28,12 +28,18 @@ const pk1 = '0x0000000000000000000000000000000000000000000000000000000000000001'
 const pk2 = '0x0000000000000000000000000000000000000000000000000000000000000002'
 const to = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC' as const
 
-/** Builds an unsigned transfer via the mocked node (TaPoS from the fixture). */
-async function buildUnsigned(account: `0x${string}`) {
+/**
+ * Builds an unsigned transfer via the mocked node (TaPoS from the fixture),
+ * on a client whose hoisted account is the local account `privateKey` derives.
+ */
+async function buildUnsigned(privateKey: `0x${string}`) {
   const { transport } = createMockTransport({
     responses: { getnowblock: { response: rpc('getnowblock.fixed') } },
   })
-  const client = createWalletClient({ account, transport })
+  const client = createWalletClient({
+    account: privateKeyToAccount(privateKey),
+    transport,
+  })
   return { client, unsigned: await client.buildSendTrx({ to, amount: 1n }) }
 }
 
@@ -52,7 +58,10 @@ test('a per-call account overrides the hoisted one', async () => {
   // per-call account (not the hoisted pk1) is the one doing the signing.
   const { client, unsigned } = await buildUnsigned(pk1)
   await expect(
-    client.signTransaction({ transaction: unsigned, account: pk2 }),
+    client.signTransaction({
+      transaction: unsigned,
+      account: privateKeyToAccount(pk2),
+    }),
   ).rejects.toThrow(/owner_address does not match/)
 })
 

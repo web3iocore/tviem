@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import {
   type AccountPermissionUpdateParameters,
   accountPermissionUpdate,
@@ -15,6 +16,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [fixture] = loadTxFixtureFile('account-permission-update-contract.json')
 
@@ -43,7 +45,7 @@ const blockHeader = {
 
 function offlineBuild(parameters: Record<string, unknown>) {
   const { transport } = createMockTransport({ responses: {} })
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   return buildAccountPermissionUpdate(client, {
     ...parameters,
     blockHeader,
@@ -61,7 +63,7 @@ function writeMock() {
 
 test('updates owner + active permissions byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await accountPermissionUpdate(client, {
     owner: {

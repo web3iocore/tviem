@@ -4,7 +4,6 @@ import {
   type TransactionHeader,
 } from '../../../../src/actions/wallet/utils/buildTransaction.js'
 import { createPublicClient } from '../../../../src/clients/createPublicClient.js'
-import { parseAccount } from '../../../../src/types/account.js'
 import { addressToHex } from '../../../../src/utils/address/addressToHex.js'
 import {
   ContractType,
@@ -14,8 +13,8 @@ import type { RawContract } from '../../../../src/utils/transaction/serializeRaw
 import { rpc } from '../../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../../mock/createMockTransport.js'
 
-// pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1. Building needs only the owner address, no key.
+const owner = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 function buildMock() {
   return createMockTransport({
@@ -29,7 +28,7 @@ function freezeContract(): RawContract {
     parameter: {
       type_url: `${contractTypeUrlPrefix}FreezeBalanceV2Contract`,
       value: {
-        owner_address: addressToHex(parseAccount(pk1).address),
+        owner_address: addressToHex(owner),
         frozen_balance: 1000000n,
       },
     },

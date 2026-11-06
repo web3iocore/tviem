@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
@@ -10,6 +10,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -77,7 +78,7 @@ export type ActivePermissionInput = PermissionInput & {
 
 export type AccountPermissionUpdateParameters = {
   /** The account whose permissions are being updated (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /**
    * The new owner permission. Required: the update replaces the account's
    * whole permission set, so java-tron rejects a contract without it.

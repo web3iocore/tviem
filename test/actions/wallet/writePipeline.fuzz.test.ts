@@ -94,7 +94,7 @@ test('sendTrx reproduces the canonical TransferContract gold vector byte-for-byt
   expect(goldSig).toBeDefined()
 
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account: pk1Account, transport })
 
   // to = TPL66VK2… (41-hex 41928c9af0…4d21) / amount 1_000_000 SUN, per params.
   const { txID } = await client.sendTrx({
@@ -159,7 +159,7 @@ test.each(
   expect(goldSig).toBeDefined()
 
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account: pk1Account, transport })
 
   const { txID } = await client.writeContract({
     address: trc20Contract,
@@ -226,7 +226,7 @@ function goldByName(cases: TxFixture[], name: string): TxFixture {
 
 /** A pk=1 wallet client over the fixed-block / broadcast-ack mock. */
 function makeClient(transport: ReturnType<typeof writeMock>['transport']) {
-  return createWalletClient({ account: pk1, transport })
+  return createWalletClient({ account: pk1Account, transport })
 }
 type WriteClient = ReturnType<typeof makeClient>
 

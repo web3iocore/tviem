@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { undelegateResource } from '../../../src/actions/wallet/undelegateResource.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -12,6 +13,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 const receiver = 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K' as Address
 
 const [energy] = loadTxFixtureFile('un-delegate-resource-contract.json')
@@ -27,7 +29,7 @@ function writeMock() {
 
 test('undelegates ENERGY byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await undelegateResource(client, {
     receiverAddress: receiver,
@@ -56,7 +58,7 @@ test('resolves the per-call account when the client hoists none', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
   const { txID } = await undelegateResource(client, {
-    account: pk1,
+    account,
     receiverAddress: receiver,
     balance: 1000000n,
     resource: 'ENERGY',

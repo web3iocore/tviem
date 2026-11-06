@@ -43,7 +43,10 @@ const typedData = {
 }
 
 test('signs typed data identically to account.signTypedData', async () => {
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk1),
+    transport,
+  })
   const viaClient = await client.signTypedData(typedData)
   const viaAccount = await privateKeyToAccount(pk1).signTypedData(typedData)
   expect(viaClient).toEqual(viaAccount)
@@ -166,7 +169,10 @@ test('a client-hoisted async account works like a per-call one', async () => {
     expected,
   )
   // A per-call async account still overrides a hoisted one.
-  const other = createWalletClient({ account: pk2, transport })
+  const other = createWalletClient({
+    account: privateKeyToAccount(pk2),
+    transport,
+  })
   expect(await other.signTypedData({ ...typedData, account })).toEqual(expected)
 })
 

@@ -9,6 +9,7 @@ import type {
 import { sendTrx } from '../../../src/actions/wallet/sendTrx.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import { InvalidAddressError } from '../../../src/errors/address.js'
 import {
   AccountNotFoundError,
   TransactionTamperedError,
@@ -27,6 +28,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 const to = 'TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY' as Address
 
 // Canonical transfer gold vectors (tx/transfer-contract[0] + sig/transaction[0]).
@@ -47,7 +49,7 @@ function writeMock() {
 
 test('builds, signs and broadcasts the canonical transfer byte-for-byte', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await client.sendTrx({ to, amount: 1000000n })
 
@@ -80,7 +82,7 @@ test('builds, signs and broadcasts the canonical transfer byte-for-byte', async 
 test('returns the local txID even when the node echoes a different one', async () => {
   // broadcasttransaction.ok replies with an all-zero txid on purpose.
   const { transport } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   const { txID } = await client.sendTrx({ to, amount: 1000000n })
   expect(txID).toBe(TX_ID)
   expect(txID).not.toBe(`0${'0'.repeat(63)}`)
@@ -90,7 +92,7 @@ test('accepts a per-call account overriding the (absent) client account', async 
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
   const { txID } = await client.sendTrx({
-    account: pk1,
+    account,
     to,
     amount: 1000000n,
   })
@@ -103,7 +105,7 @@ test('accepts a per-call account overriding the (absent) client account', async 
 
 test('writes a memo into raw_data.data', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await client.sendTrx({ to, amount: 1000000n, memo: '0x6f6d6e69' })
   const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
     raw_data: { data?: string }
@@ -113,7 +115,7 @@ test('writes a memo into raw_data.data', async () => {
 
 test('accepts a memo as raw bytes (Uint8Array)', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await client.sendTrx({
     to,
     amount: 1000000n,
@@ -129,7 +131,7 @@ test('accepts a memo as raw bytes (Uint8Array)', async () => {
 // would claim a memo the signed bytes do not carry. Refuse before building.
 test('rejects an empty memo before any request', async () => {
   const { transport, calls } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await expect(
     client.sendTrx({ to, amount: 1000000n, memo: '0x' }),
   ).rejects.toThrow(/Empty memo/)
@@ -146,7 +148,7 @@ test.each([
   ['null', null],
 ])('rejects a malformed memo (%s) before any request', async (_, memo) => {
   const { transport, calls } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await expect(
     client.sendTrx({ to, amount: 1000000n, memo: memo as never }),
   ).rejects.toThrow(/memo/)
@@ -157,7 +159,7 @@ test.each([
 // (1700000000000), so a custom lifetime lands deterministically.
 test('expirationMs sets the lifetime from the chain-derived timestamp', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await client.sendTrx({ to, amount: 1000000n, expirationMs: 3_600_000 })
   const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
     raw_data: { timestamp: number; expiration: number }
@@ -170,7 +172,7 @@ test('expirationMs sets the lifetime from the chain-derived timestamp', async ()
 // wins and expirationMs is ignored.
 test('a complete blockHeader takes precedence over expirationMs', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   await client.sendTrx({
     to,
     amount: 1000000n,
@@ -196,6 +198,33 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
   await expect(
     sendTrx(client, { to, amount: 1000000n }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+test('refuses a private-key string as `account` without echoing it or sending a request', async () => {
+  // A JS caller (or a stale cast) can still hand over a key out of habit: a
+  // string `account` is an address now, so this must fail closed — before any
+  // request, and without the key (or any slice of it) in the error.
+  const key = '4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318'
+  const keyForms = [`0x${key}`, key]
+  for (const keyForm of keyForms) {
+    const { transport, calls } = writeMock()
+    const client = createWalletClient({ transport })
+    const error = await sendTrx(client, {
+      account: keyForm as unknown as Address,
+      to,
+      amount: 1000000n,
+    }).then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(InvalidAddressError)
+    const { message, shortMessage } = error as InvalidAddressError
+    expect(shortMessage).toBe('Address is invalid.')
+    const text = `${message}\n${String(error)}\n${JSON.stringify(error)}`
+    for (let i = 0; i + 8 <= key.length; i++)
+      expect(text).not.toContain(key.slice(i, i + 8))
+    expect(calls).toHaveLength(0)
+  }
 })
 
 // ---------------------------------------------------------------------------

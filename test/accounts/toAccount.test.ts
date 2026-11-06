@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../src/accounts/toAccount.js'
 import type { TronCustomSource } from '../../src/accounts/types.js'
+import { InvalidAddressError } from '../../src/errors/address.js'
 import { decodeRawData } from '../../src/utils/transaction/decodeRawData.js'
 import { loadTxFixtures } from '../fixtures/tx/loader.js'
 
@@ -28,20 +29,39 @@ const canonicalTransaction = () => {
 }
 
 describe('toAccount', () => {
-  test('from a 0x hex private key: delegates to privateKeyToAccount', async () => {
-    const account = toAccount(pk1)
+  test('from a Base58Check address: an address-only json-rpc account', () => {
+    const account = toAccount(pk1Address)
+    expect(account).toEqual({ address: pk1Address, type: 'json-rpc' })
+    // Address-only: no signing surface, no `source` discriminant.
+    expect('signMessage' in account).toBe(false)
+    expect('signTransaction' in account).toBe(false)
+    expect('source' in account).toBe(false)
+  })
+
+  test('from a private-key string (0x or bare hex): refused without echoing the key', () => {
+    for (const key of [pk1, pk1.slice(2)]) {
+      let caught: unknown
+      try {
+        toAccount(key as never)
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(InvalidAddressError)
+      const { message } = caught as Error
+      expect(message).not.toContain(key)
+      expect(message).not.toContain(key.slice(0, 6))
+      expect(message).toContain('privateKeyToAccount')
+    }
+  })
+
+  test('a private key still works through privateKeyToAccount + toAccount(source)', async () => {
+    const account = toAccount(privateKeyToAccount(pk1))
     expect(account.address).toBe(pk1Address)
-    expect(account.source).toBe('privateKey')
-    expect(account.type).toBe('local')
     expect(
       (await account.signMessage({ message: 'hello world' })).serialized,
     ).toBe(helloWorldSig)
     // No raw-digest signer: blind signing is not part of the account surface.
     expect('sign' in account).toBe(false)
-  })
-
-  test('from a bare (non-0x) hex private key', () => {
-    expect(toAccount(pk1.slice(2)).address).toBe(pk1Address)
   })
 
   test('from a custom source: completes to a custom local account', () => {
@@ -144,6 +164,58 @@ describe('toAccount', () => {
 
   test('throws on an invalid source (no address)', () => {
     expect(() => toAccount({} as never)).toThrow()
+  })
+
+  describe('a custom source must be able to sign', () => {
+    const fullSource = (): TronCustomSource => {
+      const base = privateKeyToAccount(pk1)
+      return {
+        address: base.address,
+        publicKey: base.publicKey,
+        signMessage: base.signMessage,
+        signTypedData: base.signTypedData,
+        signTransaction: base.signTransaction,
+      }
+    }
+
+    for (const method of [
+      'signMessage',
+      'signTypedData',
+      'signTransaction',
+    ] as const) {
+      test(`missing \`${method}\` throws naming the method`, () => {
+        const { [method]: _omitted, ...rest } = fullSource()
+        expect(() => toAccount(rest as TronCustomSource)).toThrow(
+          `Invalid account source: \`${method}\` must be a function`,
+        )
+      })
+
+      test(`a non-function \`${method}\` throws naming the method`, () => {
+        const source = { ...fullSource(), [method]: 'nope' }
+        expect(() => toAccount(source as unknown as TronCustomSource)).toThrow(
+          `Invalid account source: \`${method}\` must be a function`,
+        )
+      })
+    }
+
+    test('an address-only object { address, type: json-rpc } is refused', () => {
+      expect(() =>
+        toAccount({
+          address: pk1Address,
+          type: 'json-rpc',
+        } as unknown as TronCustomSource),
+      ).toThrow(
+        'Invalid account source: `signMessage` must be a function. For an address-only account, pass the address string instead.',
+      )
+    })
+
+    test('a source without multiSign still works', () => {
+      const account = toAccount(fullSource())
+      expect(account.source).toBe('custom')
+      expect(account.type).toBe('local')
+      expect(account.address).toBe(pk1Address)
+      expect(account.multiSign).toBeUndefined()
+    })
   })
 })
 

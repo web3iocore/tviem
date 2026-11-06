@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { withdrawBalance } from '../../../src/actions/wallet/withdrawBalance.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -11,6 +12,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [withdraw] = loadTxFixtureFile('withdraw-balance-contract.json')
 
@@ -25,7 +27,7 @@ function writeMock() {
 
 test('withdraws rewards byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await withdrawBalance(client, {})
 
@@ -49,7 +51,7 @@ test('withdraws rewards byte-for-byte against the gold vector', async () => {
 test('resolves the per-call account when the client hoists none', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
-  const { txID } = await withdrawBalance(client, { account: pk1 })
+  const { txID } = await withdrawBalance(client, { account })
   expect(txID).toBe(withdraw?.txID)
   expect(
     (parseBroadcast(bodyOf('broadcasttransaction')) as { raw_data_hex: string })

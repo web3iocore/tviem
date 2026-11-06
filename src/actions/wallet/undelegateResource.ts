@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   AccountNotFoundError,
@@ -40,7 +40,7 @@ import {
 
 export type UndelegateResourceParameters = {
   /** The signing (delegator) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Account the resource was delegated to. */
   receiverAddress: Address
   /** Amount to undelegate, in SUN. */

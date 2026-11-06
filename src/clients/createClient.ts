@@ -1,10 +1,11 @@
-import type { AccountKey, TronAccount } from '../accounts/types.js'
+import type { TronAccount } from '../accounts/types.js'
 import type { ErrorType } from '../errors/utils.js'
 import {
   type ParseAccount,
   type ParseAccountErrorType,
   parseAccount,
 } from '../types/account.js'
+import type { Address } from '../types/address.js'
 import type { Chain } from '../types/chain.js'
 import type { Prettify } from '../types/utils.js'
 import { uid } from '../utils/uid.js'
@@ -13,17 +14,18 @@ import type { Transport } from './transports/createTransport.js'
 export type ClientConfig<
   transport extends Transport = Transport,
   chain extends Chain | undefined = Chain | undefined,
-  accountOrKey extends TronAccount | AccountKey | undefined =
+  accountOrAddress extends TronAccount | Address | undefined =
     | TronAccount
-    | AccountKey
+    | Address
     | undefined,
 > = {
   /**
-   * The Account to use for the Client — a built {@link TronAccount}, or an
-   * {@link AccountKey} (private key, `0x`-prefixed or bare hex) that is
-   * resolved to a local account. Used by Actions that require an account.
+   * The Account to use for the Client — a built {@link TronAccount}, or a
+   * Base58Check {@link Address}, which becomes an address-only
+   * `JsonRpcAccount` (it can build and read, not sign). Used by
+   * Actions that require an account.
    */
-  account?: accountOrKey | TronAccount | AccountKey | undefined
+  account?: accountOrAddress | TronAccount | Address | undefined
   /**
    * Time (in ms) that cached data will remain in memory.
    * @default pollingInterval
@@ -111,10 +113,10 @@ export type CreateClientErrorType = ParseAccountErrorType | ErrorType
 export function createClient<
   transport extends Transport,
   chain extends Chain | undefined = undefined,
-  accountOrKey extends TronAccount | AccountKey | undefined = undefined,
+  accountOrAddress extends TronAccount | Address | undefined = undefined,
 >(
-  parameters: ClientConfig<transport, chain, accountOrKey>,
-): Prettify<Client<transport, chain, ParseAccount<accountOrKey>>>
+  parameters: ClientConfig<transport, chain, accountOrAddress>,
+): Prettify<Client<transport, chain, ParseAccount<accountOrAddress>>>
 
 export function createClient(parameters: ClientConfig): Client {
   const {

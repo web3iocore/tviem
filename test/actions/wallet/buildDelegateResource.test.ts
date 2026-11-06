@@ -8,9 +8,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 const receiver = 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K' as Address
 // Chain time now comes from the pinned reference block, whose own timestamp is
 // exactly this value (getnowblock.fixed), so the gold vectors are unchanged.
@@ -33,7 +33,7 @@ function buildMock() {
 
 test('builds the canonical delegation in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -56,7 +56,7 @@ test('builds the canonical delegation in TronWeb JSON shape, unsigned', async ()
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -78,7 +78,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -108,7 +108,7 @@ test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async 
 
 test('lock: false writes neither lock nor lock_period', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -127,7 +127,7 @@ test('lock: false writes neither lock nor lock_period', async () => {
 
 test('lockPeriod without lock is not written', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -145,7 +145,7 @@ test('lockPeriod without lock is not written', async () => {
 
 test('lock: true writes lock, and lock_period only when given', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const bare = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -179,7 +179,7 @@ test('lock: true writes lock, and lock_period only when given', async () => {
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDelegateResource(client, {
     receiverAddress: receiver,
@@ -213,7 +213,7 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
 
 test('a stringly-typed lock is refused, not signed as locked', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await expect(
     client.buildDelegateResource({

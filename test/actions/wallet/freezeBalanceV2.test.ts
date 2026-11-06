@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { freezeBalanceV2 } from '../../../src/actions/wallet/freezeBalanceV2.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -11,6 +12,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
 // which is exactly the fixture `owner_address`.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [bandwidth, energy] = loadTxFixtureFile('freeze-balance-v2-contract.json')
 
@@ -25,7 +27,7 @@ function writeMock() {
 
 test('freezes for BANDWIDTH byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await freezeBalanceV2(client, {
     frozenBalance: 1000000n,
@@ -52,7 +54,7 @@ test('freezes for BANDWIDTH byte-for-byte against the gold vector', async () => 
 
 test('freezes for ENERGY byte-for-byte against the gold vector', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await freezeBalanceV2(client, {
     frozenBalance: 2000000n,
@@ -70,7 +72,7 @@ test('freezes for ENERGY byte-for-byte against the gold vector', async () => {
 // (raw_data.data is a Transaction-level field, valid for every contract type).
 test('memo lands in raw_data.data on a staking action', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await client.freezeBalanceV2({
     frozenBalance: 500000n,
@@ -88,7 +90,7 @@ test('resolves the per-call account when the client hoists none', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ transport })
   const { txID } = await freezeBalanceV2(client, {
-    account: pk1,
+    account,
     frozenBalance: 1000000n,
     resource: 'BANDWIDTH',
   })

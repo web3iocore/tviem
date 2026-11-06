@@ -7,9 +7,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 // Same canonical freeze gold vector as freezeBalanceV2 — the build half must
 // produce the identical bytes / id (it is exactly what freezeBalanceV2 signs).
@@ -26,7 +26,7 @@ function buildMock() {
 
 test('builds the canonical freeze in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildFreezeBalanceV2(client, {
     frozenBalance: 1000000n,
@@ -49,7 +49,7 @@ test('builds the canonical freeze in TronWeb JSON shape, unsigned', async () => 
 // message, not surface as an int64 error from inside serialization.
 test('an inherited Object.prototype member name is refused as a staking resource', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await expect(
     buildFreezeBalanceV2(client, {
@@ -61,7 +61,7 @@ test('an inherited Object.prototype member name is refused as a staking resource
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildFreezeBalanceV2(client, {
     frozenBalance: 1000000n,
@@ -81,7 +81,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data contract is a node-JSON FreezeBalanceV2Contract', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildFreezeBalanceV2(client, {
     frozenBalance: 1000000n,
@@ -103,7 +103,7 @@ test('raw_data contract is a node-JSON FreezeBalanceV2Contract', async () => {
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildFreezeBalanceV2(client, {
     frozenBalance: 1000000n,

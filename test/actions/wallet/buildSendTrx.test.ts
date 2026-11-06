@@ -1,4 +1,6 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
+import type { JsonRpcAccount } from '../../../src/accounts/types.js'
 import { buildSendTrx } from '../../../src/actions/wallet/sendTrx.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -9,6 +11,9 @@ import { createMockTransport } from '../../mock/createMockTransport.js'
 
 // pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
 const pk1 = `0x${'0'.repeat(63)}1` as const
+// Building needs no key, so the client account is the bare address (a
+// JsonRpcAccount).
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 const to = 'TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY' as Address
 // Chain time now comes from the pinned reference block, whose own timestamp is
 // exactly this value (getnowblock.fixed), so the gold vectors are unchanged.
@@ -31,7 +36,7 @@ function buildMock() {
 
 test('builds the canonical transfer in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await client.buildSendTrx({ to, amount: 1000000n })
 
@@ -49,7 +54,7 @@ test('builds the canonical transfer in TronWeb JSON shape, unsigned', async () =
 
 test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await client.buildSendTrx({ to, amount: 1000000n })
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
@@ -74,7 +79,7 @@ test('raw_data is java-tron node JSON (snake_case, 41-hex, string type)', async 
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   // The header matching the pinned reference block (same ref fields + chain
   // time the default path derives) must reproduce the exact gold vector...
@@ -99,7 +104,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('a custom blockHeader with different timing changes the built bytes', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await client.buildSendTrx({
     to,
@@ -120,7 +125,7 @@ test('a custom blockHeader with different timing changes the built bytes', async
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await client.buildSendTrx({
     to,
@@ -140,7 +145,7 @@ test('permissionId is baked in as Permission_id and changes the id', async () =>
 
 test('writes a memo into raw_data.data', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await client.buildSendTrx({
     to,
@@ -148,6 +153,33 @@ test('writes a memo into raw_data.data', async () => {
     memo: '0x6f6d6e69',
   })
   expect(tx.raw_data.data).toBe('6f6d6e69')
+})
+
+test('an address string, a local account and a json-rpc object build the identical tx', async () => {
+  const local = privateKeyToAccount(pk1)
+  const jsonRpc: JsonRpcAccount = { address: account, type: 'json-rpc' }
+  // The fixture address is exactly pk1's address.
+  expect(local.address).toBe(account)
+
+  const build = async (
+    source: typeof account | typeof local | typeof jsonRpc,
+  ) => {
+    const { transport, calls } = buildMock()
+    const client = createWalletClient({ account: source, transport })
+    const tx = await client.buildSendTrx({ to, amount: 1000000n })
+    // Building never signs or broadcasts, whatever the account kind.
+    expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
+    return tx
+  }
+
+  const fromAddress = await build(account)
+  const fromLocal = await build(local)
+  const fromJsonRpc = await build(jsonRpc)
+
+  expect(fromAddress.txID).toBe(TX_ID)
+  expect(fromAddress.raw_data_hex).toBe(RAW_DATA_HEX)
+  expect(fromLocal).toEqual(fromAddress)
+  expect(fromJsonRpc).toEqual(fromAddress)
 })
 
 test('throws AccountNotFoundError when no account is available (bare action)', async () => {

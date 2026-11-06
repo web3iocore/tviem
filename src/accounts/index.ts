@@ -29,7 +29,6 @@ export {
 } from './privateKeyToAccount.js'
 export { type ToAccountErrorType, toAccount } from './toAccount.js'
 export type {
-  AccountKey,
   AccountMultiSignFn,
   AccountMultiSignOptions,
   AccountSignMessageParameters,

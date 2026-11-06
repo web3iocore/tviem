@@ -6,8 +6,9 @@
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 → owner TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1. The build actions only need the owner address, so
+// the client hoists it as an address-only account (nothing signs).
+const owner = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC' as const
 
 /** The single pinned reference block every build test builds against. */
 export const tviemHeader = {
@@ -17,8 +18,8 @@ export const tviemHeader = {
   expiration: 1700000060000n,
 }
 
-/** A tviem wallet client hoisted with pk1; no node is hit (blockHeader is set). */
+/** A tviem wallet client hoisted with pk1's address; no node is hit (blockHeader is set). */
 export function makeTviemClient() {
   const { transport } = createMockTransport({ responses: {} })
-  return createWalletClient({ account: pk1, transport })
+  return createWalletClient({ account: owner, transport })
 }

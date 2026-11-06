@@ -1,6 +1,6 @@
 import type { Abi } from 'abitype'
 
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import {
   defaultConsumeUserResourcePercent,
@@ -142,7 +142,7 @@ export type DeployContractParameters<
   allArgs = ContractConstructorArgs<abi>,
 > = {
   /** The signing account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Contract ABI — used to encode constructor `args` and embedded on-chain. */
   abi: abi
   /** Contract creation bytecode. */

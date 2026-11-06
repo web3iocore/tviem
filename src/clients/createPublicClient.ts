@@ -1,6 +1,7 @@
-import type { AccountKey, TronAccount } from '../accounts/types.js'
+import type { TronAccount } from '../accounts/types.js'
 import type { ErrorType } from '../errors/utils.js'
 import type { ParseAccount } from '../types/account.js'
+import type { Address } from '../types/address.js'
 import type { Chain } from '../types/chain.js'
 import type { Prettify } from '../types/utils.js'
 import {
@@ -38,10 +39,10 @@ export type CreatePublicClientErrorType = CreateClientErrorType | ErrorType
 export function createPublicClient<
   transport extends Transport,
   chain extends Chain | undefined = undefined,
-  accountOrKey extends TronAccount | AccountKey | undefined = undefined,
+  accountOrAddress extends TronAccount | Address | undefined = undefined,
 >(
   parameters: PublicClientConfig<transport, chain>,
-): PublicClient<transport, chain, ParseAccount<accountOrKey>> {
+): PublicClient<transport, chain, ParseAccount<accountOrAddress>> {
   const { key = 'public', name = 'Public Client' } = parameters
   const client = createClient({
     ...parameters,
@@ -52,6 +53,6 @@ export function createPublicClient<
   return client.extend(publicActions) as PublicClient<
     transport,
     chain,
-    ParseAccount<accountOrKey>
+    ParseAccount<accountOrAddress>
   >
 }

@@ -9,9 +9,9 @@ import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile, type TxFixture } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
-// pk = 1 (permitted trivial key) → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC,
-// which is exactly the fixture `owner_address`.
-const pk1 = `0x${'0'.repeat(63)}1` as const
+// The address of pk = 1, which is exactly the fixture `owner_address`. Passed
+// as a bare address (a JsonRpcAccount): building needs no key.
+const account = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
 
 // The build half must produce the identical bytes / id that `deployContract`
 // signs — the same gold vector the full action is pinned against.
@@ -51,7 +51,7 @@ function buildMock() {
 
 test('builds the canonical deploy in TronWeb JSON shape, unsigned', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDeployContract(client, paramsOf(deployValueOf(basic!)))
 
@@ -69,7 +69,7 @@ test('builds the canonical deploy in TronWeb JSON shape, unsigned', async () => 
 
 test('a custom blockHeader is used verbatim and skips the getnowblock fetch', async () => {
   const { transport, calls } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDeployContract(client, {
     ...paramsOf(deployValueOf(basic!)),
@@ -88,7 +88,7 @@ test('a custom blockHeader is used verbatim and skips the getnowblock fetch', as
 
 test('raw_data.contract[0] is the CreateSmartContract node type', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDeployContract(client, paramsOf(deployValueOf(basic!)))
   const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
@@ -104,7 +104,7 @@ test('raw_data.contract[0] is the CreateSmartContract node type', async () => {
 
 test('permissionId is baked in as Permission_id and changes the id', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const tx = await buildDeployContract(client, {
     ...paramsOf(deployValueOf(basic!)),
@@ -134,7 +134,7 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
 // java-tron rejects for a CreateSmartContract). An explicit 0n is honored.
 test('defaults feeLimit when omitted; honors an explicit 0n', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   const value = deployValueOf(basic!)
   const noFee = {
     abi: value.abi,
@@ -155,7 +155,7 @@ test('defaults feeLimit when omitted; honors an explicit 0n', async () => {
 // [0, 100], so an out-of-range value would sign a doomed deployment.
 test('throws on a consumeUserResourcePercent outside [0, 100]', async () => {
   const { transport } = buildMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
   for (const consumeUserResourcePercent of [101n, -1n]) {
     await expect(
       buildDeployContract(client, {

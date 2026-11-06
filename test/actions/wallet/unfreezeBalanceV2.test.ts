@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import { unfreezeBalanceV2 } from '../../../src/actions/wallet/unfreezeBalanceV2.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
@@ -10,6 +11,7 @@ import { parseBroadcast } from '../../mock/parseBroadcast.js'
 
 // pk = 1 → address TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC (the fixture owner).
 const pk1 = `0x${'0'.repeat(63)}1` as const
+const account = privateKeyToAccount(pk1)
 
 const [bandwidth, energy] = loadTxFixtureFile(
   'unfreeze-balance-v2-contract.json',
@@ -26,7 +28,7 @@ function writeMock() {
 
 test('unfreezes for BANDWIDTH byte-for-byte against the gold vector', async () => {
   const { transport, calls, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await unfreezeBalanceV2(client, {
     unfreezeBalance: 500000n,
@@ -52,7 +54,7 @@ test('unfreezes for BANDWIDTH byte-for-byte against the gold vector', async () =
 
 test('unfreezes for ENERGY byte-for-byte against the gold vector', async () => {
   const { transport, bodyOf } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   const { txID } = await unfreezeBalanceV2(client, {
     unfreezeBalance: 250000n,
@@ -72,7 +74,7 @@ test('unfreezes for ENERGY byte-for-byte against the gold vector', async () => {
 // action must refuse the name before any request instead.
 test('rejects an invalid resource name from untyped JS before any request', async () => {
   const { transport, calls } = writeMock()
-  const client = createWalletClient({ account: pk1, transport })
+  const client = createWalletClient({ account, transport })
 
   await expect(
     unfreezeBalanceV2(client, {

@@ -1,4 +1,4 @@
-import type { AccountKey, TronAccount } from '../../accounts/types.js'
+import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
@@ -10,6 +10,7 @@ import {
   type ParseAccountErrorType,
   parseAccount,
 } from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import {
   type AddressToHexErrorType,
   addressToHex,
@@ -52,7 +53,7 @@ export type ProposalParametersInput =
 
 export type CreateProposalParameters = {
   /** The signing (proposer) account (falls back to `client.account`). */
-  account?: TronAccount | AccountKey | undefined
+  account?: TronAccount | Address | undefined
   /** Proposed chain-parameter changes. */
   parameters: ProposalParametersInput
   /**

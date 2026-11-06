@@ -3,6 +3,7 @@ import { generatePrivateKey } from '../../src/accounts/generatePrivateKey.js'
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../src/accounts/toAccount.js'
 import type {
+  JsonRpcAccount,
   SignableTransaction,
   TronAccount,
   TronCustomAccount,
@@ -173,8 +174,13 @@ test('generatePrivateKey returns a Hex', () => {
   expectTypeOf(generatePrivateKey()).toEqualTypeOf<Hex>()
 })
 
-test('toAccount overloads: private key → local, source → custom', () => {
-  expectTypeOf(toAccount('0x01')).toEqualTypeOf<TronLocalAccount>()
+test('toAccount overloads: address → json-rpc, source → custom', () => {
+  expectTypeOf(toAccount('TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC')).toEqualTypeOf<
+    JsonRpcAccount<'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'>
+  >()
+  expectTypeOf(toAccount('T' as Address)).toMatchTypeOf<TronAccount>()
+  // @ts-expect-error a private key is not an account source
+  toAccount('0x01')
   const source = {} as TronCustomSource
   expectTypeOf(toAccount(source)).toEqualTypeOf<TronCustomAccount>()
   expectTypeOf(toAccount(source)).toMatchTypeOf<TronAccount>()
