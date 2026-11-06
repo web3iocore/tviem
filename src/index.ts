@@ -39,6 +39,7 @@ export type {
   AccountSignMessageParameters,
   AccountSignTypedDataParameters,
   AccountSource,
+  JsonRpcAccount,
   SignableTransaction,
   TronAccount,
   TronCustomAccount,

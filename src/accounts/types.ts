@@ -145,8 +145,8 @@ export type TronHDAccount = TronCustomSource & {
 /**
  * An account backed by a caller-supplied signing source (its own `sign`
  * functions) rather than a raw private key held by this SDK. Produced by
- * `toAccount` from a {@link TronCustomSource}; the reserved shape that v0.1c
- * delegated/remote signers plug into.
+ * `toAccount` from a {@link TronCustomSource} — the shape wallet adapters
+ * plug into.
  */
 export type TronCustomAccount = TronCustomSource & {
   /** Signing source. `'custom'` = caller-supplied signing functions. */
@@ -156,11 +156,30 @@ export type TronCustomAccount = TronCustomSource & {
 }
 
 /**
- * Any account this SDK can produce: a private-key-backed
- * {@link TronLocalAccount}, an HD-derived {@link TronHDAccount}, or a
- * caller-supplied {@link TronCustomAccount}.
+ * An address-only account: it names the owner but holds no signing
+ * material. It can build transactions and act as a read caller; Actions
+ * that must sign throw `AccountTypeNotSupportedError` for it, since TRON
+ * wallets expose no signing RPC to delegate to. Mirrors viem's
+ * `JsonRpcAccount`.
  */
-export type TronAccount = TronLocalAccount | TronHDAccount | TronCustomAccount
+export type JsonRpcAccount<address extends Address = Address> = {
+  /** The account's Base58Check address. */
+  address: address
+  /** Discriminant for the account union. */
+  type: 'json-rpc'
+}
+
+/**
+ * Any account this SDK can produce: a private-key-backed
+ * {@link TronLocalAccount}, an HD-derived {@link TronHDAccount}, a
+ * caller-supplied {@link TronCustomAccount}, or an address-only
+ * {@link JsonRpcAccount}.
+ */
+export type TronAccount =
+  | TronLocalAccount
+  | TronHDAccount
+  | TronCustomAccount
+  | JsonRpcAccount
 
 /**
  * A private key in either accepted string form — `0x`-prefixed or bare

@@ -23,6 +23,10 @@ import {
   type AssertSignedTransactionErrorType,
   signWithCheck,
 } from '../utils/assertSignedTransaction.js'
+import {
+  type AssertSigningAccountErrorType,
+  assertSigningAccount,
+} from '../utils/assertSigningAccount.js'
 
 export type MultiSignParameters = {
   /** The transaction to co-sign — fresh or already carrying other signatures. */
@@ -54,6 +58,7 @@ export type MultiSignReturnType = SignableTransaction
 export type MultiSignErrorType =
   | AccountNotFoundErrorType
   | AssertSignedTransactionErrorType
+  | AssertSigningAccountErrorType
   | MultiSignTransactionErrorType
   | ParseAccountErrorType
   | BaseErrorType
@@ -98,6 +103,7 @@ export async function multiSign(
   const source = parameters.account ?? client.account
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
+  assertSigningAccount(account)
   // Optional on a custom account: a caller-supplied signer may not co-sign.
   const coSign = account.multiSign?.bind(account)
   if (typeof coSign !== 'function')

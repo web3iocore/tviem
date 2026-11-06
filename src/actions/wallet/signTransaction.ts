@@ -18,6 +18,10 @@ import {
   type AssertSignedTransactionErrorType,
   signWithCheck,
 } from '../utils/assertSignedTransaction.js'
+import {
+  type AssertSigningAccountErrorType,
+  assertSigningAccount,
+} from '../utils/assertSigningAccount.js'
 
 export type SignTransactionParameters = {
   /**
@@ -33,6 +37,7 @@ export type SignTransactionReturnType = SignableTransaction
 export type SignTransactionErrorType =
   | AccountNotFoundErrorType
   | AssertSignedTransactionErrorType
+  | AssertSigningAccountErrorType
   | ParseAccountErrorType
   | SignTransactionErrorType_account
   | ErrorType
@@ -59,6 +64,7 @@ export async function signTransaction(
   const { transaction, account: source = client.account } = parameters
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
+  assertSigningAccount(account)
   return signWithCheck(transaction, (unsigned) =>
     account.signTransaction(unsigned),
   )

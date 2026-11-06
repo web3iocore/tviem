@@ -15,6 +15,10 @@ import {
 } from '../../types/account.js'
 import type { Signature } from '../../utils/signature/sign.js'
 import type { SignMessageErrorType as SignMessageErrorType_account } from '../../utils/signature/signMessage.js'
+import {
+  type AssertSigningAccountErrorType,
+  assertSigningAccount,
+} from '../utils/assertSigningAccount.js'
 
 export type SignMessageParameters = AccountSignMessageParameters & {
   /** The signing account (falls back to `client.account`). */
@@ -24,6 +28,7 @@ export type SignMessageReturnType = Signature
 
 export type SignMessageErrorType =
   | AccountNotFoundErrorType
+  | AssertSigningAccountErrorType
   | ParseAccountErrorType
   | SignMessageErrorType_account
   | ErrorType
@@ -45,5 +50,6 @@ export async function signMessage(
   const { account: source = client.account, ...rest } = parameters
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
+  assertSigningAccount(account)
   return await account.signMessage(rest)
 }

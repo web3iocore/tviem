@@ -12,6 +12,10 @@ import {
   signWithCheck,
 } from '../../utils/assertSignedTransaction.js'
 import {
+  type AssertSigningAccountErrorType,
+  assertSigningAccount,
+} from '../../utils/assertSigningAccount.js'
+import {
   type BroadcastTransactionErrorType,
   broadcastTransaction,
 } from '../broadcastTransaction.js'
@@ -67,6 +71,7 @@ export type BuildAndBroadcastReturnType = {
 }
 
 export type BuildAndBroadcastErrorType =
+  | AssertSigningAccountErrorType
   | AssertSignedTransactionErrorType
   | BroadcastTransactionErrorType
   | BuildTransactionErrorType
@@ -95,6 +100,9 @@ export async function buildAndBroadcast(
 ): Promise<BuildAndBroadcastReturnType> {
   const { contract, account, feeLimit, memo, blockHeader, expirationMs } =
     parameters
+
+  // Refuse an account that cannot sign before anything goes out to the node.
+  assertSigningAccount(account)
 
   // Build the unsigned transaction (block header filled, txID computed locally).
   const unsigned = await buildTransaction(client, {
