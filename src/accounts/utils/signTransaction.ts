@@ -65,9 +65,8 @@ export type SignTransactionErrorType =
  * synchronous and deterministic (RFC 6979, low-`s`, no extra entropy).
  *
  * Before anything else the transaction is snapshotted into plain data
- * ({@link cloneTransaction}), each property read exactly once — so a getter
- * or `Proxy` on the caller's object cannot show the integrity check one
- * value and the signing read another (check-versus-use). All guards below
+ * ({@link cloneTransaction}), each property read exactly once, so the
+ * integrity check and the signing step see the same values. All guards below
  * run on that copy, and the returned transaction shares no references with
  * the input.
  *
@@ -81,9 +80,9 @@ export type SignTransactionErrorType =
  * 1. The transaction must pass {@link txCheck}: `txID`, `raw_data` and
  *    `raw_data_hex` are all present and mutually consistent — `raw_data`
  *    serializes to exactly the `raw_data_hex` bytes, whose SHA-256
- *    ({@link getTransactionId}) is `txID` — otherwise it throws. This
- *    refuses blind signing (a digest without its content) and any `txID` or
- *    JSON that does not match the bytes; a node-supplied `txID` is
+ *    ({@link getTransactionId}) is `txID` — otherwise it throws. A digest
+ *    without its content, or a `txID` or JSON that does not match the bytes,
+ *    is not signed; a node-supplied `txID` is
  *    recomputed and compared, never adopted as-is. Partial forms do not
  *    sign — build the full triple first (`buildTransaction` does).
  * 2. The first contract's `owner_address` must equal `address` — the
@@ -104,10 +103,9 @@ export function signTransaction(
   parameters: SignTransactionParameters,
 ): SignableTransaction {
   const { privateKey } = parameters
-  // Snapshot before ANY read is trusted: a getter/Proxy on the caller's
-  // object could otherwise answer txCheck with honest values and the signing
-  // read with different ones (check-versus-use), turning the guarded path
-  // into blind signing. Every guard below runs on this plain copy.
+  // Snapshot first, so txCheck and the signing step read the same values
+  // even when the input uses getters or a Proxy. Every guard below runs on
+  // this plain copy.
   const transaction = cloneTransaction(parameters.transaction)
   const address = parameters.address ?? privateKeyToAddress(privateKey)
 

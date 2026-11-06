@@ -139,6 +139,19 @@ const signedTransaction = await account.signTransaction(unsigned)
 const { txid } = await wallet.broadcastTransaction({ signedTransaction })
 ```
 
+### Build for an address you hold no key for
+
+A string `account` is always a Base58Check address (never a private key — use
+`privateKeyToAccount()` for that). It becomes an address-only account that can
+build transactions and act as a read caller, e.g. to prepare a transaction for
+a cold wallet or a multi-signature owner. Actions that must sign throw
+`AccountTypeNotSupportedError` for it before sending any request.
+
+```ts
+const builder = createWalletClient({ account: 'T…', transport: http() })
+const unsigned = await builder.buildSendTrx({ to: 'T…', amount: parseTrx('1') })
+```
+
 ### Sign with a wallet (custom async signer)
 
 `toAccount` turns any signer into an account — its methods may be sync or

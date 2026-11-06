@@ -56,9 +56,8 @@ export function toAccount(
     throw new BaseError(
       'Invalid account source: expected a Base58Check address or a custom source with an `address`.',
     )
-  // A custom source must be able to sign: an object without the signing
-  // methods (an address-only account, say) would otherwise come out as a
-  // `local` account and get past the checks that refuse non-signers.
+  // A custom source provides all three signing methods; an address-only
+  // account is created from the address string instead.
   for (const method of [
     'signMessage',
     'signTypedData',

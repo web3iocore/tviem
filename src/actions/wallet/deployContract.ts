@@ -141,7 +141,11 @@ export type DeployContractParameters<
   // shape working.
   allArgs = ContractConstructorArgs<abi>,
 > = {
-  /** The signing account (falls back to `client.account`). */
+  /**
+   * The owner account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Contract ABI — used to encode constructor `args` and embedded on-chain. */
   abi: abi

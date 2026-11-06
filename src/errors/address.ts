@@ -1,8 +1,8 @@
 import { BaseError } from './base.js'
 
 /**
- * The longest valid address form: `0x41` + 21 bytes = 44 characters. Anything
- * longer cannot be a mistyped address.
+ * The longest valid address form: `0x41` + 21 bytes = 44 characters. Longer
+ * values are shown truncated.
  */
 const maxAddressLength = 44
 
@@ -20,18 +20,15 @@ export class InvalidAddressError extends BaseError {
   }: {
     address: string
     /**
-     * Leave the value out of the message entirely. For inputs where a secret
-     * is a likely mistake — an `account` string used to be a private key —
-     * even a truncated head is too much.
+     * Omit the value from the message. Used when validating `account`
+     * strings.
      */
     hideValue?: boolean | undefined
     /** Replaces the default guidance on accepted address forms. */
     metaMessages?: string[] | undefined
   }) {
-    // A value longer than any address form is not a typo — it may be a private
-    // key or mnemonic passed where an address was expected. Echoing it in full
-    // would put the secret in the error message, and from there into logs and
-    // error reports, so only its head and length are shown.
+    // A value longer than any address form is shown as its first characters
+    // and its length.
     const redacted = !hideValue && address.length > maxAddressLength
     const shown = redacted
       ? `${address.slice(0, redactedPrefixLength)}…`
@@ -44,7 +41,7 @@ export class InvalidAddressError extends BaseError {
           '- Base58Check address must match its double-SHA256 checksum.',
           ...(redacted
             ? [
-                `- The value is ${address.length} characters long — too long to be an address in any form, so it is shown truncated in case it holds key material.`,
+                `- The value is ${address.length} characters long, longer than any address form, so only its first characters are shown.`,
               ]
             : []),
         ],

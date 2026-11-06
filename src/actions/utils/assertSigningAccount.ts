@@ -10,13 +10,12 @@ export type AssertSigningAccountErrorType =
   | ErrorType
 
 /**
- * Fails unless `account` can sign — i.e. it is a `local` account (private
+ * Asserts that `account` can sign, i.e. it is a `local` account (private
  * key, HD or custom source). Actions that sign call this right after
- * resolving the account, before any request goes out, so an address-only
- * account is refused without a wasted round trip.
+ * resolving the account, so the error is thrown before any request is sent.
  *
- * Fails closed: anything that is not `type: 'local'` is refused, not only
- * `json-rpc` — a plain-JS caller may pass an object with no `type` at all.
+ * Only `type: 'local'` passes; any other value, including a missing `type`,
+ * throws {@link AccountTypeNotSupportedError}.
  *
  * @param account The resolved account.
  * @param options `docsPath` — the Action's docs page, for the error.

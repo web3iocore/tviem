@@ -39,7 +39,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type UpdateAccountParameters = {
-  /** The signing account (falls back to `client.account`). */
+  /**
+   * The owner account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /**
    * New account name (`account_name`). Dual-form ("flex"): plain text is

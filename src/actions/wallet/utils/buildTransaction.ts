@@ -264,8 +264,8 @@ export async function buildTransaction(
 
   // Canonicalize once through the encode∘decode roundtrip so the built
   // transaction is the canonical node-JSON shape end to end (flexible
-  // encode-side inputs — bigint, 0x-hex, Base58 addresses — never leak out),
-  // then derive the id locally from those bytes (never trusted from a node).
+  // encode-side inputs — bigint, 0x-hex, Base58 addresses — do not appear in
+  // the output), then derive the id locally from those bytes.
   const bytes = serializeRawData(rawData)
   const canonical = decodeRawData(bytes)
   return {

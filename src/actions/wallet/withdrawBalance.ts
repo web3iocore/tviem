@@ -34,7 +34,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type WithdrawBalanceParameters = {
-  /** The signing account (falls back to `client.account`). */
+  /**
+   * The owner account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /**
    * A pre-derived TaPoS + timing header. When supplied the transaction is built

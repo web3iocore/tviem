@@ -39,7 +39,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type UpdateTokenParameters = {
-  /** The signing (issuer) account (falls back to `client.account`). */
+  /**
+   * The owner (issuer) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** New token description (dual string/hex form). */
   description: FlexInput

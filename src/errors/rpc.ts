@@ -73,8 +73,7 @@ export class BlockNotFoundError extends BaseError {
 /**
  * Thrown by `getBlock` when the node answers with a block at a different
  * height than the one requested. The node-supplied block is discarded and the
- * mismatch surfaced here. This can indicate block substitution by a
- * misbehaving or man-in-the-middled node.
+ * mismatch surfaced here.
  */
 export type BlockTamperedErrorType = BlockTamperedError & {
   name: 'BlockTamperedError'

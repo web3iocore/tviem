@@ -35,7 +35,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type UpdateSettingParameters = {
-  /** The signing (deployer/owner) account (falls back to `client.account`). */
+  /**
+   * The owner (deployer/owner) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Contract to update. */
   contractAddress: Address

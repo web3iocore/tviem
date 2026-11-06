@@ -41,10 +41,9 @@ export type MultiSignTransactionErrorType =
  * `multiSign` method and the `multiSign` wallet action.
  *
  * Before anything else the transaction is snapshotted into plain data
- * ({@link cloneTransaction}), each property read exactly once — so a getter
- * or `Proxy` on the caller's object cannot show `txCheck` an honest model
- * and hand the recompute below a different one (check-versus-use). All
- * guards and the recompute run on that copy.
+ * ({@link cloneTransaction}), each property read exactly once, so `txCheck`
+ * and the recompute below see the same model. All guards and the recompute
+ * run on that copy.
  *
  * The multi-sig guards AND the bind live here; the transaction must arrive
  * as a self-consistent `txID` + `raw_data` + `raw_data_hex` triple (it is
@@ -83,10 +82,8 @@ export function multiSignTransaction(
   parameters: MultiSignTransactionParameters,
 ): SignableTransaction {
   const { privateKey } = parameters
-  // Snapshot before ANY read is trusted: a getter/Proxy on the caller's
-  // object could otherwise answer txCheck with an honest model and hand the
-  // recompute below a different one (check-versus-use) — yielding a valid
-  // signature over bytes that were never checked. Every guard and the
+  // Snapshot first, so txCheck and the recompute below read the same model
+  // even when the input uses getters or a Proxy. Every guard and the
   // recompute run on this plain copy.
   const transaction = cloneTransaction(parameters.transaction)
 

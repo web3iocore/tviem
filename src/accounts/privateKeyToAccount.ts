@@ -56,8 +56,8 @@ export type PrivateKeyToAccountErrorType =
  * co-signs multi-signature transactions under a permission id. Signing is
  * synchronous. `signTransaction` only signs unsigned transactions — one that
  * already carries a signature (its own or a foreign one) is refused, since
- * collecting signatures is `multiSign`'s business. There is deliberately no
- * raw-digest `sign` — blind signing is not supported (see
+ * collecting signatures is `multiSign`'s business. There is no raw-digest
+ * `sign`; every signature is over a transaction, message or typed data (see
  * {@link TronCustomSource}).
  *
  * Accepts a 32-byte private key as `0x`-prefixed or bare hex. The key must be a

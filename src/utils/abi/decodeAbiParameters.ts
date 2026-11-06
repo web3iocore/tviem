@@ -234,9 +234,9 @@ function decodeArray(
       const [element, consumed_] = decodeParameter(cursor, param, {
         staticPosition: startOfData,
       })
-      // `arrayLength` is attacker-controlled and the loop's only backstop is
-      // the cursor running out of bounds, so an element occupying zero bytes
-      // (degenerate `tuple` with no components, `X[0]`) would spin here.
+      // `arrayLength` comes from the encoded data and the loop otherwise ends
+      // only when the cursor runs out of bounds, so an element occupying zero
+      // bytes (a `tuple` with no components, `X[0]`) would not advance it.
       if (consumed_ === 0) throw new AbiDecodingZeroSizeElementError(param.type)
       consumed += consumed_
       value.push(element)

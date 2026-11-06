@@ -92,8 +92,7 @@ export async function getApprovedList(
   // request body and the echo assertion are three separate reads of the
   // caller's object with an `await` between the last two. Read live, the
   // assertion would compare the node's echo against whatever the object says
-  // by then rather than against what was sent — accusing an honest node, or
-  // passing a forged echo the object has come to match.
+  // by then rather than against what was sent.
   const snapshot = cloneTransaction(parameters.transaction)
 
   if (!snapshot.raw_data_hex || !snapshot.txID)
@@ -105,8 +104,8 @@ export async function getApprovedList(
   // from `raw_data`, read as `visible: false` JSON. The triple is checked and
   // `raw_data` re-derived from the checked bytes, so a spelling the signing
   // paths accept but the node does not (Base58, `0x` EVM, raw bytes) is never
-  // sent verbatim — and a drifted model is refused here rather than inspected
-  // by the node and reported back as a tampered echo.
+  // sent verbatim — and an inconsistent model is refused here rather than
+  // sent to the node.
   const transaction = canonicalizeTransaction(snapshot)
 
   // A real node reports `SUCCESS` as `code` alone (or omits it), which the

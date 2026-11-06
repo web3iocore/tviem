@@ -25,11 +25,10 @@ const maxValues = 1_000_000
 /**
  * Deep-copies a transaction into plain data, reading every own enumerable
  * string-keyed property exactly once. This is the snapshot every signing
- * path takes BEFORE verifying anything: a getter or `Proxy` could otherwise
- * answer the integrity check (`txCheck`) with honest values and the signing
- * read with different ones — a check-versus-use swap that turns the guarded
- * path into blind signing. Whatever value the single read captures here is
- * the one both checked and signed.
+ * path takes before verifying anything, so the integrity check (`txCheck`)
+ * and the signing step read the same values even when the input uses
+ * getters or a `Proxy`. The value captured here is the one both checked and
+ * signed.
  *
  * The copy is hardened accordingly:
  * - accessors are evaluated once and pinned as plain, writable data

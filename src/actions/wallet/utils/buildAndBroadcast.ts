@@ -101,7 +101,8 @@ export async function buildAndBroadcast(
   const { contract, account, feeLimit, memo, blockHeader, expirationMs } =
     parameters
 
-  // Refuse an account that cannot sign before anything goes out to the node.
+  // Checked before building, so no request is sent for an account that
+  // cannot sign.
   assertSigningAccount(account)
 
   // Build the unsigned transaction (block header filled, txID computed locally).

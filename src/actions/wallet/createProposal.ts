@@ -52,7 +52,11 @@ export type ProposalParametersInput =
   | Record<number, number | bigint>
 
 export type CreateProposalParameters = {
-  /** The signing (proposer) account (falls back to `client.account`). */
+  /**
+   * The owner (proposer) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Proposed chain-parameter changes. */
   parameters: ProposalParametersInput

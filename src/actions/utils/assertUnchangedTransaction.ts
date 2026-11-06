@@ -24,7 +24,7 @@ export type EchoedTransaction =
  * `bareHex`, as `txCheck` and the signing paths do. Those accept — and hand
  * back — a `0x`-prefixed or upper-case `txID` / `raw_data_hex`, while a node
  * echoes its own bare lowercase rendering; folding case alone would report
- * that honest echo as tampering.
+ * a matching echo as a mismatch.
  *
  * @param local The locally built/signed transaction (source of truth).
  * @param echoed The transaction the node returned, if any.

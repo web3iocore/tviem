@@ -263,9 +263,9 @@ export function http(
     // spelling of the same key, so exactly one key is ever sent.
     if (apiKey) headers.set('TRON-PRO-API-KEY', apiKey)
     // fetch's default redirect mode (`follow`) re-sends custom headers —
-    // including `TRON-PRO-API-KEY` — to whatever cross-origin target a 30x
-    // names, leaking the key. Refuse redirects unless the caller explicitly
-    // opts in via `fetchOptions.redirect`.
+    // including `TRON-PRO-API-KEY` — to the target a 30x names, which may be
+    // another origin. Redirects are off unless the caller opts in via
+    // `fetchOptions.redirect`.
     const mergedFetchOptions = {
       ...fetchOptions,
       redirect: fetchOptions?.redirect ?? 'error',

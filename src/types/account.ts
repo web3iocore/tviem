@@ -24,9 +24,8 @@ export type ParseAccountErrorType = InvalidAddressErrorType | ErrorType
  * - A Base58Check `T…` address becomes an address-only {@link JsonRpcAccount}.
  * - An account object is returned as-is.
  *
- * A private key is not an `account` string — wrap it with
- * `privateKeyToAccount()`. An invalid string is refused without echoing it,
- * since it may well be a key passed out of habit.
+ * To sign with a private key, pass `privateKeyToAccount(key)`. Any other
+ * string throws `InvalidAddressError`, whose message omits the value.
  */
 export function parseAccount<source extends TronAccount | Address>(
   source: source,

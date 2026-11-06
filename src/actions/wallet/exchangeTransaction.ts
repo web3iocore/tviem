@@ -40,7 +40,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type ExchangeTransactionParameters = {
-  /** The signing (trader) account (falls back to `client.account`). */
+  /**
+   * The owner (trader) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Id of the exchange to trade against. */
   exchangeId: bigint | number

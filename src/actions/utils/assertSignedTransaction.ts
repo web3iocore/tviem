@@ -20,9 +20,8 @@ export type AssertSignedTransactionErrorType =
 
 /**
  * Runs `sign` on a copy of `transaction` and returns a checked snapshot of
- * the result (see {@link assertSignedTransaction}). The reference the result
- * is checked against never reaches the signer, so nothing the signer does to
- * its argument can move it.
+ * the result (see {@link assertSignedTransaction}). The signer gets its own
+ * copy, and the result is checked against a separate one.
  *
  * @param transaction The transaction to sign.
  * @param sign The account's signing call.
@@ -52,8 +51,8 @@ export async function signWithCheck(
  *   owner (multi-signature co-signers are not).
  *
  * @param signed The transaction the signer returned.
- * @param unsigned The transaction the signer was asked to sign — a copy the
- * signer never had access to.
+ * @param unsigned The transaction the signer was asked to sign, kept as a
+ * separate copy.
  * @returns A deep copy of `signed` that shares no references with it.
  */
 export function assertSignedTransaction(

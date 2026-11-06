@@ -28,9 +28,9 @@ test('InvalidAddressError echoes a value at the longest valid length', () => {
   )
 })
 
-// A private key pasted where an address was expected must not end up in the
-// error message (and from there in logs / error reports).
-test('InvalidAddressError redacts a value too long to be an address', () => {
+// A value longer than any address form is shown as its first characters and
+// its length.
+test('InvalidAddressError truncates a value too long to be an address', () => {
   const privateKey = `0x${'ab'.repeat(32)}` // 66 chars
   const error = new InvalidAddressError({ address: privateKey })
   expect(error.message).toContain('Address "0xabab…" is invalid.')
@@ -39,8 +39,7 @@ test('InvalidAddressError redacts a value too long to be an address', () => {
   expect(error.message).toContain('66 characters long')
 })
 
-// `hideValue` is for inputs where a secret is a likely mistake: nothing of
-// the value — not even a short head — reaches the message.
+// With `hideValue`, no part of the value appears in the message.
 test('InvalidAddressError with hideValue leaves the value out entirely', () => {
   for (const value of [
     `0x${'ab'.repeat(32)}`,

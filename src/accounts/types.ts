@@ -80,9 +80,8 @@ export type AccountMultiSignFn = (
  * accounts happen to resolve synchronously today, but are typed the same way
  * so that may change without breaking callers.
  *
- * Deliberately, there is NO raw-digest `sign({ hash })`: signing an opaque
- * 32-byte hash is blind signing — the signer cannot know what it authorizes.
- * Every signature an account produces carries context: a transaction
+ * There is no raw-digest `sign({ hash })`. Every signature an account
+ * produces is over content the signer can inspect: a transaction
  * (integrity-checked against its bytes, owner-guarded), a TIP-191-prefixed
  * message, or a TIP-712 typed-data domain.
  */

@@ -39,7 +39,11 @@ import {
 } from './utils/buildTransaction.js'
 
 export type UndelegateResourceParameters = {
-  /** The signing (delegator) account (falls back to `client.account`). */
+  /**
+   * The owner (delegator) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Account the resource was delegated to. */
   receiverAddress: Address

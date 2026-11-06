@@ -41,7 +41,11 @@ import {
 export type DelegateResource = 'BANDWIDTH' | 'ENERGY'
 
 export type DelegateResourceParameters = {
-  /** The signing (delegator) account (falls back to `client.account`). */
+  /**
+   * The owner (delegator) account (falls back to `client.account`). Signing needs
+   * a local account; the `build*` form only reads its address, so an
+   * address string works there.
+   */
   account?: TronAccount | Address | undefined
   /** Recipient of the delegated resource. */
   receiverAddress: Address
