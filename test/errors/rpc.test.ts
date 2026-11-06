@@ -3,6 +3,7 @@ import { expect, test } from 'vitest'
 import { BaseError } from '../../src/errors/base.js'
 import {
   AccountNotFoundError,
+  AccountTypeNotSupportedError,
   BlockNotFoundError,
   CallExecutionError,
   ContractFunctionRevertedError,
@@ -21,6 +22,19 @@ test('AccountNotFoundError is a BaseError with the expected name / message', () 
     'Could not find an Account to execute with this Action.',
   )
   expect(err.message).toContain('`account` argument')
+})
+
+test('AccountTypeNotSupportedError names the account type', () => {
+  const err = new AccountTypeNotSupportedError({
+    type: 'json-rpc',
+    docsPath: '/docs/accounts',
+    metaMessages: ['- hint'],
+  })
+  expect(err).toBeInstanceOf(BaseError)
+  expect(err.name).toBe('AccountTypeNotSupportedError')
+  expect(err.shortMessage).toBe('Account type "json-rpc" is not supported.')
+  expect(err.metaMessages).toEqual(['- hint'])
+  expect(err.docsPath).toBe('/docs/accounts')
 })
 
 test('BlockNotFoundError names the block number when provided', () => {

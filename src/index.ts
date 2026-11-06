@@ -711,6 +711,8 @@ export {
 export {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
+  AccountTypeNotSupportedError,
+  type AccountTypeNotSupportedErrorType,
   BlockNotFoundError,
   type BlockNotFoundErrorType,
   BlockTamperedError,

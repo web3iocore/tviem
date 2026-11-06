@@ -136,6 +136,7 @@ exports[`package exports surface (freeze guard) > root + subpath export names ar
     "AbiItemAmbiguityError",
     "AccountNotFoundError",
     "AccountTypeName",
+    "AccountTypeNotSupportedError",
     "BaseError",
     "BlockNotFoundError",
     "BlockTamperedError",

@@ -38,3 +38,28 @@ test('InvalidAddressError redacts a value too long to be an address', () => {
   expect(error.message).not.toContain('ab'.repeat(4))
   expect(error.message).toContain('66 characters long')
 })
+
+// `hideValue` is for inputs where a secret is a likely mistake: nothing of
+// the value — not even a short head — reaches the message.
+test('InvalidAddressError with hideValue leaves the value out entirely', () => {
+  for (const value of [
+    `0x${'ab'.repeat(32)}`,
+    'ab'.repeat(32),
+    'TshortKeyish',
+  ]) {
+    const error = new InvalidAddressError({ address: value, hideValue: true })
+    expect(error.shortMessage).toBe('Address is invalid.')
+    expect(error.message).not.toContain(value)
+    expect(error.message).not.toContain(value.slice(0, 4))
+  }
+})
+
+test('InvalidAddressError metaMessages replace the default guidance', () => {
+  const error = new InvalidAddressError({
+    address: 'x',
+    hideValue: true,
+    metaMessages: ['- custom guidance'],
+  })
+  expect(error.metaMessages).toEqual(['- custom guidance'])
+  expect(error.message).not.toContain('"41"-prefixed')
+})

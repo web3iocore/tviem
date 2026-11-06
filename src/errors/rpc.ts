@@ -24,6 +24,33 @@ export class AccountNotFoundError extends BaseError {
 }
 
 /**
+ * Thrown when an Action cannot run with the given account's type — e.g. an
+ * address-only (`json-rpc`) account passed to an Action that must sign. TRON
+ * wallets expose no signing RPC to delegate to, so such an account can build
+ * transactions and read, but not sign.
+ */
+export type AccountTypeNotSupportedErrorType = AccountTypeNotSupportedError & {
+  name: 'AccountTypeNotSupportedError'
+}
+export class AccountTypeNotSupportedError extends BaseError {
+  constructor({
+    docsPath,
+    metaMessages,
+    type,
+  }: {
+    docsPath?: string | undefined
+    metaMessages?: string[] | undefined
+    type: string
+  }) {
+    super(`Account type "${type}" is not supported.`, {
+      docsPath,
+      metaMessages,
+      name: 'AccountTypeNotSupportedError',
+    })
+  }
+}
+
+/**
  * Thrown by `getBlock` when the requested block does not exist — the node
  * returns an empty `{}` body for an unknown block number.
  */

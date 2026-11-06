@@ -91,6 +91,9 @@ test('root barrel exposes createTransport / createWalletClient / node errors', (
   expect(typeof mod.createClient).toBe('function')
   expect(new mod.TronNodeError('boom')).toBeInstanceOf(mod.BaseError)
   expect(new mod.AccountNotFoundError()).toBeInstanceOf(mod.BaseError)
+  expect(
+    new mod.AccountTypeNotSupportedError({ type: 'json-rpc' }),
+  ).toBeInstanceOf(mod.BaseError)
 })
 
 test('root barrel exposes UserRejectedRequestError as a BaseError subclass', () => {
