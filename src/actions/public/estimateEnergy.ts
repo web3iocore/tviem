@@ -15,7 +15,11 @@ import {
   type TronRpcErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
-import type { Address, AddressInput } from '../../types/address.js'
+import {
+  type ParseAccountErrorType,
+  parseAccount,
+} from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import type { ContractFunctionName } from '../../types/contract.js'
 import type { TronAbiParametersToPrimitiveTypes } from '../../utils/abi/encodeAbiParameters.js'
 import {
@@ -47,7 +51,7 @@ export type EstimateEnergyParameters<
 > = {
   /**
    * The caller the estimate is computed for — sent as `owner_address`. Accepts
-   * an account or any TRON address form; falls back to the Client's `account`.
+   * an account or a Base58Check address; falls back to the Client's `account`.
    * With neither, an {@link AccountNotFoundError} is thrown.
    *
    * The node executes the call against real chain state, so energy depends on
@@ -56,7 +60,7 @@ export type EstimateEnergyParameters<
    * nothing useful. There is no safe default — and java-tron requires
    * `owner_address` on `estimateenergy`, so there is no anonymous form either.
    */
-  account?: TronAccount | AddressInput | undefined
+  account?: TronAccount | Address | undefined
   /** The contract's Base58Check address. */
   address: Address
   /** The contract ABI. */
@@ -91,6 +95,7 @@ export type EstimateEnergyReturnType = bigint
 
 export type EstimateEnergyErrorType =
   | AccountNotFoundErrorType
+  | ParseAccountErrorType
   | ContractFunctionRevertedErrorType
   | EncodeFunctionDataErrorType
   | IntegerOutOfRangeErrorType
@@ -168,7 +173,7 @@ export async function estimateEnergy<
   // the estimate is only meaningful for the account that will send the call.
   const source = caller ?? client.account
   if (!source) throw new AccountNotFoundError()
-  const owner = typeof source === 'string' ? source : source.address
+  const owner = parseAccount(source).address
 
   const data = encodeFunctionData({ abi, functionName, args })
 

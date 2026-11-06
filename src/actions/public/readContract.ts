@@ -8,7 +8,11 @@ import {
   type ContractFunctionRevertedErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
-import type { Address, AddressInput } from '../../types/address.js'
+import {
+  type ParseAccountErrorType,
+  parseAccount,
+} from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import type {
   ContractFunctionName,
   TronContractFunctionArgs,
@@ -64,7 +68,7 @@ export type ReadContractParameters<
     | (functionName extends allFunctionNames ? functionName : never) // infer value
   /**
    * The caller the call runs as — sent as `owner_address`. Accepts an account
-   * or any TRON address form; falls back to the Client's `account`. With
+   * or a Base58Check address; falls back to the Client's `account`. With
    * neither, an {@link AccountNotFoundError} is thrown.
    *
    * A `view` function can branch on `msg.sender` (allowances, per-caller
@@ -74,7 +78,7 @@ export type ReadContractParameters<
    * java-tron requires `owner_address` on `triggerconstantcontract`, so there
    * is no anonymous form to fall back to either.
    */
-  account?: TronAccount | AddressInput | undefined
+  account?: TronAccount | Address | undefined
   /**
    * Run the constant call against solidified state on the SolidityNode
    * instead of the FullNode's latest state. Solidified state trails the chain
@@ -111,6 +115,7 @@ export type ReadContractReturnType<
 
 export type ReadContractErrorType =
   | AccountNotFoundErrorType
+  | ParseAccountErrorType
   | ContractFunctionRevertedErrorType
   | DecodeAbiParametersErrorType
   | DecodeFunctionResultErrorType
@@ -175,7 +180,7 @@ export async function readContract<
   // the result of a `view` can depend on who asks.
   const source = caller ?? client.account
   if (!source) throw new AccountNotFoundError()
-  const owner = typeof source === 'string' ? source : source.address
+  const owner = parseAccount(source).address
 
   const data = encodeFunctionData({ abi, functionName, args })
 

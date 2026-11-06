@@ -17,7 +17,11 @@ import {
   type ContractFunctionRevertedErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
-import type { Address, AddressInput } from '../../types/address.js'
+import {
+  type ParseAccountErrorType,
+  parseAccount,
+} from '../../types/account.js'
+import type { Address } from '../../types/address.js'
 import type {
   ContractFunctionName,
   TronContractFunctionArgs,
@@ -70,7 +74,7 @@ export type TriggerConstantContractParameters<
     | (functionName extends allFunctionNames ? functionName : never) // infer value
   /**
    * The caller the simulated call runs as — sent as `owner_address`. Accepts an
-   * account or any TRON address form; falls back to the Client's `account`.
+   * account or a Base58Check address; falls back to the Client's `account`.
    * With neither, an {@link AccountNotFoundError} is thrown.
    *
    * The simulation executes against real chain state, so the caller decides the
@@ -80,7 +84,7 @@ export type TriggerConstantContractParameters<
    * java-tron requires `owner_address` on `triggerconstantcontract`, so there
    * is no anonymous form to fall back to either.
    */
-  account?: TronAccount | AddressInput | undefined
+  account?: TronAccount | Address | undefined
   /** TRX value (in SUN) attached to the simulated call. */
   callValue?: bigint | undefined
   /** TRC10 amount attached to the simulated call (`call_token_value`). */
@@ -130,6 +134,7 @@ export type TriggerConstantContractReturnType<
 
 export type TriggerConstantContractErrorType =
   | AccountNotFoundErrorType
+  | ParseAccountErrorType
   | ContractFunctionRevertedErrorType
   | DecodeAbiParametersErrorType
   | DecodeFunctionResultErrorType
@@ -219,7 +224,7 @@ export async function triggerConstantContract<
   // the simulation's outcome depends on who runs it.
   const source = caller ?? client.account
   if (!source) throw new AccountNotFoundError()
-  const owner = typeof source === 'string' ? source : source.address
+  const owner = parseAccount(source).address
 
   const data = encodeFunctionData({ abi, functionName, args })
 
