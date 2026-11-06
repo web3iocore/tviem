@@ -12,7 +12,7 @@ import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { InvalidAddressError } from '../../../src/errors/address.js'
 import {
   AccountNotFoundError,
-  TransactionTamperedError,
+  TransactionMismatchError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
@@ -201,9 +201,8 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
 })
 
 test('refuses a private-key string as `account` without echoing it or sending a request', async () => {
-  // A JS caller (or a stale cast) can still hand over a key out of habit: a
-  // string `account` is an address now, so this must fail closed — before any
-  // request, and without the key (or any slice of it) in the error.
+  // A string `account` is an address, so a key string throws before any
+  // request, and no slice of the value appears in the error.
   const key = '4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318'
   const keyForms = [`0x${key}`, key]
   for (const keyForm of keyForms) {
@@ -426,8 +425,8 @@ test('sendTrx: a validly signed transaction for a different owner is refused and
       return other.signTransaction(rebuild(tx, reown))
     }),
   )
-  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
-  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+  expect(outcome.error).toBeInstanceOf(TransactionMismatchError)
+  expect((outcome.error as TransactionMismatchError).shortMessage).toMatch(
     /different owner_address/,
   )
   expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])
@@ -440,8 +439,8 @@ test('sendTrx: a signer returning an empty signature list is refused and never b
       return { ...(await local.signTransaction(tx)), signature: [] }
     }),
   )
-  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
-  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+  expect(outcome.error).toBeInstanceOf(TransactionMismatchError)
+  expect((outcome.error as TransactionMismatchError).shortMessage).toMatch(
     /without a signature/,
   )
   expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])

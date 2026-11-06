@@ -5,7 +5,7 @@ import { getSignWeight } from '../../../src/actions/public/getSignWeight.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { TronContractValidateError } from '../../../src/errors/node.js'
-import { TransactionTamperedError } from '../../../src/errors/rpc.js'
+import { TransactionMismatchError } from '../../../src/errors/rpc.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -149,7 +149,7 @@ test('a NOT_ENOUGH_PERMISSION body carrying a message is still recovered', async
   expect(result.result?.code).toBe('NOT_ENOUGH_PERMISSION')
 })
 
-test('throws TransactionTamperedError when the node echoes different bytes', async () => {
+test('throws TransactionMismatchError when the node echoes different bytes', async () => {
   const { transport } = createMockTransport({
     responses: {
       getsignweight: {
@@ -167,7 +167,7 @@ test('throws TransactionTamperedError when the node echoes different bytes', asy
   const client = createPublicClient({ transport })
   await expect(
     getSignWeight(client, { transaction: tx }),
-  ).rejects.toBeInstanceOf(TransactionTamperedError)
+  ).rejects.toBeInstanceOf(TransactionMismatchError)
 })
 
 test('checks the echo against the transaction that was sent, not a later read of the caller object', async () => {
@@ -201,7 +201,7 @@ test('checks the echo against the transaction that was sent, not a later read of
   expect(result.transaction.raw_data_hex).toBe(tx.raw_data_hex)
 })
 
-test('flags a tampered echo even when the caller object has changed to match it', async () => {
+test('flags a mismatched echo even when the caller object has changed to match it', async () => {
   // The reverse swap: the node echoes bytes it was never sent, and by the
   // time the response lands the caller's object reads as those same bytes. A
   // check against a fresh read would pass and bless the forged transaction.
@@ -228,7 +228,7 @@ test('flags a tampered echo even when the caller object has changed to match it'
 
   await expect(
     getSignWeight(client, { transaction: local }),
-  ).rejects.toBeInstanceOf(TransactionTamperedError)
+  ).rejects.toBeInstanceOf(TransactionMismatchError)
 })
 
 // Signing accepts any address spelling the serializer does (it is the same

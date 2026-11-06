@@ -12,7 +12,7 @@ import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import {
   AccountNotFoundError,
-  TransactionTamperedError,
+  TransactionMismatchError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
 import type { Hex } from '../../../src/types/misc.js'
@@ -449,8 +449,8 @@ test('deployContract: a validly signed transaction for a different owner is refu
       return other.signTransaction(rebuild(tx, reown))
     }),
   )
-  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
-  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+  expect(outcome.error).toBeInstanceOf(TransactionMismatchError)
+  expect((outcome.error as TransactionMismatchError).shortMessage).toMatch(
     /different owner_address/,
   )
   expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])
@@ -463,8 +463,8 @@ test('deployContract: a signer returning an empty signature list is refused and 
       return { ...(await local.signTransaction(tx)), signature: [] }
     }),
   )
-  expect(outcome.error).toBeInstanceOf(TransactionTamperedError)
-  expect((outcome.error as TransactionTamperedError).shortMessage).toMatch(
+  expect(outcome.error).toBeInstanceOf(TransactionMismatchError)
+  expect((outcome.error as TransactionMismatchError).shortMessage).toMatch(
     /without a signature/,
   )
   expect(outcome.calls.map((c) => c.path)).toEqual(['getnowblock'])

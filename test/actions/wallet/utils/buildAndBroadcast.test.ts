@@ -9,7 +9,7 @@ import type {
 import { buildAndBroadcast } from '../../../../src/actions/wallet/utils/buildAndBroadcast.js'
 import { createPublicClient } from '../../../../src/clients/createPublicClient.js'
 import {
-  TransactionTamperedError,
+  TransactionMismatchError,
   UserRejectedRequestError,
 } from '../../../../src/errors/rpc.js'
 import { addressToHex } from '../../../../src/utils/address/addressToHex.js'
@@ -419,8 +419,8 @@ test('a validly signed transaction for a different owner is refused and never br
     account,
   }).catch((err: unknown) => err)
 
-  expect(error).toBeInstanceOf(TransactionTamperedError)
-  expect((error as TransactionTamperedError).shortMessage).toMatch(
+  expect(error).toBeInstanceOf(TransactionMismatchError)
+  expect((error as TransactionMismatchError).shortMessage).toMatch(
     /different owner_address/,
   )
   expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
@@ -444,8 +444,8 @@ test('a signer retargeting its own argument cannot move the owner check', async 
     account,
   }).catch((err: unknown) => err)
 
-  expect(error).toBeInstanceOf(TransactionTamperedError)
-  expect((error as TransactionTamperedError).shortMessage).toMatch(
+  expect(error).toBeInstanceOf(TransactionMismatchError)
+  expect((error as TransactionMismatchError).shortMessage).toMatch(
     /different owner_address/,
   )
   expect(calls.map((c) => c.path)).toEqual(['getnowblock'])
@@ -477,8 +477,8 @@ test.each([
     account,
   }).catch((err: unknown) => err)
 
-  expect(error).toBeInstanceOf(TransactionTamperedError)
-  expect((error as TransactionTamperedError).shortMessage).toMatch(
+  expect(error).toBeInstanceOf(TransactionMismatchError)
+  expect((error as TransactionMismatchError).shortMessage).toMatch(
     /without a signature/,
   )
   expect(calls.map((c) => c.path)).toEqual(['getnowblock'])

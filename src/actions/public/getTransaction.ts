@@ -2,8 +2,8 @@ import type { SignableTransaction } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
 import {
-  TransactionTamperedError,
-  type TransactionTamperedErrorType,
+  TransactionMismatchError,
+  type TransactionMismatchErrorType,
   TronRpcError,
   type TronRpcErrorType,
 } from '../../errors/rpc.js'
@@ -51,7 +51,7 @@ export type GetTransactionErrorType =
   | HexToBytesErrorType
   | RequestErrorType
   | Sha256ErrorType
-  | TransactionTamperedErrorType
+  | TransactionMismatchErrorType
   | TronRpcErrorType
   | ErrorType
 
@@ -75,7 +75,7 @@ type RawTransactionResponse = {
  * `raw_data_hex` bytes and must equal the requested `hash` — and the node's
  * echoed `txID`, when present, must agree. A node that returns different
  * bytes than asked for, or mislabels them, throws
- * {@link TransactionTamperedError}. The returned `raw_data` is decoded
+ * {@link TransactionMismatchError}. The returned `raw_data` is decoded
  * locally from those id-checked bytes — the node's `raw_data` JSON is not
  * used, so what the caller inspects
  * (recipient, amount, contract) is exactly what the bytes say. The triple is
@@ -123,18 +123,17 @@ export async function getTransaction(
     )
   }
 
-  // Fail closed on substitution: the bytes the node returned must hash to the
-  // id that was asked for, and any echoed txID label must agree.
+  // The bytes the node returned must hash to the requested id, and any
+  // echoed txID label must agree.
   const localId = sha256(bytes, 'hex').slice(2)
   const echoedId = response.txID ? bareHex(response.txID) : undefined
   if (localId !== id || (echoedId !== undefined && echoedId !== localId))
-    throw new TransactionTamperedError({
+    throw new TransactionMismatchError({
       localTxId: id,
       nodeTxId: localId !== id ? localId : echoedId,
       path: 'gettransactionbyid',
       shortMessage: [
         'The node returned a transaction that does not hash to the requested transaction id.',
-        'This can indicate transaction tampering by a malicious or man-in-the-middled node.',
         'The node-supplied transaction was not accepted.',
       ].join('\n'),
     })

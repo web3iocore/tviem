@@ -75,10 +75,10 @@ export class BlockNotFoundError extends BaseError {
  * height than the one requested. The node-supplied block is discarded and the
  * mismatch surfaced here.
  */
-export type BlockTamperedErrorType = BlockTamperedError & {
-  name: 'BlockTamperedError'
+export type BlockMismatchErrorType = BlockMismatchError & {
+  name: 'BlockMismatchError'
 }
-export class BlockTamperedError extends BaseError {
+export class BlockMismatchError extends BaseError {
   constructor({
     path,
     requestedBlockNumber,
@@ -91,11 +91,10 @@ export class BlockTamperedError extends BaseError {
     super(
       [
         'The node returned a block at a different height than the one requested.',
-        'This can indicate block substitution by a malicious or man-in-the-middled node.',
         'The node-supplied block was not accepted.',
       ].join('\n'),
       {
-        name: 'BlockTamperedError',
+        name: 'BlockMismatchError',
         metaMessages: [
           requestedBlockNumber !== undefined
             ? `Requested block: ${requestedBlockNumber}`
@@ -294,10 +293,10 @@ export class TransactionExpiredError extends BaseError {
  * match the locally built one. The echoed copy is discarded and the mismatch
  * surfaced here; callers keep working against the local transaction.
  */
-export type TransactionTamperedErrorType = TransactionTamperedError & {
-  name: 'TransactionTamperedError'
+export type TransactionMismatchErrorType = TransactionMismatchError & {
+  name: 'TransactionMismatchError'
 }
-export class TransactionTamperedError extends BaseError {
+export class TransactionMismatchError extends BaseError {
   constructor({
     localTxId,
     nodeTxId,
@@ -318,11 +317,10 @@ export class TransactionTamperedError extends BaseError {
       shortMessage ??
         [
           'The node returned a transaction that does not match the locally built one.',
-          'This can indicate transaction tampering by a malicious or man-in-the-middled node.',
           'No signature was produced over the node-supplied transaction.',
         ].join('\n'),
       {
-        name: 'TransactionTamperedError',
+        name: 'TransactionMismatchError',
         metaMessages: [
           localTxId ? `Local txID: ${localTxId}` : undefined,
           nodeTxId ? `Node txID:  ${nodeTxId}` : undefined,

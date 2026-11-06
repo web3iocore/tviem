@@ -8,7 +8,7 @@ import {
   CallExecutionError,
   ContractFunctionRevertedError,
   TransactionExpiredError,
-  TransactionTamperedError,
+  TransactionMismatchError,
   TronRpcError,
   UserRejectedRequestError,
   WaitForTransactionReceiptTimeoutError,
@@ -166,17 +166,15 @@ test('TransactionExpiredError names the hash when provided', () => {
   )
 })
 
-test('TransactionTamperedError fails closed and retains the mismatch fields', () => {
-  const err = new TransactionTamperedError({
+test('TransactionMismatchError retains the mismatch fields', () => {
+  const err = new TransactionMismatchError({
     localTxId: 'aaaa1111',
     nodeTxId: 'bbbb2222',
     path: 'getSignWeight',
   })
   expect(err).toBeInstanceOf(BaseError)
-  expect(err.name).toBe('TransactionTamperedError')
-  // The message names the mismatch and the anti-tamper posture.
+  expect(err.name).toBe('TransactionMismatchError')
   expect(err.shortMessage).toContain('does not match the locally built one')
-  expect(err.message).toContain('transaction tampering')
   expect(err.message).toContain(
     'No signature was produced over the node-supplied transaction.',
   )
@@ -192,10 +190,10 @@ test('TransactionTamperedError fails closed and retains the mismatch fields', ()
   expect(err.message).toContain('Path: getSignWeight')
 })
 
-test('TransactionTamperedError omits absent fields from its metaMessages', () => {
-  const err = new TransactionTamperedError({ localTxId: 'aaaa1111' })
+test('TransactionMismatchError omits absent fields from its metaMessages', () => {
+  const err = new TransactionMismatchError({ localTxId: 'aaaa1111' })
   expect(err.metaMessages).toEqual(['Local txID: aaaa1111'])
-  expect(new TransactionTamperedError().metaMessages).toEqual([])
+  expect(new TransactionMismatchError().metaMessages).toEqual([])
 })
 
 test('UserRejectedRequestError is a BaseError with code 4001 (static and instance)', () => {

@@ -12,7 +12,7 @@ import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import {
   AccountNotFoundError,
-  TransactionTamperedError,
+  TransactionMismatchError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -374,8 +374,8 @@ test('a signer returning a validly signed transaction for another owner is rejec
 
   const err = (await client
     .signTransaction({ transaction: unsigned })
-    .catch((e) => e)) as TransactionTamperedError
-  expect(err).toBeInstanceOf(TransactionTamperedError)
+    .catch((e) => e)) as TransactionMismatchError
+  expect(err).toBeInstanceOf(TransactionMismatchError)
   expect(err.shortMessage).toMatch(/different owner_address/)
   expect(calls).toHaveLength(0)
 })
@@ -391,8 +391,8 @@ test('a signer returning an unsigned transaction is rejected', async () => {
     const err = (await signTransaction(client, {
       transaction: unsigned,
       account: customAccountWith(async () => produced),
-    }).catch((e) => e)) as TransactionTamperedError
-    expect(err).toBeInstanceOf(TransactionTamperedError)
+    }).catch((e) => e)) as TransactionMismatchError
+    expect(err).toBeInstanceOf(TransactionMismatchError)
     expect(err.shortMessage).toMatch(/without a signature/)
   }
 })
@@ -407,8 +407,8 @@ test('a signer returning inconsistent bytes is rejected', async () => {
       ...signed,
       txID: 'ab'.repeat(32),
     })),
-  }).catch((e) => e)) as TransactionTamperedError
-  expect(err).toBeInstanceOf(TransactionTamperedError)
+  }).catch((e) => e)) as TransactionMismatchError
+  expect(err).toBeInstanceOf(TransactionMismatchError)
   expect(err.shortMessage).toMatch(/do not agree/)
 })
 
@@ -479,7 +479,7 @@ test('a signer retargeting its own argument cannot move the owner check', async 
     transaction: unsigned,
     account,
   }).catch((e) => e)
-  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(err).toBeInstanceOf(TransactionMismatchError)
   // The caller's object is untouched either way.
   expect(unsigned.txID).not.toBe(other.txID)
 })

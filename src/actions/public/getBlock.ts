@@ -2,10 +2,10 @@ import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
+  BlockMismatchError,
+  type BlockMismatchErrorType,
   BlockNotFoundError,
   type BlockNotFoundErrorType,
-  BlockTamperedError,
-  type BlockTamperedErrorType,
   type TronRpcErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
@@ -33,7 +33,7 @@ export type GetBlockReturnType = Block
 export type GetBlockErrorType =
   | BaseErrorType
   | BlockNotFoundErrorType
-  | BlockTamperedErrorType
+  | BlockMismatchErrorType
   | RequestErrorType
   | ToBase58ErrorType
   | TronRpcErrorType
@@ -48,7 +48,7 @@ export type GetBlockErrorType =
  * @returns The formatted block.
  * @throws {BlockNotFoundError} If the node returns an empty body (unknown block).
  * @throws {TronRpcError} If the node returns a malformed block body.
- * @throws {BlockTamperedError} If the returned block is not at the requested height.
+ * @throws {BlockMismatchError} If the returned block is not at the requested height.
  */
 export async function getBlock(
   client: Client,
@@ -73,10 +73,10 @@ export async function getBlock(
   if (isEmptyResponse(response)) throw new BlockNotFoundError({ blockNumber })
   assertBlockResponse(response, 'getblockbynum')
   const block = formatBlock(response)
-  // Fail closed on substitution: the block the node answered with must sit at
-  // the height that was asked for.
+  // The block the node answered with must sit at the height that was asked
+  // for.
   if (block.number !== BigInt(num))
-    throw new BlockTamperedError({
+    throw new BlockMismatchError({
       path: 'getblockbynum',
       requestedBlockNumber: num,
       returnedBlockNumber: block.number,

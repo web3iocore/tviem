@@ -43,9 +43,8 @@ function tamperedRawData(): RawData {
 
 test('defuses a getter that swaps raw_data between check and sign (TOCTOU)', () => {
   // multiSign recomputes the triple from raw_data before delegating to
-  // signTransaction — so a getter showing txCheck an honest model and the
-  // recompute a tampered one would yield a valid signature over bytes that
-  // were never checked. The pre-check snapshot pins one single model.
+  // signTransaction; the pre-check snapshot means txCheck and the recompute
+  // read one model.
   const honest = unboundTriple()
   const local = signTransaction({ transaction: honest, privateKey: pk1 })
   let reads = 0

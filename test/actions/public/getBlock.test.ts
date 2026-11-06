@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import {
+  BlockMismatchError,
   BlockNotFoundError,
-  BlockTamperedError,
   TronRpcError,
 } from '../../../src/errors/rpc.js'
 import {
@@ -179,7 +179,7 @@ test('getBlock rejects a block at a different height than the requested one', as
   })
   const client = createPublicClient({ transport })
   await expect(client.getBlock({ blockNumber: 99n })).rejects.toBeInstanceOf(
-    BlockTamperedError,
+    BlockMismatchError,
   )
 })
 

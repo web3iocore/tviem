@@ -2,7 +2,7 @@ import type { SignableTransaction } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
-import type { TransactionTamperedErrorType } from '../../errors/rpc.js'
+import type { TransactionMismatchErrorType } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
@@ -66,7 +66,7 @@ export type GetSignWeightErrorType =
   | CloneTransactionErrorType
   | RequestErrorType
   | ToBase58ErrorType
-  | TransactionTamperedErrorType
+  | TransactionMismatchErrorType
   | ErrorType
 
 type RawKey = {
@@ -130,7 +130,7 @@ export function formatPermission(
  *
  * Node echo: the node echoes the submitted transaction back; this asserts that
  * echoed transaction matches the local one byte-for-byte and throws
- * {@link TransactionTamperedError} on any mismatch — and always returns the
+ * {@link TransactionMismatchError} on any mismatch — and always returns the
  * **local** transaction, never the node's copy.
  *
  * The node rebuilds the transaction from the `raw_data` JSON, read as

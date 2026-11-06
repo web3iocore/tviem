@@ -1,7 +1,7 @@
 import type { SignableTransaction } from '../../accounts/types.js'
 import {
-  TransactionTamperedError,
-  type TransactionTamperedErrorType,
+  TransactionMismatchError,
+  type TransactionMismatchErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
@@ -15,7 +15,7 @@ import { txCheck } from '../../utils/transaction/txCheck.js'
 
 export type AssertSignedTransactionErrorType =
   | CloneTransactionErrorType
-  | TransactionTamperedErrorType
+  | TransactionMismatchErrorType
   | ErrorType
 
 /**
@@ -62,19 +62,19 @@ export function assertSignedTransaction(
   const snapshot = cloneTransaction(signed)
 
   if (!txCheck(snapshot))
-    throw new TransactionTamperedError({
+    throw new TransactionMismatchError({
       shortMessage:
         'The signer returned a transaction that fails txCheck: its txID, raw_data and raw_data_hex do not agree, or raw_data holds fields this SDK does not serialize.',
     })
 
   if (!snapshot.signature?.length)
-    throw new TransactionTamperedError({
+    throw new TransactionMismatchError({
       shortMessage: 'The signer returned a transaction without a signature.',
     })
 
   const expected = readOwners(unsigned)
   if (!expected)
-    throw new TransactionTamperedError({
+    throw new TransactionMismatchError({
       shortMessage:
         'The transaction to sign has no readable owner_address to check the signed result against.',
     })
@@ -84,7 +84,7 @@ export function assertSignedTransaction(
     expected.length !== actual.length ||
     expected.some((owner, i) => owner !== actual[i])
   )
-    throw new TransactionTamperedError({
+    throw new TransactionMismatchError({
       shortMessage:
         'The signer returned a transaction for a different owner_address than the one it was asked to sign.',
     })

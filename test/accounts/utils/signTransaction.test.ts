@@ -298,10 +298,9 @@ describe('signTransaction', () => {
   })
 
   test('defuses a getter that swaps txID between check and sign (TOCTOU)', () => {
-    // A malicious transaction can pass txCheck with an honest txID and then
-    // hand a different digest to the actual signing read — unless the
-    // transaction is snapshotted (cloned) before any check. The signature
-    // must cover the checked digest, never the swapped one.
+    // A getter that returns different txID values on successive reads: the
+    // transaction is snapshotted before any check, so the signature covers
+    // the checked digest.
     const honest = triple(canonicalRawData)
     let reads = 0
     const evil = {

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import {
-  TransactionTamperedError,
+  TransactionMismatchError,
   TronRpcError,
 } from '../../../src/errors/rpc.js'
 import { txCheck } from '../../../src/utils/transaction/txCheck.js'
@@ -72,7 +72,7 @@ test('an unknown / not-yet-packed id resolves to null', async () => {
   expect(await client.getTransaction({ hash: txID })).toBeNull()
 })
 
-test('a node returning different bytes than asked for throws TransactionTamperedError', async () => {
+test('a node returning different bytes than asked for throws TransactionMismatchError', async () => {
   // Perturb one byte of the returned raw_data_hex: the bytes no longer hash
   // to the requested id, so believing them would adopt a substituted payload.
   const substituted = rpc<{ raw_data_hex: string }>('gettransactionbyid')
@@ -87,11 +87,11 @@ test('a node returning different bytes than asked for throws TransactionTampered
   const client = createPublicClient({ transport })
 
   await expect(client.getTransaction({ hash: txID })).rejects.toThrow(
-    TransactionTamperedError,
+    TransactionMismatchError,
   )
 })
 
-test('a node mislabeling correct bytes with a foreign txID throws TransactionTamperedError', async () => {
+test('a node mislabeling correct bytes with a foreign txID throws TransactionMismatchError', async () => {
   const lying = {
     ...fixture.response,
     txID: '2e8b73373f830f8a100b11291c5e169a079552c212eb94b6c722247320adb698',
@@ -102,7 +102,7 @@ test('a node mislabeling correct bytes with a foreign txID throws TransactionTam
   const client = createPublicClient({ transport })
 
   await expect(client.getTransaction({ hash: txID })).rejects.toThrow(
-    TransactionTamperedError,
+    TransactionMismatchError,
   )
 })
 

@@ -148,7 +148,7 @@ describe('an address-only account', () => {
   })
 })
 
-describe('the signing-account check fails closed', () => {
+describe('the signing-account check accepts only local accounts', () => {
   test.each([
     ['no type at all', { address: local.address }, 'undefined'],
     ['an unknown type', { address: local.address, type: 'smart' }, 'smart'],

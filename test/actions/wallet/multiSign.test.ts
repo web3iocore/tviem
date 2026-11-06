@@ -16,7 +16,7 @@ import { InvalidAddressError } from '../../../src/errors/address.js'
 import { BaseError } from '../../../src/errors/base.js'
 import {
   AccountNotFoundError,
-  TransactionTamperedError,
+  TransactionMismatchError,
   UserRejectedRequestError,
 } from '../../../src/errors/rpc.js'
 import { addressToHex } from '../../../src/utils/address/addressToHex.js'
@@ -743,8 +743,8 @@ test('a co-signer returning a validly signed transaction for another owner is re
     transaction: unboundTriple(),
     account: customAccountWith(async () => swapped),
     permissionId: 2,
-  }).catch((e) => e)) as TransactionTamperedError
-  expect(err).toBeInstanceOf(TransactionTamperedError)
+  }).catch((e) => e)) as TransactionMismatchError
+  expect(err).toBeInstanceOf(TransactionMismatchError)
   expect(err.shortMessage).toMatch(/different owner_address/)
   expect(calls).toHaveLength(0)
 })
@@ -756,8 +756,8 @@ test('a co-signer returning an unsigned transaction is rejected', async () => {
       transaction: unboundTriple(),
       account: customAccountWith(async () => produced),
       permissionId: 2,
-    }).catch((e) => e)) as TransactionTamperedError
-    expect(err).toBeInstanceOf(TransactionTamperedError)
+    }).catch((e) => e)) as TransactionMismatchError
+    expect(err).toBeInstanceOf(TransactionMismatchError)
     expect(err.shortMessage).toMatch(/without a signature/)
   }
 })
@@ -841,6 +841,6 @@ test('a co-signer retargeting its own argument cannot move the owner check', asy
       return swapped
     }),
   }).catch((e) => e)
-  expect(err).toBeInstanceOf(TransactionTamperedError)
+  expect(err).toBeInstanceOf(TransactionMismatchError)
   expect(transaction).toStrictEqual(unboundTriple())
 })

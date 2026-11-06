@@ -2,7 +2,7 @@ import type { SignableTransaction } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
-import type { TransactionTamperedErrorType } from '../../errors/rpc.js'
+import type { TransactionMismatchErrorType } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
 import {
@@ -50,7 +50,7 @@ export type GetApprovedListErrorType =
   | CloneTransactionErrorType
   | RequestErrorType
   | ToBase58ErrorType
-  | TransactionTamperedErrorType
+  | TransactionMismatchErrorType
   | ErrorType
 
 type RawApprovedList = {
@@ -69,7 +69,7 @@ type RawApprovedList = {
  *
  * Node echo: like {@link getSignWeight}, the node's echoed transaction is
  * asserted to match the local one byte-for-byte (throwing
- * {@link TransactionTamperedError} otherwise), and the returned `transaction`
+ * {@link TransactionMismatchError} otherwise), and the returned `transaction`
  * is always the local copy — never the node's. Also like it, the triple is
  * integrity-checked first and `raw_data` is sent as the canonical rendering of
  * the checked bytes (see {@link canonicalizeTransaction}).

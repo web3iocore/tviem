@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import type { SignableTransaction } from '../../../src/accounts/types.js'
 import { assertSignedTransaction } from '../../../src/actions/utils/assertSignedTransaction.js'
-import { TransactionTamperedError } from '../../../src/errors/rpc.js'
+import { TransactionMismatchError } from '../../../src/errors/rpc.js'
 import { addressToHex } from '../../../src/utils/address/addressToHex.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { toEvm } from '../../../src/utils/address/toEvm.js'
@@ -82,15 +82,15 @@ async function walletRebuilt(unsigned: SignableTransaction) {
 }
 
 /** Throws-assertion that also pins which check fired. */
-function expectTampered(fn: () => unknown, shortMessage: string) {
+function expectMismatch(fn: () => unknown, shortMessage: string) {
   try {
     fn()
   } catch (error) {
-    expect(error).toBeInstanceOf(TransactionTamperedError)
-    expect((error as TransactionTamperedError).shortMessage).toBe(shortMessage)
+    expect(error).toBeInstanceOf(TransactionMismatchError)
+    expect((error as TransactionMismatchError).shortMessage).toBe(shortMessage)
     return
   }
-  expect.fail('expected TransactionTamperedError')
+  expect.fail('expected TransactionMismatchError')
 }
 
 describe('accepts (compatibility)', () => {
@@ -184,11 +184,11 @@ describe('accepts (compatibility)', () => {
   })
 })
 
-describe('rejects with TransactionTamperedError', () => {
+describe('rejects with TransactionMismatchError', () => {
   test('txCheck failure: txID does not match the bytes', async () => {
     const unsigned = unsignedTransfer()
     const signed = await owner.signTransaction(unsigned)
-    expectTampered(
+    expectMismatch(
       () =>
         assertSignedTransaction(
           { ...signed, txID: transferBound!.txID },
@@ -201,7 +201,7 @@ describe('rejects with TransactionTamperedError', () => {
   test('txCheck failure: raw_data_hex does not match raw_data', async () => {
     const unsigned = unsignedTransfer()
     const signed = await walletRebuilt(unsigned)
-    expectTampered(
+    expectMismatch(
       () =>
         assertSignedTransaction(
           { ...signed, raw_data_hex: unsigned.raw_data_hex },
@@ -213,7 +213,7 @@ describe('rejects with TransactionTamperedError', () => {
 
   test('missing signature array', () => {
     const unsigned = unsignedTransfer()
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(unsignedTransfer(), unsigned),
       messages.signature,
     )
@@ -221,7 +221,7 @@ describe('rejects with TransactionTamperedError', () => {
 
   test('empty signature array', () => {
     const unsigned = unsignedTransfer()
-    expectTampered(
+    expectMismatch(
       () =>
         assertSignedTransaction(
           { ...unsignedTransfer(), signature: [] },
@@ -238,7 +238,7 @@ describe('rejects with TransactionTamperedError', () => {
     )
     // pk2 legitimately owns and signs its own transfer.
     const signed = await other.signTransaction(triple(raw_data))
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsignedTransfer()),
       messages.owner,
     )
@@ -248,7 +248,7 @@ describe('rejects with TransactionTamperedError', () => {
     const signed = await owner.signTransaction(unsignedTransfer())
     const unsigned = unsignedTransfer()
     delete (unsigned.raw_data.contract[0]!.parameter.value as any).owner_address
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsigned),
       messages.unreadableOwner,
     )
@@ -260,7 +260,7 @@ describe('rejects with TransactionTamperedError', () => {
       ...unsignedTransfer(),
       raw_data: withOwner(unsignedTransfer().raw_data, 'not-an-address'),
     }
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsigned),
       messages.unreadableOwner,
     )
@@ -272,7 +272,7 @@ describe('rejects with TransactionTamperedError', () => {
       ...unsignedTransfer(),
       raw_data: { ...unsignedTransfer().raw_data, contract: [] },
     }
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsigned),
       messages.unreadableOwner,
     )
@@ -280,7 +280,7 @@ describe('rejects with TransactionTamperedError', () => {
 
   test('signed with an empty contract list fails txCheck first', () => {
     const unsigned = unsignedTransfer()
-    expectTampered(
+    expectMismatch(
       () =>
         assertSignedTransaction(
           {
@@ -305,7 +305,7 @@ describe('rejects with TransactionTamperedError', () => {
       },
     }
     // Same owner on every contract — only the count differs.
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsigned),
       messages.owner,
     )
@@ -323,7 +323,7 @@ describe('rejects with TransactionTamperedError', () => {
       ...triple({ ...twice, contract: [first!, second!] } as RawData),
       signature: ['00'.repeat(65)],
     }
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(signed, unsigned),
       messages.owner,
     )
@@ -401,7 +401,7 @@ describe('snapshot', () => {
       get: () => (reads++ === 0 ? transferBound!.txID : honest),
     })
 
-    expectTampered(
+    expectMismatch(
       () => assertSignedTransaction(shifty, unsigned),
       messages.txCheck,
     )

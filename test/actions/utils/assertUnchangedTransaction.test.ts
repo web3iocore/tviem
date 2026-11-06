@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { SignableTransaction } from '../../../src/accounts/types.js'
 import { assertUnchangedTransaction } from '../../../src/actions/utils/assertUnchangedTransaction.js'
-import { TransactionTamperedError } from '../../../src/errors/rpc.js'
+import { TransactionMismatchError } from '../../../src/errors/rpc.js'
 
 // The comparison covers only `txID` and `raw_data_hex` — the `raw_data`
 // model is present to satisfy the full-triple `SignableTransaction` shape.
@@ -58,13 +58,13 @@ test('a `0x`-prefixed local transaction still flags different bytes', () => {
       txID: 'aabbccdd',
       raw_data_hex: '0a02cafe',
     }),
-  ).toThrowError(TransactionTamperedError)
+  ).toThrowError(TransactionMismatchError)
   expect(() =>
     assertUnchangedTransaction(prefixed, {
       txID: 'ffffffff',
       raw_data_hex: '0a02deadbeef',
     }),
-  ).toThrowError(TransactionTamperedError)
+  ).toThrowError(TransactionMismatchError)
 })
 
 test('an echoed field that is not a string is a mismatch, not a raw TypeError', () => {
@@ -73,7 +73,7 @@ test('an echoed field that is not a string is a mismatch, not a raw TypeError', 
       txID: 'aabbccdd',
       raw_data_hex: 0x0a02 as unknown as string,
     }),
-  ).toThrowError(TransactionTamperedError)
+  ).toThrowError(TransactionMismatchError)
 })
 
 test('no echoed transaction is a no-op (nothing to adopt)', () => {
@@ -86,7 +86,7 @@ test('a mismatched raw_data_hex throws (the load-bearing field)', () => {
       txID: 'aabbccdd',
       raw_data_hex: '0a02cafe',
     }),
-  ).toThrowError(TransactionTamperedError)
+  ).toThrowError(TransactionMismatchError)
 })
 
 test('a mismatched txID throws', () => {
@@ -95,5 +95,5 @@ test('a mismatched txID throws', () => {
       txID: 'ffffffff',
       raw_data_hex: '0a02deadbeef',
     }),
-  ).toThrowError(TransactionTamperedError)
+  ).toThrowError(TransactionMismatchError)
 })
