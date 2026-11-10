@@ -79,6 +79,65 @@ describe('mnemonicToAccount', () => {
     expect(account.address).not.toBe(V.default.address)
   })
 
+  test.each([
+    ['null', null],
+    ['0', 0],
+    ['false', false],
+    ['an object', {}],
+    ['an array', []],
+  ])('throws on a passphrase that is not a string (%s)', (_, passphrase) => {
+    expect(() =>
+      mnemonicToAccount(mnemonic, {
+        passphrase: passphrase as unknown as string,
+      }),
+    ).toThrow(/Invalid passphrase/)
+  })
+
+  test('an empty-string passphrase is the default wallet', () => {
+    expect(mnemonicToAccount(mnemonic, { passphrase: '' }).address).toBe(
+      V.default.address,
+    )
+    expect(mnemonicToAccount(mnemonic, { passphrase: undefined }).address).toBe(
+      V.default.address,
+    )
+  })
+
+  test('the passphrase itself is not normalized', () => {
+    const base = mnemonicToAccount(mnemonic, { passphrase: 'abc' }).address
+    expect(mnemonicToAccount(mnemonic, { passphrase: 'ABC' }).address).not.toBe(
+      base,
+    )
+    expect(
+      mnemonicToAccount(mnemonic, { passphrase: ' abc ' }).address,
+    ).not.toBe(base)
+  })
+
+  test.each([
+    [
+      'first letters upper-cased',
+      (m: string) => m.replace(/\b\w/g, (c) => c.toUpperCase()),
+    ],
+    ['all upper-case', (m: string) => m.toUpperCase()],
+    ['double spaces', (m: string) => m.split(' ').join('  ')],
+    ['tabs and newlines', (m: string) => m.split(' ').join('\t\n')],
+    ['leading and trailing whitespace', (m: string) => `  ${m} \n`],
+  ])('normalizes a phrase with %s to the canonical wallet', (_, mutate) => {
+    const variant = mutate(mnemonic)
+    expect(variant).not.toBe(mnemonic)
+    const account = mnemonicToAccount(variant)
+    expect(account.address).toBe(V.default.address)
+    expect(mnemonicToAccount(variant, { addressIndex: 1 }).address).toBe(
+      V.addressIndex1,
+    )
+  })
+
+  test('throws on a mnemonic that is not a string', () => {
+    for (const value of [null, undefined, 42, {}, []])
+      expect(() => mnemonicToAccount(value as unknown as string)).toThrow(
+        /Invalid mnemonic/,
+      )
+  })
+
   test('throws on an invalid mnemonic', () => {
     expect(() => mnemonicToAccount('not a valid mnemonic phrase')).toThrow()
     // A valid-looking phrase with a bad checksum is also rejected.

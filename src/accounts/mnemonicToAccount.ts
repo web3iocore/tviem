@@ -33,12 +33,15 @@ export type MnemonicToAccountErrorType =
   | ErrorType
 
 /**
- * Derives a {@link TronHDAccount} from a BIP-39 mnemonic. The mnemonic is
- * validated against the English wordlist, expanded to a seed (with the optional
- * `passphrase`), and derived at the TRON path — default `m/44'/195'/0'/0/0`
- * (SLIP-44 coin type `195`). Signing is delegated to the derived private key.
+ * Derives a {@link TronHDAccount} from a BIP-39 mnemonic. The phrase is
+ * normalized first — trimmed, lower-cased, words separated by a single space,
+ * as TronWeb and ethers do — then validated against the English wordlist,
+ * expanded to a seed (with the optional `passphrase`), and derived at the TRON
+ * path — default `m/44'/195'/0'/0/0` (SLIP-44 coin type `195`). Signing is
+ * delegated to the derived private key.
  *
- * @param mnemonic A BIP-39 mnemonic phrase (English wordlist).
+ * @param mnemonic A BIP-39 mnemonic phrase (English wordlist). Case and the
+ * amount of whitespace between words do not matter.
  * @param options `passphrase` plus HD derivation indices or an explicit `path`.
  * @returns A {@link TronHDAccount}.
  *
@@ -54,10 +57,21 @@ export function mnemonicToAccount(
   mnemonic: string,
   { passphrase, ...hdOptions }: MnemonicToAccountOptions = {},
 ): TronHDAccount {
-  if (!validateMnemonic(mnemonic, wordlist))
+  // The passphrase enters the seed as-is (every string is a distinct wallet),
+  // so only a string — or no passphrase at all — is accepted.
+  if (passphrase !== undefined && typeof passphrase !== 'string')
+    throw new BaseError(
+      `Invalid passphrase: expected a string or undefined, got ${passphrase === null ? 'null' : typeof passphrase}.`,
+    )
+  if (typeof mnemonic !== 'string')
+    throw new BaseError(
+      `Invalid mnemonic: expected a string, got ${mnemonic === null ? 'null' : typeof mnemonic}.`,
+    )
+  const phrase = mnemonic.trim().toLowerCase().split(/\s+/).join(' ')
+  if (!validateMnemonic(phrase, wordlist))
     throw new BaseError(
       'Invalid mnemonic: the phrase is not a valid BIP-39 English mnemonic.',
     )
-  const seed = mnemonicToSeedSync(mnemonic, passphrase)
+  const seed = mnemonicToSeedSync(phrase, passphrase)
   return hdKeyToAccount(HDKey.fromMasterSeed(seed), hdOptions)
 }
