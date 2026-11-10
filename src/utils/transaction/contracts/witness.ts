@@ -2,8 +2,11 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   UpdateBrokerageContract,
+  UpdateBrokerageContractInput,
   WitnessCreateContract,
+  WitnessCreateContractInput,
   WitnessUpdateContract,
+  WitnessUpdateContractInput,
 } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -26,7 +29,7 @@ export type EncodeUpdateBrokerageContractErrorType =
 
 /** Encodes an `UpdateBrokerageContract` (contract type 49) body. */
 export function encodeUpdateBrokerageContract(
-  message: UpdateBrokerageContract,
+  message: UpdateBrokerageContractInput,
 ): ByteArray {
   return encodeMessage(updateBrokerageContractSpec, message)
 }
@@ -57,7 +60,7 @@ export type EncodeWitnessCreateContractErrorType =
 
 /** Encodes a `WitnessCreateContract` (contract type 5) body. */
 export function encodeWitnessCreateContract(
-  message: WitnessCreateContract,
+  message: WitnessCreateContractInput,
 ): ByteArray {
   return encodeMessage(witnessCreateContractSpec, message)
 }
@@ -88,7 +91,7 @@ export type EncodeWitnessUpdateContractErrorType =
 
 /** Encodes a `WitnessUpdateContract` (contract type 8) body. */
 export function encodeWitnessUpdateContract(
-  message: WitnessUpdateContract,
+  message: WitnessUpdateContractInput,
 ): ByteArray {
   return encodeMessage(witnessUpdateContractSpec, message)
 }

@@ -185,26 +185,26 @@ export const contractTypeUrlPrefix = 'type.googleapis.com/protocol.'
  * Encoder/decoder pair for one contract message type, keyed both by the
  * `Transaction.Contract.type` integer and the `Any` type URL.
  */
-export type ContractCodec<message = unknown> = {
+export type ContractCodec<input = unknown, output = input> = {
   /** `Transaction.Contract.type` integer. */
   readonly type: number
   /** Protocol message name (e.g. `'TransferContract'`). */
   readonly name: string
   /** `google.protobuf.Any` type URL. */
   readonly typeUrl: string
-  /** Encodes the message body (the `Any.value` bytes). */
-  encode(message: message): ByteArray
-  /** Decodes the message body (the `Any.value` bytes). */
-  decode(bytes: ByteArray): message
+  /** Encodes a message body (the `Any.value` bytes) from its input spelling. */
+  encode(message: input): ByteArray
+  /** Decodes the message body (the `Any.value` bytes) into the decoded model. */
+  decode(bytes: ByteArray): output
 }
 
 /** Builds a codec entry, deriving the type URL from the message name. */
-function defineContractCodec<message>(
+function defineContractCodec<input, output>(
   type: number,
   name: string,
-  encode: (message: message) => ByteArray,
-  decode: (bytes: ByteArray) => message,
-): ContractCodec<message> {
+  encode: (message: input) => ByteArray,
+  decode: (bytes: ByteArray) => output,
+): ContractCodec<input, output> {
   return {
     type,
     name,

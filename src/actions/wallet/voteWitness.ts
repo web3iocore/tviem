@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { VoteWitnessContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -95,7 +95,7 @@ export type BuildVoteWitnessErrorType =
 function assemble(
   client: Client,
   parameters: VoteWitnessParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { votes } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -112,7 +112,7 @@ function assemble(
     })),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.VoteWitnessContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}VoteWitnessContract`,

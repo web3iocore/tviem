@@ -23,7 +23,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -100,7 +100,7 @@ export type BuildSendTrc10ErrorType =
 function assemble(
   client: Client,
   parameters: SendTrc10Parameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { to, assetName, amount } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -110,7 +110,7 @@ function assemble(
 
   // Build the TransferAssetContract (addresses enter the body as 41-hex;
   // asset_name is flex-normalized by the codec).
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.TransferAssetContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}TransferAssetContract`,

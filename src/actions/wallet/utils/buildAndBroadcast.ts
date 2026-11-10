@@ -6,7 +6,7 @@ import type { SignTransactionErrorType } from '../../../accounts/utils/signTrans
 import type { Client } from '../../../clients/createClient.js'
 import type { ErrorType } from '../../../errors/utils.js'
 import { getAction } from '../../../utils/getAction.js'
-import type { RawContract } from '../../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../../utils/transaction/serializeRawData.js'
 import {
   type AssertSignedTransactionErrorType,
   signWithCheck,
@@ -28,7 +28,7 @@ import {
 
 export type BuildAndBroadcastParameters = {
   /** The single `Transaction.Contract` to wrap in the transaction. */
-  contract: RawContract
+  contract: RawContractInput
   /** The signing account (already resolved and parsed). */
   account: TronAccount
   /**

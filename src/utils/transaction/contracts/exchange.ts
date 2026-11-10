@@ -2,9 +2,13 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   ExchangeCreateContract,
+  ExchangeCreateContractInput,
   ExchangeInjectContract,
+  ExchangeInjectContractInput,
   ExchangeTransactionContract,
+  ExchangeTransactionContractInput,
   ExchangeWithdrawContract,
+  ExchangeWithdrawContractInput,
 } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -29,7 +33,7 @@ export type EncodeExchangeCreateContractErrorType =
 
 /** Encodes an `ExchangeCreateContract` (contract type 41) body. */
 export function encodeExchangeCreateContract(
-  message: ExchangeCreateContract,
+  message: ExchangeCreateContractInput,
 ): ByteArray {
   return encodeMessage(exchangeCreateContractSpec, message)
 }
@@ -62,7 +66,7 @@ export type EncodeExchangeInjectContractErrorType =
 
 /** Encodes an `ExchangeInjectContract` (contract type 42) body. */
 export function encodeExchangeInjectContract(
-  message: ExchangeInjectContract,
+  message: ExchangeInjectContractInput,
 ): ByteArray {
   return encodeMessage(exchangeInjectContractSpec, message)
 }
@@ -95,7 +99,7 @@ export type EncodeExchangeWithdrawContractErrorType =
 
 /** Encodes an `ExchangeWithdrawContract` (contract type 43) body. */
 export function encodeExchangeWithdrawContract(
-  message: ExchangeWithdrawContract,
+  message: ExchangeWithdrawContractInput,
 ): ByteArray {
   return encodeMessage(exchangeWithdrawContractSpec, message)
 }
@@ -129,7 +133,7 @@ export type EncodeExchangeTransactionContractErrorType =
 
 /** Encodes an `ExchangeTransactionContract` (contract type 44) body. */
 export function encodeExchangeTransactionContract(
-  message: ExchangeTransactionContract,
+  message: ExchangeTransactionContractInput,
 ): ByteArray {
   return encodeMessage(exchangeTransactionContractSpec, message)
 }

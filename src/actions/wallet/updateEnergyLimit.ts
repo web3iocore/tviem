@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { UpdateEnergyLimitContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -89,7 +89,7 @@ export type BuildUpdateEnergyLimitErrorType =
 function assemble(
   client: Client,
   parameters: UpdateEnergyLimitParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { contractAddress, originEnergyLimit } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -103,7 +103,7 @@ function assemble(
     origin_energy_limit: originEnergyLimit,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.UpdateEnergyLimitContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}UpdateEnergyLimitContract`,

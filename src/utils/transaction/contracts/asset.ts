@@ -2,9 +2,13 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   AssetIssueContract,
+  AssetIssueContractInput,
   ParticipateAssetIssueContract,
+  ParticipateAssetIssueContractInput,
   UnfreezeAssetContract,
+  UnfreezeAssetContractInput,
   UpdateAssetContract,
+  UpdateAssetContractInput,
 } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -28,7 +32,7 @@ export type EncodeParticipateAssetIssueContractErrorType =
 
 /** Encodes a `ParticipateAssetIssueContract` (contract type 9) body. */
 export function encodeParticipateAssetIssueContract(
-  message: ParticipateAssetIssueContract,
+  message: ParticipateAssetIssueContractInput,
 ): ByteArray {
   return encodeMessage(participateAssetIssueContractSpec, message)
 }
@@ -89,7 +93,7 @@ export type EncodeAssetIssueContractErrorType =
 
 /** Encodes an `AssetIssueContract` (contract type 6) body. */
 export function encodeAssetIssueContract(
-  message: AssetIssueContract,
+  message: AssetIssueContractInput,
 ): ByteArray {
   return encodeMessage(assetIssueContractSpec, message)
 }
@@ -118,7 +122,7 @@ export type EncodeUpdateAssetContractErrorType =
 
 /** Encodes an `UpdateAssetContract` (contract type 15) body. */
 export function encodeUpdateAssetContract(
-  message: UpdateAssetContract,
+  message: UpdateAssetContractInput,
 ): ByteArray {
   return encodeMessage(updateAssetContractSpec, message)
 }
@@ -145,7 +149,7 @@ export type EncodeUnfreezeAssetContractErrorType =
 
 /** Encodes an `UnfreezeAssetContract` (contract type 14) body. */
 export function encodeUnfreezeAssetContract(
-  message: UnfreezeAssetContract,
+  message: UnfreezeAssetContractInput,
 ): ByteArray {
   return encodeMessage(unfreezeAssetContractSpec, message)
 }

@@ -23,7 +23,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { WitnessCreateContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -97,7 +97,7 @@ export type BuildApplyForSrErrorType =
 function assemble(
   client: Client,
   parameters: ApplyForSrParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { url } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -110,7 +110,7 @@ function assemble(
     url: flexToHex(url),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.WitnessCreateContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}WitnessCreateContract`,

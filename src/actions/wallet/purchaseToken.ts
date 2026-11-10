@@ -23,7 +23,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -100,7 +100,7 @@ export type BuildPurchaseTokenErrorType =
 function assemble(
   client: Client,
   parameters: PurchaseTokenParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { issuerAddress, tokenId, amount } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -108,7 +108,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ParticipateAssetIssueContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ParticipateAssetIssueContract`,

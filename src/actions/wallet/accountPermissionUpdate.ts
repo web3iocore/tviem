@@ -20,7 +20,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type AccountPermissionUpdateContract,
   type BytesInput,
@@ -211,7 +211,7 @@ function toActivePermission(
 function assemble(
   client: Client,
   parameters: AccountPermissionUpdateParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { owner, witness, actives } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -246,7 +246,7 @@ function assemble(
     ),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.AccountPermissionUpdateContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}AccountPermissionUpdateContract`,

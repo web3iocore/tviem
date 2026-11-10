@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -85,14 +85,14 @@ export type BuildCancelAllUnfreezeV2ErrorType =
 function assemble(
   client: Client,
   parameters: CancelAllUnfreezeV2Parameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
   const source = parameters.account ?? client.account
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
   // Build the CancelAllUnfreezeV2Contract (carries only the owner address).
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.CancelAllUnfreezeV2Contract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}CancelAllUnfreezeV2Contract`,

@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { WithdrawBalanceContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -85,7 +85,7 @@ export type BuildWithdrawBalanceErrorType =
 function assemble(
   client: Client,
   parameters: WithdrawBalanceParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
   const source = parameters.account ?? client.account
   if (!source) throw new AccountNotFoundError()
@@ -95,7 +95,7 @@ function assemble(
     owner_address: addressToHex(account.address),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.WithdrawBalanceContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}WithdrawBalanceContract`,

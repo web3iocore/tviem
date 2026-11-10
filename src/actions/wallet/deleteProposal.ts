@@ -19,7 +19,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ProposalDeleteContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -88,7 +88,7 @@ export type BuildDeleteProposalErrorType =
 function assemble(
   client: Client,
   parameters: DeleteProposalParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { proposalId } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -101,7 +101,7 @@ function assemble(
     proposal_id: int64InputToBigInt('proposalId', proposalId),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ProposalDeleteContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ProposalDeleteContract`,

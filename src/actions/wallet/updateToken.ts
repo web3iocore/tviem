@@ -23,7 +23,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { UpdateAssetContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -103,7 +103,7 @@ export type BuildUpdateTokenErrorType =
 function assemble(
   client: Client,
   parameters: UpdateTokenParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { description, url, newLimit, newPublicLimit } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -119,7 +119,7 @@ function assemble(
     new_public_limit: newPublicLimit,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.UpdateAssetContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}UpdateAssetContract`,

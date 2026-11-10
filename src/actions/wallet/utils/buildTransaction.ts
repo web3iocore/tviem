@@ -19,8 +19,8 @@ import {
   fillBlockHeader,
 } from '../../../utils/transaction/prepareTransaction.js'
 import {
-  type RawContract,
-  type RawData,
+  type RawContractInput,
+  type RawDataInput,
   type SerializeRawDataErrorType,
   serializeRawData,
 } from '../../../utils/transaction/serializeRawData.js'
@@ -58,7 +58,7 @@ export type MemoInput = Hex | ByteArray
 
 export type BuildTransactionParameters = {
   /** The single `Transaction.Contract` to wrap in the transaction. */
-  contract: RawContract
+  contract: RawContractInput
   /** Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`). */
   feeLimit?: bigint | undefined
   /**
@@ -113,7 +113,7 @@ export type BuildTransactionErrorType =
 
 /**
  * The shared TRON build phase extracted from {@link buildAndBroadcast}: wrap a
- * single already-built `RawContract` into a `raw_data` model, attach `fee_limit`
+ * single already-built `RawContractInput` into a `raw_data` model, attach `fee_limit`
  * / the `memo` bytes (`raw_data.data`) when supplied, fill its TaPoS reference
  * fields + `timestamp` +
  * `expiration`, then locally compute the `txID` and `raw_data_hex`. Nothing is
@@ -184,7 +184,7 @@ export async function buildTransaction(
       : contract
 
   // Wrap the contract in the raw_data model (fee_limit / data only when given).
-  let rawData: RawData = { contract: [boundContract] }
+  let rawData: RawDataInput = { contract: [boundContract] }
   if (feeLimit !== undefined) rawData = { ...rawData, fee_limit: feeLimit }
   if (data !== undefined) rawData = { ...rawData, data }
 

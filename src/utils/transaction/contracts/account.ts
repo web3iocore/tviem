@@ -2,8 +2,11 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   AccountCreateContract,
+  AccountCreateContractInput,
   AccountUpdateContract,
+  AccountUpdateContractInput,
   SetAccountIdContract,
+  SetAccountIdContractInput,
 } from '../types.js'
 import { AccountTypeName } from '../types.js'
 import {
@@ -27,7 +30,7 @@ export type EncodeAccountCreateContractErrorType =
 
 /** Encodes an `AccountCreateContract` (contract type 0) body. */
 export function encodeAccountCreateContract(
-  message: AccountCreateContract,
+  message: AccountCreateContractInput,
 ): ByteArray {
   return encodeMessage(accountCreateContractSpec, message)
 }
@@ -58,7 +61,7 @@ export type EncodeAccountUpdateContractErrorType =
 
 /** Encodes an `AccountUpdateContract` (contract type 10) body. */
 export function encodeAccountUpdateContract(
-  message: AccountUpdateContract,
+  message: AccountUpdateContractInput,
 ): ByteArray {
   return encodeMessage(accountUpdateContractSpec, message)
 }
@@ -89,7 +92,7 @@ export type EncodeSetAccountIdContractErrorType =
 
 /** Encodes a `SetAccountIdContract` (contract type 19) body. */
 export function encodeSetAccountIdContract(
-  message: SetAccountIdContract,
+  message: SetAccountIdContractInput,
 ): ByteArray {
   return encodeMessage(setAccountIdContractSpec, message)
 }

@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type DelegateResourceContract,
   type ResourceCodeOfErrorType,
@@ -110,7 +110,7 @@ export type BuildDelegateResourceErrorType =
 function assemble(
   client: Client,
   parameters: DelegateResourceParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { receiverAddress, balance, resource, lock, lockPeriod } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -130,7 +130,7 @@ function assemble(
     if (lockPeriod !== undefined) value.lock_period = lockPeriod
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.DelegateResourceContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}DelegateResourceContract`,

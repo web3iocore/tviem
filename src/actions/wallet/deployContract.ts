@@ -44,7 +44,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   EntryType,
   type SmartContractAbi,
@@ -245,7 +245,7 @@ function assemble(
   parameters: DeployContractParameters<Abi>,
 ): {
   account: TronAccount
-  contract: RawContract
+  contract: RawContractInput
   feeLimit: bigint
   ownerAddress: TronHexAddress
 } {
@@ -282,7 +282,7 @@ function assemble(
     )
 
   // Build the CreateSmartContract (constructor args ABI-encoded onto bytecode).
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.CreateSmartContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}CreateSmartContract`,

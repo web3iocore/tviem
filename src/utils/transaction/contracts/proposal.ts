@@ -16,8 +16,11 @@ import {
 import type {
   ContractAddressInput,
   ProposalApproveContract,
+  ProposalApproveContractInput,
   ProposalCreateContract,
+  ProposalCreateContractInput,
   ProposalDeleteContract,
+  ProposalDeleteContractInput,
 } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -94,7 +97,7 @@ function assertOnlyKeys(
  * (the createProposal action), not here.
  */
 export function encodeProposalCreateContract(
-  message: ProposalCreateContract,
+  message: ProposalCreateContractInput,
 ): ByteArray {
   assertOnlyKeys(
     message,
@@ -158,7 +161,7 @@ export type EncodeProposalApproveContractErrorType =
 
 /** Encodes a `ProposalApproveContract` (contract type 17) body. */
 export function encodeProposalApproveContract(
-  message: ProposalApproveContract,
+  message: ProposalApproveContractInput,
 ): ByteArray {
   return encodeMessage(proposalApproveContractSpec, message)
 }
@@ -189,7 +192,7 @@ export type EncodeProposalDeleteContractErrorType =
 
 /** Encodes a `ProposalDeleteContract` (contract type 18) body. */
 export function encodeProposalDeleteContract(
-  message: ProposalDeleteContract,
+  message: ProposalDeleteContractInput,
 ): ByteArray {
   return encodeMessage(proposalDeleteContractSpec, message)
 }

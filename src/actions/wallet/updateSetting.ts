@@ -19,7 +19,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { UpdateSettingContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -92,7 +92,7 @@ export type BuildUpdateSettingErrorType =
 function assemble(
   client: Client,
   parameters: UpdateSettingParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { contractAddress, consumeUserResourcePercent } = parameters
 
   // `UpdateSettingContractActuator.validate()` rejects anything outside
@@ -114,7 +114,7 @@ function assemble(
     consume_user_resource_percent: consumeUserResourcePercent,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.UpdateSettingContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}UpdateSettingContract`,

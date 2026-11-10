@@ -5,7 +5,9 @@ import type {
   FreezeBalanceV2Contract,
   UnfreezeBalanceV2Contract,
   WithdrawBalanceContract,
+  WithdrawBalanceContractInput,
   WithdrawExpireUnfreezeContract,
+  WithdrawExpireUnfreezeContractInput,
 } from '../types.js'
 import { ResourceCodeName } from '../types.js'
 import {
@@ -27,7 +29,7 @@ export type EncodeWithdrawBalanceContractErrorType =
 
 /** Encodes a `WithdrawBalanceContract` (contract type 13) body. */
 export function encodeWithdrawBalanceContract(
-  message: WithdrawBalanceContract,
+  message: WithdrawBalanceContractInput,
 ): ByteArray {
   return encodeMessage(ownerOnlySpec, message)
 }
@@ -113,7 +115,7 @@ export type EncodeWithdrawExpireUnfreezeContractErrorType =
 
 /** Encodes a `WithdrawExpireUnfreezeContract` (contract type 56) body. */
 export function encodeWithdrawExpireUnfreezeContract(
-  message: WithdrawExpireUnfreezeContract,
+  message: WithdrawExpireUnfreezeContractInput,
 ): ByteArray {
   return encodeMessage(ownerOnlySpec, message)
 }

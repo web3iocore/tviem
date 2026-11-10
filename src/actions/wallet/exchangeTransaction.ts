@@ -24,7 +24,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ExchangeTransactionContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -105,7 +105,7 @@ export type BuildExchangeTransactionErrorType =
 function assemble(
   client: Client,
   parameters: ExchangeTransactionParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { exchangeId, tokenId, quant, expected } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -121,7 +121,7 @@ function assemble(
     expected,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ExchangeTransactionContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ExchangeTransactionContract`,

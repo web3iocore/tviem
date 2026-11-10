@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type ResourceCodeOfErrorType,
   resourceCodeOf,
@@ -101,7 +101,7 @@ export type BuildUndelegateResourceErrorType =
 function assemble(
   client: Client,
   parameters: UndelegateResourceParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { receiverAddress, balance, resource } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -116,7 +116,7 @@ function assemble(
     receiver_address: addressToHex(receiverAddress),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.UnDelegateResourceContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}UnDelegateResourceContract`,

@@ -24,7 +24,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ExchangeWithdrawContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -102,7 +102,7 @@ export type BuildExchangeWithdrawErrorType =
 function assemble(
   client: Client,
   parameters: ExchangeWithdrawParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { exchangeId, tokenId, quant } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -117,7 +117,7 @@ function assemble(
     quant,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ExchangeWithdrawContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ExchangeWithdrawContract`,

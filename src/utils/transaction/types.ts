@@ -682,3 +682,51 @@ export type ContractMessage =
   | ExchangeInjectContract
   | ExchangeWithdrawContract
   | ExchangeTransactionContract
+
+// Encode-side (input) spellings of the contract models. Today these are the
+// same types as the decoded models; the decoded models are narrowed in a
+// follow-up.
+export type VoteInput = Vote
+export type PermissionKeyInput = PermissionKey
+export type SmartContractAbiParamInput = SmartContractAbiParam
+export type SmartContractAbiEntryInput = SmartContractAbiEntry
+export type SmartContractAbiInput = SmartContractAbi
+export type SmartContractInput = SmartContract
+export type AssetIssueFrozenSupplyInput = AssetIssueFrozenSupply
+export type TransferContractInput = TransferContract
+export type TransferAssetContractInput = TransferAssetContract
+export type VoteWitnessContractInput = VoteWitnessContract
+export type FreezeBalanceContractInput = FreezeBalanceContract
+export type UnfreezeBalanceContractInput = UnfreezeBalanceContract
+export type ParticipateAssetIssueContractInput = ParticipateAssetIssueContract
+export type AssetIssueContractInput = AssetIssueContract
+export type UnfreezeAssetContractInput = UnfreezeAssetContract
+export type UpdateAssetContractInput = UpdateAssetContract
+export type WithdrawBalanceContractInput = WithdrawBalanceContract
+export type CreateSmartContractInput = CreateSmartContract
+export type TriggerSmartContractInput = TriggerSmartContract
+export type AccountPermissionUpdateContractInput =
+  AccountPermissionUpdateContract
+export type FreezeBalanceV2ContractInput = FreezeBalanceV2Contract
+export type UnfreezeBalanceV2ContractInput = UnfreezeBalanceV2Contract
+export type WithdrawExpireUnfreezeContractInput = WithdrawExpireUnfreezeContract
+export type DelegateResourceContractInput = DelegateResourceContract
+export type UnDelegateResourceContractInput = UnDelegateResourceContract
+export type CancelAllUnfreezeV2ContractInput = CancelAllUnfreezeV2Contract
+export type UpdateBrokerageContractInput = UpdateBrokerageContract
+export type AccountCreateContractInput = AccountCreateContract
+export type AccountUpdateContractInput = AccountUpdateContract
+export type SetAccountIdContractInput = SetAccountIdContract
+export type WitnessCreateContractInput = WitnessCreateContract
+export type WitnessUpdateContractInput = WitnessUpdateContract
+export type ClearABIContractInput = ClearABIContract
+export type UpdateSettingContractInput = UpdateSettingContract
+export type UpdateEnergyLimitContractInput = UpdateEnergyLimitContract
+export type ProposalCreateContractInput = ProposalCreateContract
+export type ProposalApproveContractInput = ProposalApproveContract
+export type ProposalDeleteContractInput = ProposalDeleteContract
+export type ExchangeCreateContractInput = ExchangeCreateContract
+export type ExchangeInjectContractInput = ExchangeInjectContract
+export type ExchangeWithdrawContractInput = ExchangeWithdrawContract
+export type ExchangeTransactionContractInput = ExchangeTransactionContract
+export type ContractMessageInput = ContractMessage

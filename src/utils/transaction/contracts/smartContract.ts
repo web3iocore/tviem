@@ -1,6 +1,11 @@
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
-import type { CreateSmartContract, TriggerSmartContract } from '../types.js'
+import type {
+  CreateSmartContract,
+  CreateSmartContractInput,
+  TriggerSmartContract,
+  TriggerSmartContractInput,
+} from '../types.js'
 import { EntryTypeName, StateMutabilityTypeName } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -94,7 +99,7 @@ export type EncodeCreateSmartContractErrorType =
 
 /** Encodes a `CreateSmartContract` (contract type 30) body. */
 export function encodeCreateSmartContract(
-  message: CreateSmartContract,
+  message: CreateSmartContractInput,
 ): ByteArray {
   return encodeMessage(createSmartContractSpec, message)
 }
@@ -128,7 +133,7 @@ export type EncodeTriggerSmartContractErrorType =
 
 /** Encodes a `TriggerSmartContract` (contract type 31) body. */
 export function encodeTriggerSmartContract(
-  message: TriggerSmartContract,
+  message: TriggerSmartContractInput,
 ): ByteArray {
   return encodeMessage(triggerSmartContractSpec, message)
 }

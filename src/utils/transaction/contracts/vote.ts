@@ -1,6 +1,6 @@
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
-import type { VoteWitnessContract } from '../types.js'
+import type { VoteWitnessContract, VoteWitnessContractInput } from '../types.js'
 import {
   type DecodeMessageErrorType,
   decodeMessage,
@@ -34,7 +34,7 @@ export type EncodeVoteWitnessContractErrorType =
 
 /** Encodes a `VoteWitnessContract` (contract type 4) body. */
 export function encodeVoteWitnessContract(
-  message: VoteWitnessContract,
+  message: VoteWitnessContractInput,
 ): ByteArray {
   return encodeMessage(voteWitnessContractSpec, message)
 }

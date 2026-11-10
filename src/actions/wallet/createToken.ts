@@ -23,7 +23,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { AssetIssueContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -142,7 +142,7 @@ export type BuildCreateTokenErrorType =
 function assemble(
   client: Client,
   parameters: CreateTokenParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const {
     name,
     abbr,
@@ -187,7 +187,7 @@ function assemble(
       frozen_days: entry.frozenDays,
     }))
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.AssetIssueContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}AssetIssueContract`,

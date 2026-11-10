@@ -2,8 +2,11 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   ClearABIContract,
+  ClearABIContractInput,
   UpdateEnergyLimitContract,
+  UpdateEnergyLimitContractInput,
   UpdateSettingContract,
+  UpdateSettingContractInput,
 } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -22,7 +25,9 @@ const clearABIContractSpec: MessageSpec = [
 export type EncodeClearABIContractErrorType = EncodeMessageErrorType | ErrorType
 
 /** Encodes a `ClearABIContract` (contract type 48) body. */
-export function encodeClearABIContract(message: ClearABIContract): ByteArray {
+export function encodeClearABIContract(
+  message: ClearABIContractInput,
+): ByteArray {
   return encodeMessage(clearABIContractSpec, message)
 }
 
@@ -47,7 +52,7 @@ export type EncodeUpdateSettingContractErrorType =
 
 /** Encodes an `UpdateSettingContract` (contract type 33) body. */
 export function encodeUpdateSettingContract(
-  message: UpdateSettingContract,
+  message: UpdateSettingContractInput,
 ): ByteArray {
   return encodeMessage(updateSettingContractSpec, message)
 }
@@ -79,7 +84,7 @@ export type EncodeUpdateEnergyLimitContractErrorType =
 
 /** Encodes an `UpdateEnergyLimitContract` (contract type 45) body. */
 export function encodeUpdateEnergyLimitContract(
-  message: UpdateEnergyLimitContract,
+  message: UpdateEnergyLimitContractInput,
 ): ByteArray {
   return encodeMessage(updateEnergyLimitContractSpec, message)
 }

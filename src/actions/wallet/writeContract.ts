@@ -26,7 +26,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { TriggerSmartContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -141,7 +141,7 @@ export type BuildWriteContractErrorType =
 function assemble(
   client: Client,
   parameters: WriteContractParameters,
-): { account: TronAccount; contract: RawContract; feeLimit: bigint } {
+): { account: TronAccount; contract: RawContractInput; feeLimit: bigint } {
   const {
     abi,
     address,
@@ -173,7 +173,7 @@ function assemble(
   if (callTokenValue !== undefined) value.call_token_value = callTokenValue
   if (tokenId !== undefined) value.token_id = tokenId
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.TriggerSmartContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}TriggerSmartContract`,

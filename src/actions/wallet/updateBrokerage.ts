@@ -19,7 +19,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { UpdateBrokerageContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -90,7 +90,7 @@ export type BuildUpdateBrokerageErrorType =
 function assemble(
   client: Client,
   parameters: UpdateBrokerageParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { brokerage } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -112,7 +112,7 @@ function assemble(
     brokerage,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.UpdateBrokerageContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}UpdateBrokerageContract`,

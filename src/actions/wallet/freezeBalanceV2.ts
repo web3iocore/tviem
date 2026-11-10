@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
   type ResourceCodeOfErrorType,
   resourceCodeOf,
@@ -97,7 +97,7 @@ export type BuildFreezeBalanceV2ErrorType =
 function assemble(
   client: Client,
   parameters: FreezeBalanceV2Parameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { frozenBalance, resource } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -106,7 +106,7 @@ function assemble(
   const account = parseAccount(source)
 
   // Build the FreezeBalanceV2Contract (addresses enter the body as 41-hex).
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.FreezeBalanceV2Contract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}FreezeBalanceV2Contract`,

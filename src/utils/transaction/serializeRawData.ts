@@ -82,6 +82,11 @@ export type RawData = {
   fee_limit?: Int64 | undefined
 }
 
+/** Encode-side spelling of {@link RawContract} (the same type today). */
+export type RawContractInput = RawContract
+/** Encode-side spelling of {@link RawData} (the same type today). */
+export type RawDataInput = RawData
+
 /** Prefixes a bare hex string with `0x` (leaves an already-prefixed one). */
 function toHexInput(value: string): Hex {
   return (value.startsWith('0x') ? value : `0x${value}`) as Hex
@@ -212,7 +217,7 @@ export type SerializeRawDataErrorType =
  * @param rawData Raw data model.
  * @returns Canonical `raw_data` bytes.
  */
-export function serializeRawData(rawData: RawData): ByteArray {
+export function serializeRawData(rawData: RawDataInput): ByteArray {
   assertOnlyKeys(
     rawData,
     [
@@ -252,6 +257,6 @@ export type ToRawDataHexErrorType = SerializeRawDataErrorType | ErrorType
  * @param rawData Raw data model.
  * @returns `raw_data_hex` string.
  */
-export function toRawDataHex(rawData: RawData): string {
+export function toRawDataHex(rawData: RawDataInput): string {
   return bareHex(serializeRawData(rawData))
 }

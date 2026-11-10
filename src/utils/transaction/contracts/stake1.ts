@@ -2,7 +2,9 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   FreezeBalanceContract,
+  FreezeBalanceContractInput,
   UnfreezeBalanceContract,
+  UnfreezeBalanceContractInput,
 } from '../types.js'
 import { ResourceCodeName } from '../types.js'
 import {
@@ -35,7 +37,7 @@ export type EncodeFreezeBalanceContractErrorType =
 
 /** Encodes a `FreezeBalanceContract` (contract type 11) body. */
 export function encodeFreezeBalanceContract(
-  message: FreezeBalanceContract,
+  message: FreezeBalanceContractInput,
 ): ByteArray {
   return encodeMessage(freezeBalanceContractSpec, message)
 }
@@ -67,7 +69,7 @@ export type EncodeUnfreezeBalanceContractErrorType =
 
 /** Encodes an `UnfreezeBalanceContract` (contract type 12) body. */
 export function encodeUnfreezeBalanceContract(
-  message: UnfreezeBalanceContract,
+  message: UnfreezeBalanceContractInput,
 ): ByteArray {
   return encodeMessage(unfreezeBalanceContractSpec, message)
 }

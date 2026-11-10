@@ -2,7 +2,9 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   DelegateResourceContract,
+  DelegateResourceContractInput,
   UnDelegateResourceContract,
+  UnDelegateResourceContractInput,
 } from '../types.js'
 import { ResourceCodeName } from '../types.js'
 import {
@@ -35,7 +37,7 @@ export type EncodeDelegateResourceContractErrorType =
 
 /** Encodes a `DelegateResourceContract` (contract type 57) body. */
 export function encodeDelegateResourceContract(
-  message: DelegateResourceContract,
+  message: DelegateResourceContractInput,
 ): ByteArray {
   return encodeMessage(delegateResourceContractSpec, message)
 }
@@ -68,7 +70,7 @@ export type EncodeUnDelegateResourceContractErrorType =
 
 /** Encodes an `UnDelegateResourceContract` (contract type 58) body. */
 export function encodeUnDelegateResourceContract(
-  message: UnDelegateResourceContract,
+  message: UnDelegateResourceContractInput,
 ): ByteArray {
   return encodeMessage(unDelegateResourceContractSpec, message)
 }

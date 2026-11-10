@@ -20,7 +20,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ProposalCreateContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -149,7 +149,7 @@ function normalizeParameters(
 function assemble(
   client: Client,
   parameters: CreateProposalParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
   const source = parameters.account ?? client.account
   if (!source) throw new AccountNotFoundError()
@@ -160,7 +160,7 @@ function assemble(
     parameters: normalizeParameters(parameters.parameters),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ProposalCreateContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ProposalCreateContract`,

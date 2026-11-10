@@ -20,7 +20,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ProposalApproveContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -98,7 +98,7 @@ export type BuildVoteProposalErrorType =
 function assemble(
   client: Client,
   parameters: VoteProposalParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { proposalId, isApproval } = parameters
 
   // `is_add_approval` is a proto3 bool: absent encodes as `false` = "revoke
@@ -125,7 +125,7 @@ function assemble(
     is_add_approval: isApproval,
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ProposalApproveContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ProposalApproveContract`,

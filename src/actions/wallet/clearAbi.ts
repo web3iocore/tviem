@@ -18,7 +18,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
-import type { RawContract } from '../../utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import type { ClearABIContract } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
@@ -87,7 +87,7 @@ export type BuildClearAbiErrorType =
 function assemble(
   client: Client,
   parameters: ClearAbiParameters,
-): { account: TronAccount; contract: RawContract } {
+): { account: TronAccount; contract: RawContractInput } {
   const { contractAddress } = parameters
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).
@@ -100,7 +100,7 @@ function assemble(
     contract_address: addressToHex(contractAddress),
   }
 
-  const contract: RawContract = {
+  const contract: RawContractInput = {
     type: ContractType.ClearABIContract,
     parameter: {
       type_url: `${contractTypeUrlPrefix}ClearABIContract`,

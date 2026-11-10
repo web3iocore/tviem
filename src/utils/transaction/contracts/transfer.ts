@@ -1,6 +1,11 @@
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
-import type { TransferAssetContract, TransferContract } from '../types.js'
+import type {
+  TransferAssetContract,
+  TransferAssetContractInput,
+  TransferContract,
+  TransferContractInput,
+} from '../types.js'
 import {
   type DecodeMessageErrorType,
   decodeMessage,
@@ -19,7 +24,9 @@ const transferContractSpec: MessageSpec = [
 export type EncodeTransferContractErrorType = EncodeMessageErrorType | ErrorType
 
 /** Encodes a `TransferContract` (TRX transfer, contract type 1) body. */
-export function encodeTransferContract(message: TransferContract): ByteArray {
+export function encodeTransferContract(
+  message: TransferContractInput,
+): ByteArray {
   return encodeMessage(transferContractSpec, message)
 }
 
@@ -44,7 +51,7 @@ export type EncodeTransferAssetContractErrorType =
 
 /** Encodes a `TransferAssetContract` (TRC10 transfer, contract type 2) body. */
 export function encodeTransferAssetContract(
-  message: TransferAssetContract,
+  message: TransferAssetContractInput,
 ): ByteArray {
   return encodeMessage(transferAssetContractSpec, message)
 }

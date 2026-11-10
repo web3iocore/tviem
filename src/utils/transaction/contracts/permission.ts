@@ -1,6 +1,9 @@
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
-import type { AccountPermissionUpdateContract } from '../types.js'
+import type {
+  AccountPermissionUpdateContract,
+  AccountPermissionUpdateContractInput,
+} from '../types.js'
 import { PermissionTypeName } from '../types.js'
 import {
   type DecodeMessageErrorType,
@@ -64,7 +67,7 @@ export type EncodeAccountPermissionUpdateContractErrorType =
 
 /** Encodes an `AccountPermissionUpdateContract` (contract type 46) body. */
 export function encodeAccountPermissionUpdateContract(
-  message: AccountPermissionUpdateContract,
+  message: AccountPermissionUpdateContractInput,
 ): ByteArray {
   return encodeMessage(accountPermissionUpdateContractSpec, message)
 }
