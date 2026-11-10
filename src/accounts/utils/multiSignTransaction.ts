@@ -10,7 +10,7 @@ import { txCheck } from '../../utils/transaction/txCheck.js'
 import type { SignableTransaction } from '../types.js'
 import {
   type SignTransactionErrorType,
-  signTransaction,
+  signTransactionAs,
 } from './signTransaction.js'
 
 export type MultiSignTransactionParameters = {
@@ -139,7 +139,7 @@ export function multiSignTransaction(
       }
     : raw_data
 
-  return signTransaction({
+  return signTransactionAs({
     transaction: {
       ...transaction,
       txID: getTransactionId(bound),

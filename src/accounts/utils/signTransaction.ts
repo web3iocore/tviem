@@ -38,14 +38,16 @@ export type SignTransactionParameters = {
   transaction: SignableTransaction
   /** The secp256k1 private key, as `0x`-prefixed or bare hex. */
   privateKey: Hex | string
+}
+
+/** @internal Parameters of {@link signTransactionAs}. */
+export type SignTransactionAsParameters = SignTransactionParameters & {
   /**
-   * The address the `owner_address` guard compares against — the signing
-   * account by default (derived from `privateKey`). Supplying a different
-   * address relaxes the guard (trusted input): `multiSign` passes the
-   * transaction's own `owner_address` here, behind its permission
+   * The address the `owner_address` guard compares against. `multiSign`
+   * passes the transaction's own `owner_address`, after its permission
    * validations, so a non-owner co-signer can sign.
    */
-  address?: AddressInput | undefined
+  address: AddressInput
 }
 
 export type SignTransactionErrorType =
@@ -85,29 +87,45 @@ export type SignTransactionErrorType =
  *    is not signed; a node-supplied `txID` is
  *    recomputed and compared, never adopted as-is. Partial forms do not
  *    sign — build the full triple first (`buildTransaction` does).
- * 2. The first contract's `owner_address` must equal `address` — the
- *    signing account, unless the caller supplied one — otherwise it throws.
- *    A contract whose owner cannot be read is refused. Non-owner co-signing
- *    goes through the `multiSign` action,
- *    which satisfies this guard via the `address` parameter after its own
- *    permission validations.
+ * 2. The first contract's `owner_address` must equal the signing account's
+ *    address — otherwise it throws. A contract whose owner cannot be read is
+ *    refused. Non-owner co-signing goes through `multiSign`, which runs its
+ *    permission validations and then signs via {@link signTransactionAs}.
  * 3. If this key's signature is already present it is not appended twice
  *    (compared by bytes — `0x`-prefix- and case-insensitive — since a
  *    duplicate signer would fail broadcast).
  *
- * @param parameters Transaction, private key, optional expected address.
+ * @param parameters Transaction and private key.
  * @returns A new {@link SignableTransaction} — the verified
  * `txID`/`raw_data`/`raw_data_hex` unchanged, with this signature appended.
  */
 export function signTransaction(
   parameters: SignTransactionParameters,
 ): SignableTransaction {
-  const { privateKey } = parameters
+  const { transaction, privateKey } = parameters
+  return signTransactionAs({
+    transaction,
+    privateKey,
+    address: privateKeyToAddress(privateKey),
+  })
+}
+
+/**
+ * {@link signTransaction} with the `owner_address` guard compared against a
+ * caller-supplied `address` instead of the key's own. Not exported from the
+ * package entries: `multiSign` uses it after validating the permission, and a
+ * key-backed account uses it with its own address.
+ *
+ * @internal
+ */
+export function signTransactionAs(
+  parameters: SignTransactionAsParameters,
+): SignableTransaction {
+  const { privateKey, address } = parameters
   // Snapshot first, so txCheck and the signing step read the same values
   // even when the input uses getters or a Proxy. Every guard below runs on
   // this plain copy.
   const transaction = cloneTransaction(parameters.transaction)
-  const address = parameters.address ?? privateKeyToAddress(privateKey)
 
   if (!txCheck(transaction))
     throw new BaseError('The transaction failed its integrity check (txCheck).')

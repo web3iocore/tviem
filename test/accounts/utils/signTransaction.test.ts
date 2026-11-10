@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import type { SignableTransaction } from '../../../src/accounts/types.js'
-import { signTransaction } from '../../../src/accounts/utils/signTransaction.js'
+import {
+  signTransaction,
+  signTransactionAs,
+} from '../../../src/accounts/utils/signTransaction.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import {
@@ -171,23 +174,32 @@ describe('signTransaction', () => {
     expect(signed.signature).toEqual([canonicalSig])
   })
 
-  test('an explicit address relaxes the owner guard (non-owner co-sign)', () => {
-    // A foreign owner would normally throw; passing the transaction's own
-    // owner_address as `address` (what multiSign does after its permission
-    // validations) lets any key co-sign.
+  test('signTransactionAs compares the owner guard against the given address (non-owner co-sign)', () => {
+    // The public signTransaction compares against the key's own address; the
+    // internal signTransactionAs takes the address, which is how multiSign
+    // lets any key co-sign after its permission validations.
     const foreignOwned = triple(
       withPermission(withOwner(canonicalRawData, pk2HexAddress), 2),
     )
     expect(() =>
       signTransaction({ transaction: foreignOwned, privateKey: pk1 }),
     ).toThrow(/owner_address/)
-    const signed = signTransaction({
+    const signed = signTransactionAs({
       transaction: foreignOwned,
       privateKey: pk1,
       address: pk2Address,
     })
     expect(signed.signature).toHaveLength(1)
     expect(signed.txID).toBe(foreignOwned.txID)
+    // The public form has no `address`.
+    expect(() =>
+      signTransaction({
+        transaction: foreignOwned,
+        privateKey: pk1,
+        // @ts-expect-error -- `address` is not a parameter of signTransaction
+        address: pk2Address,
+      }),
+    ).toThrow(/owner_address/)
   })
 
   test('re-signing a bound transaction with the same key is idempotent', () => {

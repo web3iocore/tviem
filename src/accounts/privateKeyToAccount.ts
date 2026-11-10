@@ -35,7 +35,7 @@ import {
 } from './utils/privateKeyToAddress.js'
 import {
   type SignTransactionErrorType,
-  signTransaction,
+  signTransactionAs,
 } from './utils/signTransaction.js'
 
 export type PrivateKeyToAccountErrorType =
@@ -107,7 +107,7 @@ export function privateKeyToAccount(
         throw new BaseError(
           `The transaction is already signed (${snapshot.signature.length} signature(s)) — co-signing a multi-signature transaction goes through multiSign.`,
         )
-      return signTransaction({
+      return signTransactionAs({
         transaction: snapshot,
         privateKey: keyHex,
         address,
