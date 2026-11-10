@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidHashError } from '../../../src/errors/data.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 import {
   parseSignature,
@@ -116,11 +117,75 @@ describe('sign', () => {
 
   test('throws on a non-32-byte hash', () => {
     expect(() => sign({ hash: '0xdeadbeef', privateKey: pk1 })).toThrow(
-      BaseError,
+      InvalidHashError,
     )
     expect(() => sign({ hash: new Uint8Array(31), privateKey: pk1 })).toThrow(
-      'Invalid hash length: 31 bytes.',
+      'got 31 bytes',
     )
+  })
+})
+
+describe('sign: hash input validation', () => {
+  const digest = txId.slice(2) // 64 hex characters
+
+  test('accepts upper-case hex and a 32-byte array', () => {
+    const expected = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    expect(
+      sign({ hash: `0x${digest.toUpperCase()}`, privateKey: pk1, to: 'hex' }),
+    ).toBe(expected)
+    expect(sign({ hash: hexToBytes(txId), privateKey: pk1, to: 'hex' })).toBe(
+      expected,
+    )
+  })
+
+  test.each([
+    ['63 hex characters', `0x${digest.slice(1)}`],
+    ['65 hex characters', `0x${digest}0`],
+    ['65 hex characters without a prefix', `${digest}0`],
+    ['64 hex characters without a prefix', digest],
+    ['a non-hex prefix', `zz${digest}`],
+    ['a non-hex character', `0x${digest.slice(1)}g`],
+    ['an upper-case prefix', `0X${digest}`],
+  ])('rejects a string hash of %s', (_, hash) => {
+    expect(() =>
+      sign({ hash: hash as `0x${string}`, privateKey: pk1 }),
+    ).toThrow(InvalidHashError)
+  })
+
+  test.each([31, 33, 0])('rejects a %i-byte array', (length) => {
+    expect(() =>
+      sign({ hash: new Uint8Array(length), privateKey: pk1 }),
+    ).toThrow(InvalidHashError)
+  })
+})
+
+describe('sign: extraEntropy input validation', () => {
+  test.each([
+    ['odd-length hex', '0xabc'],
+    ['no 0x prefix', 'deadbeef'],
+    ['empty hex', '0x'],
+    ['non-hex characters', '0xzz'],
+  ])('rejects %s', (_, extraEntropy) => {
+    expect(() =>
+      sign({
+        hash: txId,
+        privateKey: pk1,
+        extraEntropy: extraEntropy as `0x${string}`,
+      }),
+    ).toThrow(/extraEntropy/)
+  })
+
+  test('accepts whole-byte hex, bytes and booleans', () => {
+    for (const extraEntropy of [
+      '0xab',
+      '0xdeadbeef',
+      new Uint8Array(4),
+      true,
+      false,
+    ] as const)
+      expect(
+        sign({ hash: txId, privateKey: pk1, extraEntropy, to: 'hex' }),
+      ).toMatch(/^0x[0-9a-f]{130}$/)
   })
 })
 

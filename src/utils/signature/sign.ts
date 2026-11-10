@@ -1,6 +1,10 @@
 import { secp256k1 } from '@noble/curves/secp256k1'
 
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidHashError,
+  type InvalidHashErrorType,
+} from '../../errors/data.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
 import { type HexToBytesErrorType, hexToBytes } from '../encoding/toBytes.js'
@@ -134,7 +138,11 @@ export type SignReturnType<to extends SignTo = 'object'> =
   | (to extends 'hex' ? Hex : never)
   | (to extends 'bytes' ? ByteArray : never)
 
-export type SignErrorType = BaseErrorType | HexToBytesErrorType | ErrorType
+export type SignErrorType =
+  | BaseErrorType
+  | HexToBytesErrorType
+  | InvalidHashErrorType
+  | ErrorType
 
 /**
  * Signs a 32-byte digest with a secp256k1 private key, producing a TRON-form
@@ -158,17 +166,29 @@ export function sign<to extends SignTo = 'object'>({
   extraEntropy,
   to = 'object',
 }: SignParameters<to>): SignReturnType<to> {
-  const hashBytes = typeof hash === 'string' ? hexToBytes(hash) : hash
-  if (hashBytes.length !== 32)
-    throw new BaseError(
-      `Invalid hash length: ${hashBytes.length} bytes. Expected a 32-byte digest.`,
-    )
+  // A string digest is exactly `0x` + 64 hex characters; bytes are exactly 32.
+  const hashBytes = (() => {
+    if (typeof hash === 'string') {
+      if (!/^0x[0-9a-fA-F]{64}$/.test(hash))
+        throw new InvalidHashError({ hash })
+      return hexToBytes(hash)
+    }
+    if (hash.length !== 32) throw new InvalidHashError({ hash })
+    return hash
+  })()
 
   const keyHex = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey
 
-  // The advertised hex form is decoded here — noble rejects 0x-prefixed hex.
-  const entropy =
-    typeof extraEntropy === 'string' ? hexToBytes(extraEntropy) : extraEntropy
+  // String entropy is `0x`-prefixed hex of one or more whole bytes; it is
+  // decoded here since noble takes bytes.
+  const entropy = (() => {
+    if (typeof extraEntropy !== 'string') return extraEntropy
+    if (!/^0x([0-9a-fA-F]{2})+$/.test(extraEntropy))
+      throw new BaseError(
+        'Invalid extraEntropy: expected 0x-prefixed hex of one or more whole bytes.',
+      )
+    return hexToBytes(extraEntropy)
+  })()
 
   const { r, s, recovery } = secp256k1.sign(
     hashBytes,

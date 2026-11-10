@@ -4,6 +4,7 @@ import { expect, test } from 'vitest'
 import { BaseError } from '../../src/errors/base.js'
 import {
   InvalidBytesLengthError,
+  InvalidHashError,
   SizeExceedsPaddingSizeError,
   SliceOffsetOutOfBoundsError,
 } from '../../src/errors/data.js'
@@ -47,4 +48,17 @@ test('InvalidBytesLengthError', () => {
   expect(error.shortMessage).toBe(
     'Bytes is expected to be 21 bytes long, but is 20 bytes long.',
   )
+})
+
+test('InvalidHashError describes the input it got without echoing it', () => {
+  const fromString = new InvalidHashError({ hash: `0x${'ab'.repeat(31)}` })
+  expect(fromString).toBeInstanceOf(BaseError)
+  expect(fromString.name).toBe('InvalidHashError')
+  expect(fromString.shortMessage).toBe(
+    'Invalid hash: expected a 32-byte digest as 0x-prefixed hex (64 hex characters) or a 32-byte array, got a string of 64 characters.',
+  )
+  expect(fromString.message).not.toContain('abab')
+
+  const fromBytes = new InvalidHashError({ hash: new Uint8Array(31) })
+  expect(fromBytes.shortMessage).toContain('got 31 bytes.')
 })

@@ -61,3 +61,23 @@ export class InvalidBytesLengthError extends BaseError {
     )
   }
 }
+
+export type InvalidHashErrorType = InvalidHashError & {
+  name: 'InvalidHashError'
+}
+/**
+ * A value that should be a 32-byte digest is not one: as a string it must be
+ * `0x`-prefixed hex of exactly 64 hex characters; as bytes, exactly 32 bytes.
+ */
+export class InvalidHashError extends BaseError {
+  constructor({ hash }: { hash: string | Uint8Array }) {
+    const got =
+      typeof hash === 'string'
+        ? `a string of ${hash.length} characters`
+        : `${hash.length} bytes`
+    super(
+      `Invalid hash: expected a 32-byte digest as 0x-prefixed hex (64 hex characters) or a 32-byte array, got ${got}.`,
+      { name: 'InvalidHashError' },
+    )
+  }
+}

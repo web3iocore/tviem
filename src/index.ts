@@ -672,6 +672,8 @@ export {
 export {
   InvalidBytesLengthError,
   type InvalidBytesLengthErrorType,
+  InvalidHashError,
+  type InvalidHashErrorType,
   SizeExceedsPaddingSizeError,
   type SizeExceedsPaddingSizeErrorType,
   SliceOffsetOutOfBoundsError,
