@@ -19,7 +19,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../../../src/utils/transaction/registry.js'
 import {
-  type RawContract,
+  type RawContractInput,
   type RawData,
   toRawDataHex,
 } from '../../../../src/utils/transaction/serializeRawData.js'
@@ -44,7 +44,7 @@ function writeMock() {
 }
 
 /** A `FreezeBalanceV2Contract` matching the BANDWIDTH gold vector. */
-function freezeContract(): RawContract {
+function freezeContract(): RawContractInput {
   return {
     type: ContractType.FreezeBalanceV2Contract,
     parameter: {
@@ -75,12 +75,7 @@ test('runs getNowBlock → sign → broadcast and returns the local txID', async
   expect(calls[0]?.method).toBe('GET')
   expect(calls[1]?.method).toBe('POST')
 
-  const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
-    txID: string
-    raw_data_hex: string
-    raw_data: { fee_limit?: number | undefined }
-    signature: string[]
-  }
+  const body = parseBroadcast(bodyOf('broadcasttransaction'))
   expect(body.txID).toBe(bandwidth?.txID)
   expect(body.raw_data_hex).toBe(bandwidth?.rawDataHex)
   expect(body.signature).toHaveLength(1)
@@ -142,9 +137,7 @@ test('writes fee_limit into raw_data when supplied', async () => {
     feeLimit: 15000000n,
   })
 
-  const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
-    raw_data: { fee_limit?: number | undefined }
-  }
+  const body = parseBroadcast(bodyOf('broadcasttransaction'))
   expect(body.raw_data.fee_limit).toBe(15000000)
 })
 
@@ -154,9 +147,7 @@ test('derives timing from the latest block when blockHeader is omitted', async (
 
   await buildAndBroadcast(client, { contract: freezeContract(), account })
 
-  const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
-    raw_data: { timestamp: bigint }
-  }
+  const body = parseBroadcast(bodyOf('broadcasttransaction'))
   // getnowblock.fixed pins block_header timestamp = 1700000000000; timing is
   // taken verbatim from the fetched block rather than a wall clock.
   expect(body.raw_data.timestamp).toBe(1700000000000)
@@ -341,8 +332,8 @@ const walletRebuild = (raw: RawData): RawData => ({
   ...raw,
   ref_block_bytes: 'abcd',
   ref_block_hash: '1122334455667788',
-  expiration: BigInt(raw.expiration ?? 0) + 120_000n,
-  fee_limit: 30_000_000n,
+  expiration: Number(raw.expiration ?? 0) + 120_000,
+  fee_limit: 30_000_000,
 })
 
 /** Same transaction, every contract's owner swapped for pk2's address. */

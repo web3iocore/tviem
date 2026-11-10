@@ -20,7 +20,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { ProposalDeleteContract } from '../../utils/transaction/types.js'
+import type { ProposalDeleteContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -96,7 +96,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: ProposalDeleteContract = {
+  const value: ProposalDeleteContractInput = {
     owner_address: addressToHex(account.address),
     proposal_id: int64InputToBigInt('proposalId', proposalId),
   }

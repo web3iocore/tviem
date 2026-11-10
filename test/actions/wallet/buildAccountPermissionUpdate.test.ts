@@ -93,9 +93,7 @@ test('raw_data.contract[0].type is the java-tron node string', async () => {
   const client = createWalletClient({ account, transport })
 
   const tx = await buildAccountPermissionUpdate(client, params)
-  const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
-    type: string
-  }
+  const contract = tx.raw_data.contract[0]!
 
   expect(contract.type).toBe('AccountPermissionUpdateContract')
 })
@@ -108,9 +106,7 @@ test('permissionId is baked in as Permission_id and changes the id', async () =>
     ...params,
     permissionId: 2,
   })
-  const contract = (tx.raw_data.contract as Record<string, unknown>[])[0] as {
-    Permission_id?: number
-  }
+  const contract = tx.raw_data.contract[0]!
 
   // TRON renders the field with a capital `P`.
   expect(contract.Permission_id).toBe(2)

@@ -6,7 +6,7 @@ import {
   decodeAccountPermissionUpdateContract,
   encodeAccountPermissionUpdateContract,
 } from '../../../../src/utils/transaction/contracts/permission.js'
-import type { AccountPermissionUpdateContract } from '../../../../src/utils/transaction/types.js'
+import type { AccountPermissionUpdateContractInput } from '../../../../src/utils/transaction/types.js'
 import { PermissionType } from '../../../../src/utils/transaction/types.js'
 
 // §2.1 V1 / V2.
@@ -17,7 +17,7 @@ const operations =
   '0x7fff1fc0033e0000000000000000000000000000000000000000000000000000' as const
 
 test('encodeAccountPermissionUpdateContract: owner/witness/actives + 32-byte operations bitmap', () => {
-  const x: AccountPermissionUpdateContract = {
+  const x: AccountPermissionUpdateContractInput = {
     owner_address: v1,
     owner: {
       type: PermissionType.OWNER,

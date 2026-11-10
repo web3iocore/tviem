@@ -19,7 +19,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { ClearABIContract } from '../../utils/transaction/types.js'
+import type { ClearABIContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -95,7 +95,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: ClearABIContract = {
+  const value: ClearABIContractInput = {
     owner_address: addressToHex(account.address),
     contract_address: addressToHex(contractAddress),
   }

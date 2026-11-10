@@ -1,4 +1,5 @@
-import { expect, test } from 'vitest'
+import { expect, expectTypeOf, test } from 'vitest'
+import type { SignableTransaction } from '../../../../src/accounts/types.js'
 import {
   buildTransaction,
   type TransactionHeader,
@@ -9,7 +10,7 @@ import {
   ContractType,
   contractTypeUrlPrefix,
 } from '../../../../src/utils/transaction/registry.js'
-import type { RawContract } from '../../../../src/utils/transaction/serializeRawData.js'
+import type { RawContractInput } from '../../../../src/utils/transaction/serializeRawData.js'
 import { rpc } from '../../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../../mock/createMockTransport.js'
 
@@ -22,7 +23,7 @@ function buildMock() {
   })
 }
 
-function freezeContract(): RawContract {
+function freezeContract(): RawContractInput {
   return {
     type: ContractType.FreezeBalanceV2Contract,
     parameter: {
@@ -36,9 +37,8 @@ function freezeContract(): RawContract {
 }
 
 /** The `Permission_id` the built transaction carries, if any. */
-function permissionIdOf(tx: { raw_data: { contract: unknown[] } }) {
-  const contracts = tx.raw_data.contract as { Permission_id?: number }[]
-  return contracts[0]!.Permission_id
+function permissionIdOf(tx: SignableTransaction) {
+  return tx.raw_data.contract[0]!.Permission_id
 }
 
 test('binds a valid permission id, and omits the field for the owner id 0', async () => {
@@ -237,4 +237,48 @@ test('leaves a large permission id to the node', async () => {
     permissionId: 1000,
   })
   expect(permissionIdOf(tx)).toBe(1000)
+})
+
+test('the built raw_data is the decoded model: its contract narrows by `type`', async () => {
+  const { transport } = buildMock()
+  const client = createPublicClient({ transport })
+
+  // The contract goes in as an INPUT (numeric wire type, Base58 and 0x
+  // addresses, a bigint amount) and comes back DECODED: the type as its name,
+  // addresses as 41-hex strings, int64 as a number. Checking `type` is all it
+  // takes to read the message's fields — no cast.
+  const tx = await buildTransaction(client, {
+    contract: {
+      type: ContractType.TransferContract,
+      parameter: {
+        type_url: `${contractTypeUrlPrefix}TransferContract`,
+        value: {
+          owner_address: owner,
+          to_address: `0x${addressToHex(owner)}`,
+          amount: 1000000n,
+        },
+      },
+    },
+  })
+
+  const [contract] = tx.raw_data.contract
+  expect(contract?.type).toBe('TransferContract')
+  // Before the check `value` is the whole union (a bare-hex string for a
+  // codec-less type), so a TransferContract field is not reachable yet.
+  // @ts-expect-error -- `amount` exists only on the TransferContract member
+  contract!.parameter.value.amount
+  if (contract?.type !== 'TransferContract')
+    throw new Error('expected a TransferContract')
+
+  const { owner_address, to_address, amount } = contract.parameter.value
+  expectTypeOf(contract.type).toEqualTypeOf<'TransferContract'>()
+  expectTypeOf(owner_address).toEqualTypeOf<string>()
+  expectTypeOf(to_address).toEqualTypeOf<string>()
+  expectTypeOf(amount).toEqualTypeOf<number | string>()
+  expect(owner_address).toBe(addressToHex(owner))
+  expect(to_address).toBe(addressToHex(owner))
+  expect(amount).toBe(1000000)
+  expectTypeOf(tx.raw_data.expiration).toEqualTypeOf<
+    number | string | undefined
+  >()
 })

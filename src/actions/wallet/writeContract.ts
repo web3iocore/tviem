@@ -27,7 +27,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { TriggerSmartContract } from '../../utils/transaction/types.js'
+import type { TriggerSmartContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -164,7 +164,7 @@ function assemble(
   const data = encodeFunctionData({ abi, functionName, args })
 
   // ② build the TriggerSmartContract (addresses enter the body as 41-hex).
-  const value: TriggerSmartContract = {
+  const value: TriggerSmartContractInput = {
     owner_address: addressToHex(account.address),
     contract_address: addressToHex(address),
     data,

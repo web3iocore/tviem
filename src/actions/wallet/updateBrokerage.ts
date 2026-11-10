@@ -20,7 +20,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { UpdateBrokerageContract } from '../../utils/transaction/types.js'
+import type { UpdateBrokerageContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -107,7 +107,7 @@ function assemble(
       `Invalid brokerage: ${brokerage}. Expected an integer percentage in [0, 100].`,
     )
 
-  const value: UpdateBrokerageContract = {
+  const value: UpdateBrokerageContractInput = {
     owner_address: addressToHex(account.address),
     brokerage,
   }

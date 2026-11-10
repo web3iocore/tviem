@@ -2,8 +2,11 @@ import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import type {
   CancelAllUnfreezeV2Contract,
+  CancelAllUnfreezeV2ContractInput,
   FreezeBalanceV2Contract,
+  FreezeBalanceV2ContractInput,
   UnfreezeBalanceV2Contract,
+  UnfreezeBalanceV2ContractInput,
   WithdrawBalanceContract,
   WithdrawBalanceContractInput,
   WithdrawExpireUnfreezeContract,
@@ -58,7 +61,7 @@ export type EncodeFreezeBalanceV2ContractErrorType =
 
 /** Encodes a `FreezeBalanceV2Contract` (contract type 54) body. */
 export function encodeFreezeBalanceV2Contract(
-  message: FreezeBalanceV2Contract,
+  message: FreezeBalanceV2ContractInput,
 ): ByteArray {
   return encodeMessage(freezeBalanceV2ContractSpec, message)
 }
@@ -90,7 +93,7 @@ export type EncodeUnfreezeBalanceV2ContractErrorType =
 
 /** Encodes an `UnfreezeBalanceV2Contract` (contract type 55) body. */
 export function encodeUnfreezeBalanceV2Contract(
-  message: UnfreezeBalanceV2Contract,
+  message: UnfreezeBalanceV2ContractInput,
 ): ByteArray {
   return encodeMessage(unfreezeBalanceV2ContractSpec, message)
 }
@@ -137,7 +140,7 @@ export type EncodeCancelAllUnfreezeV2ContractErrorType =
 
 /** Encodes a `CancelAllUnfreezeV2Contract` (contract type 59) body. */
 export function encodeCancelAllUnfreezeV2Contract(
-  message: CancelAllUnfreezeV2Contract,
+  message: CancelAllUnfreezeV2ContractInput,
 ): ByteArray {
   return encodeMessage(ownerOnlySpec, message)
 }

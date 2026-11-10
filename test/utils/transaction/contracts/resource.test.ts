@@ -8,8 +8,8 @@ import {
   encodeUnDelegateResourceContract,
 } from '../../../../src/utils/transaction/contracts/resource.js'
 import type {
-  DelegateResourceContract,
-  UnDelegateResourceContract,
+  DelegateResourceContractInput,
+  UnDelegateResourceContractInput,
 } from '../../../../src/utils/transaction/types.js'
 import { ResourceCode } from '../../../../src/utils/transaction/types.js'
 
@@ -53,7 +53,7 @@ test('encodeUnDelegateResourceContract: same field order', () => {
 })
 
 test('decode(encode(x)) canonicalizes to the node-JSON form', () => {
-  const delegate: DelegateResourceContract = {
+  const delegate: DelegateResourceContractInput = {
     owner_address: v1,
     resource: ResourceCode.ENERGY,
     balance: 1_000_000n,
@@ -73,7 +73,7 @@ test('decode(encode(x)) canonicalizes to the node-JSON form', () => {
   })
 
   // BANDWIDTH is the zero enum — omitted from wire and canonical JSON alike.
-  const undelegate: UnDelegateResourceContract = {
+  const undelegate: UnDelegateResourceContractInput = {
     owner_address: v1,
     resource: ResourceCode.BANDWIDTH,
     balance: 1_000_000n,

@@ -22,11 +22,11 @@ import {
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
-  type AccountPermissionUpdateContract,
+  type AccountPermissionUpdateContractInput,
   type BytesInput,
   type Int64,
-  type Permission,
-  type PermissionKey,
+  type PermissionKeyInput,
+  type PermissionMessageInput,
   PermissionType,
 } from '../../utils/transaction/types.js'
 import {
@@ -54,7 +54,7 @@ export type PermissionInput = {
   /** Combined signature weight required to authorize an operation (`int64`). */
   threshold: Int64
   /** Signer keys and their weights (`{ address, weight }`) — at least one. */
-  keys: PermissionKey[]
+  keys: PermissionKeyInput[]
 }
 
 /**
@@ -142,7 +142,7 @@ function toPermission(
   input: PermissionInput,
   slot: string,
   type: PermissionType,
-): Permission {
+): PermissionMessageInput {
   if (input.threshold === undefined || input.threshold === null)
     throw new BaseError(`Invalid ${slot} permission: missing \`threshold\`.`)
   if (!Array.isArray(input.keys) || input.keys.length === 0)
@@ -170,7 +170,7 @@ function toActivePermission(
   input: ActivePermissionInput,
   slot: string,
   index: number,
-): Permission {
+): PermissionMessageInput {
   const permission = toPermission(input, slot, PermissionType.ACTIVE)
   const { id, operations } = input
   // The chain stores actives by position: `AccountCapsule.updatePermissions`
@@ -235,7 +235,7 @@ function assemble(
     )
 
   // Each permission's `type` is forced from the slot it was passed in.
-  const value: AccountPermissionUpdateContract = {
+  const value: AccountPermissionUpdateContractInput = {
     owner_address: addressToHex(account.address),
     owner: toPermission(owner, 'owner', PermissionType.OWNER),
     ...(witness

@@ -20,7 +20,7 @@ import {
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
 import {
-  type DelegateResourceContract,
+  type DelegateResourceContractInput,
   type ResourceCodeOfErrorType,
   resourceCodeOf,
 } from '../../utils/transaction/types.js'
@@ -118,7 +118,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: DelegateResourceContract = {
+  const value: DelegateResourceContractInput = {
     owner_address: addressToHex(account.address),
     resource: resourceCodeOf(resource),
     balance,

@@ -33,7 +33,11 @@ import {
   getContractCodecByType,
   getContractCodecByTypeUrl,
 } from './registry.js'
-import type { ContractMessage, Int64 } from './types.js'
+import type {
+  ContractMessageByType,
+  ContractMessageInput,
+  Int64,
+} from './types.js'
 
 /**
  * One `Transaction.Contract` entry, in java-tron's JSON shape: the contract
@@ -41,51 +45,75 @@ import type { ContractMessage, Int64 } from './types.js'
  * and an optional multi-sig `Permission_id` (java-tron's own capital-P
  * spelling).
  */
-export type RawContract = {
-  /** Contract type name (or its registered wire integer). */
-  type: ContractTypeName | number
+type RawContractBase<message, type> = {
+  /** Contract type name (or, on the encode side, its registered wire integer). */
+  type: type
   /** `Any`-wrapped contract parameter. */
   parameter: {
     /** `Any.type_url`. */
     type_url: string
-    /**
-     * Decoded contract message — or, for a type without a registered codec
-     * (decode side only), the undecoded body as bare hex. A bare-hex body
-     * never serializes: without a codec there is no byte verification.
-     */
-    value: ContractMessage | string
+    /** The contract message. */
+    value: message
   }
   /** Multi-sig permission id (`Transaction.Contract.Permission_id`). */
   Permission_id?: number | undefined
 }
 
+/** A `Transaction.Contract` on the encode side: any contract message input. */
+export type RawContractInput = RawContractBase<
+  ContractMessageInput,
+  ContractTypeName | number
+>
+
 /**
- * A `Transaction.raw` in java-tron's JSON shape. Byte fields
- * (`ref_block_bytes`, `ref_block_hash`, `data`) are bare lowercase hex (no
- * `0x`); `int64` fields accept `bigint | number | string` on the encode side
- * (the canonical decoded form is a number, or a decimal string past 2^53).
+ * A decoded `Transaction.Contract`, discriminated by `type`: checking
+ * `contract.type === 'TransferContract'` narrows `parameter.value` to the
+ * matching message. A type java-tron defines but this SDK has no codec for
+ * keeps its body as bare hex in `parameter.value`; such a contract never
+ * serializes.
  */
-export type RawData = {
+export type RawContract =
+  | {
+      [name in keyof ContractMessageByType]: RawContractBase<
+        ContractMessageByType[name],
+        name
+      >
+    }[keyof ContractMessageByType]
+  | RawContractBase<
+      string,
+      Exclude<ContractTypeName, keyof ContractMessageByType>
+    >
+
+type RawDataBase<contract, int64> = {
   /** TaPoS reference block bytes (field 1, bare hex). */
   ref_block_bytes?: string | undefined
   /** TaPoS reference block hash (field 4, bare hex). */
   ref_block_hash?: string | undefined
   /** Expiration timestamp in ms (field 8, `int64`). */
-  expiration?: Int64 | undefined
+  expiration?: int64 | undefined
   /** Memo/extra data (field 10, bare hex). */
   data?: string | undefined
   /** Contracts (field 11, repeated). */
-  contract: RawContract[]
+  contract: contract[]
   /** Creation timestamp in ms (field 14, `int64`). */
-  timestamp?: Int64 | undefined
+  timestamp?: int64 | undefined
   /** Energy/bandwidth fee ceiling in SUN (field 18, `int64`). */
-  fee_limit?: Int64 | undefined
+  fee_limit?: int64 | undefined
 }
 
-/** Encode-side spelling of {@link RawContract} (the same type today). */
-export type RawContractInput = RawContract
-/** Encode-side spelling of {@link RawData} (the same type today). */
-export type RawDataInput = RawData
+/**
+ * A `Transaction.raw` on the encode side, in java-tron's JSON shape. Byte
+ * fields (`ref_block_bytes`, `ref_block_hash`, `data`) are bare lowercase hex
+ * (no `0x`); `int64` fields accept `bigint | number | string`.
+ */
+export type RawDataInput = RawDataBase<RawContractInput, Int64>
+
+/**
+ * A decoded `Transaction.raw`, as `decodeRawData` and the node return it:
+ * `int64` fields are numbers (a decimal string past 2^53), contracts are
+ * {@link RawContract}s.
+ */
+export type RawData = RawDataBase<RawContract, number | string>
 
 /** Prefixes a bare hex string with `0x` (leaves an already-prefixed one). */
 function toHexInput(value: string): Hex {
@@ -131,7 +159,9 @@ function assertOnlyKeys(
 }
 
 /** Encodes one `Transaction.Contract` (type + `Any` parameter + permission). */
-function serializeContract(contract: RawContract): ByteArray {
+function serializeContract(
+  contract: RawContractInput | RawContract,
+): ByteArray {
   // Strict by design (like `encodeMessage`): the sign path verifies supplied
   // JSON by re-serializing and comparing bytes — a silently dropped key
   // would let the JSON claim things the signed bytes do not carry.
@@ -217,7 +247,7 @@ export type SerializeRawDataErrorType =
  * @param rawData Raw data model.
  * @returns Canonical `raw_data` bytes.
  */
-export function serializeRawData(rawData: RawDataInput): ByteArray {
+export function serializeRawData(rawData: RawDataInput | RawData): ByteArray {
   assertOnlyKeys(
     rawData,
     [
@@ -257,6 +287,6 @@ export type ToRawDataHexErrorType = SerializeRawDataErrorType | ErrorType
  * @param rawData Raw data model.
  * @returns `raw_data_hex` string.
  */
-export function toRawDataHex(rawData: RawDataInput): string {
+export function toRawDataHex(rawData: RawDataInput | RawData): string {
   return bareHex(serializeRawData(rawData))
 }

@@ -131,8 +131,12 @@ export function signTransactionAs(
     throw new BaseError('The transaction failed its integrity check (txCheck).')
 
   const { raw_data, txID } = transaction
-  const owner = (raw_data.contract[0]?.parameter.value as any).owner_address
-  if (owner === undefined || !isAddressEqual(addressToHex(owner), address))
+  const value = raw_data.contract[0]?.parameter.value
+  const owner = typeof value === 'object' ? value.owner_address : undefined
+  if (
+    owner === undefined ||
+    !isAddressEqual(addressToHex(owner as AddressInput), address)
+  )
     throw new BaseError(
       `The transaction's owner_address does not match the signing account (${address}).`,
     )

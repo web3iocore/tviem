@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { expect, expectTypeOf, test } from 'vitest'
 
 import { concatBytes } from '../../../../src/utils/data/concat.js'
 import { hexToBytes } from '../../../../src/utils/encoding/toBytes.js'
@@ -11,8 +11,9 @@ import {
 } from '../../../../src/utils/transaction/contracts/transfer.js'
 import { flexToHex } from '../../../../src/utils/transaction/normalize.js'
 import type {
-  TransferAssetContract,
+  TransferAssetContractInput,
   TransferContract,
+  TransferContractInput,
 } from '../../../../src/utils/transaction/types.js'
 
 // §2.1 V1 / V2, §2.3 `to`.
@@ -75,7 +76,7 @@ test('encodeTransferContract: zero amount is refused (required, default = absent
 })
 
 test('decode(encode(x)) canonicalizes to the node-JSON form', () => {
-  const x: TransferContract = {
+  const x: TransferContractInput = {
     owner_address: v1,
     to_address: to,
     amount: 1_000_000n,
@@ -95,6 +96,35 @@ test('decode(encode(x)) canonicalizes to the node-JSON form', () => {
   ).toStrictEqual({
     owner_address: v1,
     to_address: to,
+  })
+})
+
+test('encode(TransferContractInput) → decode is a TransferContract: number amount, 41-hex addresses', () => {
+  // Encode side is wide: bigint amount, Base58 / 0x / 41-hex / bytes addresses.
+  const input: TransferContractInput = {
+    owner_address: 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC',
+    to_address: hexToBytes(`0x${to}`),
+    amount: 1_000_000n,
+  }
+  // Decode side is the node-JSON model — no cast needed to hold it.
+  const decoded: TransferContract = decodeTransferContract(
+    encodeTransferContract(input),
+  )
+  expectTypeOf(decoded.amount).toEqualTypeOf<number | string>()
+  expectTypeOf(decoded.owner_address).toEqualTypeOf<string>()
+  expectTypeOf(decoded.to_address).toEqualTypeOf<string>()
+  // A bigint on the way in cannot come back out: the model has no bigint.
+  expectTypeOf(decoded.amount).not.toEqualTypeOf<bigint>()
+
+  // Runtime: int64 within 2^53 is a number; addresses are bare 41-hex.
+  expect(typeof decoded.amount).toBe('number')
+  expect(decoded.amount).toBe(1_000_000)
+  expect(decoded.owner_address).toMatch(/^41[0-9a-f]{40}$/)
+  expect(decoded.to_address).toMatch(/^41[0-9a-f]{40}$/)
+  expect(decoded).toStrictEqual({
+    owner_address: v1,
+    to_address: to,
+    amount: 1_000_000,
   })
 })
 
@@ -137,7 +167,7 @@ test('encodeTransferAssetContract: asset_name is field 1 (bytes = hex)', () => {
 })
 
 test('decode(encode(x)) canonicalizes (TransferAssetContract)', () => {
-  const x: TransferAssetContract = {
+  const x: TransferAssetContractInput = {
     asset_name: '0x31303030303031',
     owner_address: v1,
     to_address: v2,

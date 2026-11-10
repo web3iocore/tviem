@@ -5,10 +5,11 @@ import { BaseError } from '../../../src/errors/base.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
+import type { RawData } from '../../../src/utils/transaction/serializeRawData.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 
 const [transfer] = loadTxFixtureFile('transfer-contract.json')
-const canonicalRawData = decodeRawData(transfer!.rawDataHex)
+const canonicalRawData: RawData = decodeRawData(transfer!.rawDataHex)
 const canonical: SignableTransaction = {
   txID: transfer!.txID,
   raw_data: canonicalRawData,
@@ -16,22 +17,25 @@ const canonical: SignableTransaction = {
   signature: ['ab'.repeat(65)],
 }
 
-// The same bytes, spelled the way java-tron renders them for `visible: true`.
-const value = canonicalRawData.contract[0]!.parameter.value as {
-  owner_address: TronHexAddress
-  to_address: TronHexAddress
-}
-const visibleRawData = {
+// The decoded contract narrows through its `type` discriminant.
+const canonicalContract = canonicalRawData.contract[0]!
+if (canonicalContract.type !== 'TransferContract')
+  throw new Error('transfer-contract fixture is not a TransferContract')
+const value = canonicalContract.parameter.value
+
+// The same bytes, spelled the way java-tron renders them for `visible: true`
+// (Base58 addresses are still a `string`, so this is a `RawData` too).
+const visibleRawData: RawData = {
   ...canonicalRawData,
   contract: [
     {
-      ...canonicalRawData.contract[0]!,
+      ...canonicalContract,
       parameter: {
-        ...canonicalRawData.contract[0]!.parameter,
+        ...canonicalContract.parameter,
         value: {
           ...value,
-          owner_address: toBase58(value.owner_address),
-          to_address: toBase58(value.to_address),
+          owner_address: toBase58(value.owner_address as TronHexAddress),
+          to_address: toBase58(value.to_address as TronHexAddress),
         },
       },
     },

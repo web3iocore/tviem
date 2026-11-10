@@ -21,7 +21,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { ProposalCreateContract } from '../../utils/transaction/types.js'
+import type { ProposalCreateContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -155,7 +155,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: ProposalCreateContract = {
+  const value: ProposalCreateContractInput = {
     owner_address: addressToHex(account.address),
     parameters: normalizeParameters(parameters.parameters),
   }

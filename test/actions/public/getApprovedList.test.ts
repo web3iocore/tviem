@@ -290,7 +290,7 @@ test('refuses a raw_data model that does not serialize to raw_data_hex, before a
       ...tx,
       // A drifted model: the bytes (and signatures) say something else, and
       // the node would inspect the model.
-      raw_data: { ...tx.raw_data, fee_limit: 1_000_000n },
+      raw_data: { ...tx.raw_data, fee_limit: 1_000_000 },
     },
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)

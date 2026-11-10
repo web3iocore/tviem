@@ -24,7 +24,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { UpdateAssetContract } from '../../utils/transaction/types.js'
+import type { UpdateAssetContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -111,7 +111,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: UpdateAssetContract = {
+  const value: UpdateAssetContractInput = {
     owner_address: addressToHex(account.address),
     description: flexToHex(description),
     url: flexToHex(url),

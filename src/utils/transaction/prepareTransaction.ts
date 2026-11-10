@@ -1,6 +1,6 @@
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import type { ErrorType } from '../../errors/utils.js'
-import type { RawData } from './serializeRawData.js'
+import type { RawDataInput } from './serializeRawData.js'
 
 /** Default transaction lifetime, in milliseconds (one minute). */
 export const defaultExpirationMs = 60000n
@@ -128,10 +128,10 @@ export type FillBlockHeaderErrorType =
  * @returns A new raw data model with TaPoS, timestamp and expiration set.
  */
 export function fillBlockHeader(
-  rawData: RawData,
+  rawData: RawDataInput,
   block: BlockRef,
   options: { expirationMs?: bigint | number | undefined } = {},
-): RawData {
+): RawDataInput {
   let lifetimeMs = defaultExpirationMs
   if (options.expirationMs !== undefined) {
     // Integer-check numbers first: BigInt(1.5) would escape as a raw

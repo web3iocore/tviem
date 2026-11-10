@@ -5,7 +5,7 @@ import {
   deriveRefBlockParams,
   fillBlockHeader,
 } from '../../../src/utils/transaction/prepareTransaction.js'
-import type { RawData } from '../../../src/utils/transaction/serializeRawData.js'
+import type { RawDataInput } from '../../../src/utils/transaction/serializeRawData.js'
 
 // A block id whose hex chars 16..32 are the §2.3 ref_block_hash.
 const blockID = `${'00'.repeat(8)}0102030405060708${'00'.repeat(16)}`
@@ -89,7 +89,7 @@ test('deriveRefBlockParams: rejects a non-string blockID', () => {
 })
 
 test('fillBlockHeader: sets TaPoS, timestamp and expiration from the block', () => {
-  const rawData: RawData = { contract: [] }
+  const rawData: RawDataInput = { contract: [] }
   const filled = fillBlockHeader(rawData, {
     number: 0x1234,
     blockID,

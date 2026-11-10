@@ -19,7 +19,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { VoteWitnessContract } from '../../utils/transaction/types.js'
+import type { VoteWitnessContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -104,7 +104,7 @@ function assemble(
   const account = parseAccount(source)
 
   // Build the VoteWitnessContract (addresses enter the body as 41-hex).
-  const value: VoteWitnessContract = {
+  const value: VoteWitnessContractInput = {
     owner_address: addressToHex(account.address),
     votes: votes.map((vote) => ({
       vote_address: addressToHex(vote.voteAddress),

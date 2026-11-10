@@ -336,7 +336,8 @@ test('a signer that spells owner_address in Base58 is the same owner', async () 
   const account = customAccountWith(async (transaction) => {
     const signed = await local.signTransaction(transaction)
     const contract = signed.raw_data.contract[0]!
-    const value = contract.parameter.value as { owner_address: string }
+    if (contract.type !== 'TransferContract')
+      throw new Error('expected a TransferContract')
     // Same bytes, owner re-spelled: raw_data_hex / txID still agree.
     return {
       ...signed,
@@ -347,7 +348,10 @@ test('a signer that spells owner_address in Base58 is the same owner', async () 
             ...contract,
             parameter: {
               ...contract.parameter,
-              value: { ...value, owner_address: local.address },
+              value: {
+                ...contract.parameter.value,
+                owner_address: local.address,
+              },
             },
           },
         ],

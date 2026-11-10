@@ -102,12 +102,11 @@ function readOwners(transaction: SignableTransaction): string[] | undefined {
   try {
     const contracts = transaction.raw_data.contract
     if (!Array.isArray(contracts) || contracts.length === 0) return undefined
-    return contracts.map((contract) =>
-      addressToHex(
-        (contract.parameter.value as { owner_address: AddressInput })
-          .owner_address,
-      ),
-    )
+    return contracts.map((contract) => {
+      const { value } = contract.parameter
+      if (typeof value !== 'object') throw new Error('no owner')
+      return addressToHex(value.owner_address as AddressInput)
+    })
   } catch {
     return undefined
   }

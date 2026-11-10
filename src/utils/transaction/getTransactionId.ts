@@ -2,6 +2,7 @@ import type { ErrorType } from '../../errors/utils.js'
 import { type Sha256ErrorType, sha256 } from '../hash/sha256.js'
 import {
   type RawData,
+  type RawDataInput,
   type SerializeRawDataErrorType,
   serializeRawData,
 } from './serializeRawData.js'
@@ -19,6 +20,6 @@ export type GetTransactionIdErrorType =
  * @param rawData Raw data model.
  * @returns Transaction id (64 hex chars).
  */
-export function getTransactionId(rawData: RawData): string {
+export function getTransactionId(rawData: RawDataInput | RawData): string {
   return sha256(serializeRawData(rawData), 'hex').slice(2)
 }

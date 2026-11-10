@@ -25,7 +25,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { ExchangeWithdrawContract } from '../../utils/transaction/types.js'
+import type { ExchangeWithdrawContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -110,7 +110,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: ExchangeWithdrawContract = {
+  const value: ExchangeWithdrawContractInput = {
     owner_address: addressToHex(account.address),
     exchange_id: int64InputToBigInt('exchangeId', exchangeId),
     token_id: flexToHex(tokenId),

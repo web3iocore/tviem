@@ -22,7 +22,7 @@ import type { RawContractInput } from '../../utils/transaction/serializeRawData.
 import {
   type ResourceCodeOfErrorType,
   resourceCodeOf,
-  type UnfreezeBalanceContract,
+  type UnfreezeBalanceContractInput,
 } from '../../utils/transaction/types.js'
 import type { StakeResource } from './freezeBalanceV2.js'
 import {
@@ -107,7 +107,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: UnfreezeBalanceContract = {
+  const value: UnfreezeBalanceContractInput = {
     owner_address: addressToHex(account.address),
     resource: resourceCodeOf(resource),
   }

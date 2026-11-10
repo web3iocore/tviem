@@ -1,11 +1,13 @@
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import type { ErrorType } from '../../errors/utils.js'
+import type { AddressInput } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
 import { getTransactionId, toRawDataHex } from '../../utils/index.js'
 import {
   type CloneTransactionErrorType,
   cloneTransaction,
 } from '../../utils/transaction/cloneTransaction.js'
+import type { RawData } from '../../utils/transaction/serializeRawData.js'
 import { txCheck } from '../../utils/transaction/txCheck.js'
 import type { SignableTransaction } from '../types.js'
 import {
@@ -147,6 +149,14 @@ export function multiSignTransaction(
       raw_data_hex: toRawDataHex(bound),
     },
     privateKey,
-    address: (raw_data.contract[0]?.parameter.value as any).owner_address,
+    address: ownerAddressOf(raw_data),
   })
+}
+
+/** The first contract's `owner_address`; a codec-less body has none. */
+function ownerAddressOf(raw_data: RawData): AddressInput {
+  const value = raw_data.contract[0]?.parameter.value
+  if (typeof value !== 'object')
+    throw new BaseError('The transaction has no readable owner_address.')
+  return value.owner_address as AddressInput
 }

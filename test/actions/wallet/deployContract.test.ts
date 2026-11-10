@@ -375,8 +375,8 @@ const walletRebuild = (raw: RawData): RawData => ({
   ...raw,
   ref_block_bytes: 'abcd',
   ref_block_hash: '1122334455667788',
-  expiration: BigInt(raw.expiration ?? 0) + 120_000n,
-  fee_limit: 30_000_000n,
+  expiration: Number(raw.expiration ?? 0) + 120_000,
+  fee_limit: 30_000_000,
 })
 
 const reown = (raw: RawData): RawData => ({

@@ -95,13 +95,13 @@ function decodeContract(bytes: ByteArray): RawContract {
       throw new BaseError(
         `Contract type "${typeName}" does not match its parameter type URL "${typeUrl}".`,
       )
-    const contract: RawContract = {
+    const contract = {
       type: typeName,
       parameter: {
         type_url: typeUrl,
         value: bareHex(valueBytes),
       },
-    }
+    } as RawContract
     if (permissionId !== undefined) contract.Permission_id = permissionId
     return contract
   }
@@ -112,13 +112,15 @@ function decodeContract(bytes: ByteArray): RawContract {
     throw new BaseError(
       `Contract type "${typeName}" does not match its parameter type URL "${typeUrl}".`,
     )
-  const contract: RawContract = {
+  // `type` and `value` are correlated by the codec lookup above; the union
+  // member is asserted rather than re-derived per type.
+  const contract = {
     type: typeName,
     parameter: {
       type_url: typeUrl,
       value,
     },
-  }
+  } as RawContract
   if (permissionId !== undefined) contract.Permission_id = permissionId
   return contract
 }

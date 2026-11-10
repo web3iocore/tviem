@@ -209,7 +209,7 @@ test('refuses a raw_data model that does not serialize to raw_data_hex', async (
     signedTransaction: {
       ...signedTransaction,
       // A drifted model: the bytes (and signature) say something else.
-      raw_data: { ...signedTransaction.raw_data, fee_limit: 1_000_000n },
+      raw_data: { ...signedTransaction.raw_data, fee_limit: 1_000_000 },
     },
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)

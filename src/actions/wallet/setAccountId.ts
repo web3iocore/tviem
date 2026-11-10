@@ -29,7 +29,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { SetAccountIdContract } from '../../utils/transaction/types.js'
+import type { SetAccountIdContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -124,7 +124,7 @@ function assemble(
       `Invalid account id: ${byteLength} bytes. Expected ${minAccountIdLength} to ${maxAccountIdLength} bytes — java-tron rejects anything outside that range.`,
     )
 
-  const value: SetAccountIdContract = {
+  const value: SetAccountIdContractInput = {
     account_id,
     owner_address: addressToHex(account.address),
   }

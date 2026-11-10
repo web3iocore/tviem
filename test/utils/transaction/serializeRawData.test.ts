@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
 import { IntegerOutOfRangeError } from '../../../src/errors/encoding.js'
 import { UnknownContractTypeError } from '../../../src/errors/transaction.js'
+import { toBase58 } from '../../../src/utils/address/toBase58.js'
+import { bareHex } from '../../../src/utils/encoding/bareHex.js'
+import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import {
@@ -9,9 +12,15 @@ import {
 } from '../../../src/utils/transaction/registry.js'
 import {
   type RawData,
+  type RawDataInput,
+  serializeRawData,
   toRawDataHex,
 } from '../../../src/utils/transaction/serializeRawData.js'
-import type { Int64 } from '../../../src/utils/transaction/types.js'
+import type {
+  AssetIssueContractInput,
+  Int64,
+  TransferContractInput,
+} from '../../../src/utils/transaction/types.js'
 import { loadTxFixtures } from '../../fixtures/tx/loader.js'
 
 // §2.3 canonical reference vector.
@@ -22,7 +31,7 @@ const canonical = loadTxFixtures().find(
 )!
 
 test('§2.3 canonical: forward-serialize a hand-built raw data', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -41,7 +50,7 @@ test('§2.3 canonical: forward-serialize a hand-built raw data', () => {
 })
 
 test('an unregistered contract type name throws (strict)', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     contract: [
       {
         // @ts-expect-error deliberately invalid contract type name
@@ -60,15 +69,16 @@ test('an unregistered contract type name throws (strict)', () => {
 })
 
 test('an unsupported contract throws UnknownContractTypeError, not a bare BaseError', () => {
+  // In java-tron's enum (so the name resolves) but codec-less: this is the
+  // decoded-side fallback member of `RawContract` — the body stays bare hex
+  // — and the encode path must still refuse it with the same typed error.
   const rawData: RawData = {
     contract: [
       {
-        // In java-tron's enum (so the name resolves) but codec-less: the
-        // encode path must still refuse it with the same typed error.
         type: 'MarketSellAssetContract',
         parameter: {
           type_url: 'type.googleapis.com/protocol.MarketSellAssetContract',
-          value: { owner_address: owner },
+          value: `0a15${owner}`,
         },
       },
     ],
@@ -91,7 +101,7 @@ test('an unsupported contract throws UnknownContractTypeError, not a bare BaseEr
 })
 
 test('a contract type that does not match the parameter type URL throws', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     contract: [
       {
         type: 'TriggerSmartContract',
@@ -108,7 +118,7 @@ test('a contract type that does not match the parameter type URL throws', () => 
 })
 
 test('a registered type with an unregistered type_url throws (strict)', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     contract: [
       {
         type: ContractType.TransferContract,
@@ -125,7 +135,7 @@ test('a registered type with an unregistered type_url throws (strict)', () => {
 })
 
 test('an unregistered contract type integer throws (strict)', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     contract: [
       {
         type: 999,
@@ -146,7 +156,7 @@ test('§2.3 canonical: Permission_id is contract field 5', () => {
   const withPermission = loadTxFixtures().find(
     (f) => f.name === 'transfer with Permission_id=2',
   )!
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -167,7 +177,7 @@ test('§2.3 canonical: Permission_id is contract field 5', () => {
 
 test('int32 fields are bounded to int32; int64 fields are not', () => {
   /** A `raw_data` whose AssetIssue `trx_num` (an int32 field) is `trxNum`. */
-  const assetIssue = (trxNum: number): RawData => ({
+  const assetIssue = (trxNum: number): RawDataInput => ({
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -215,13 +225,13 @@ test('int32 fields are bounded to int32; int64 fields are not', () => {
   // value far past int32 is perfectly legal there.
   const bigSupply = assetIssue(1)
   ;(
-    bigSupply.contract[0]!.parameter.value as { total_supply: bigint }
+    bigSupply.contract[0]!.parameter.value as AssetIssueContractInput
   ).total_supply = 90_000_000_000_000_000n
   expect(() => toRawDataHex(bigSupply)).not.toThrow()
 })
 
 test('Permission_id is bounded to int32', () => {
-  const withPermission = (id: number): RawData => ({
+  const withPermission = (id: number): RawDataInput => ({
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -256,7 +266,7 @@ test('Permission_id is bounded to int32', () => {
 test('enum contract fields refuse object values', () => {
   // `resource` is an enum: a non-string variant must be a primitive number,
   // never an object that converts through `valueOf` behind the validation.
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -281,7 +291,7 @@ test('enum contract fields refuse object values', () => {
 })
 
 test('int64 fields are bounded to signed int64 on the wire', () => {
-  const withFeeLimit = (fee_limit: bigint): RawData => ({
+  const withFeeLimit = (fee_limit: bigint): RawDataInput => ({
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -306,6 +316,73 @@ test('int64 fields are bounded to signed int64 on the wire', () => {
   )
 })
 
+test('a decoded RawData is accepted by serializeRawData / toRawDataHex / getTransactionId and round-trips byte-identically', () => {
+  // `decodeRawData` yields the narrow decoded model (41-hex addresses, int64
+  // as numbers, `type` a name). Every encode entry point must take it as-is —
+  // no re-spelling into the input model — and reproduce the gold bytes.
+  const decoded: RawData = decodeRawData(canonical.rawDataHex)
+  expect(bareHex(serializeRawData(decoded))).toBe(canonical.rawDataHex)
+  expect(toRawDataHex(decoded)).toBe(canonical.rawDataHex)
+  expect(getTransactionId(decoded)).toBe(canonical.txID)
+
+  // The decoded contract narrows through its `type` discriminant to the
+  // TransferContract model, with the §2.3 fields in their decoded spelling.
+  const contract = decoded.contract[0]!
+  expect(contract.type).toBe('TransferContract')
+  if (contract.type !== 'TransferContract')
+    throw new Error('canonical fixture is not a TransferContract')
+  expect(contract.parameter.value).toEqual({
+    owner_address: owner,
+    to_address: to,
+    amount: 1000000,
+  })
+  expect(decoded.expiration).toBe(1700000060000)
+  expect(decoded.timestamp).toBe(1700000000000)
+})
+
+test('a RawDataInput serializes to the same bytes in every accepted address spelling', () => {
+  // The encode side is deliberately wide: bigint amounts, numeric type ints
+  // and 41-hex, Base58 or raw 21-byte addresses all normalize to the same
+  // wire bytes as the §2.3 reference vector.
+  const withTransfer = (value: TransferContractInput): RawDataInput => ({
+    ref_block_bytes: '1234',
+    ref_block_hash: '0102030405060708',
+    expiration: 1700000060000n,
+    contract: [
+      {
+        type: ContractType.TransferContract,
+        parameter: {
+          type_url: 'type.googleapis.com/protocol.TransferContract',
+          value,
+        },
+      },
+    ],
+    timestamp: 1700000000000n,
+  })
+
+  const hex41 = withTransfer({
+    owner_address: owner,
+    to_address: to,
+    amount: 1000000n,
+  })
+  const base58 = withTransfer({
+    owner_address: toBase58(owner),
+    to_address: toBase58(to),
+    amount: 1000000n,
+  })
+  const bytes = withTransfer({
+    owner_address: hexToBytes(`0x${owner}`),
+    to_address: hexToBytes(`0x${to}`),
+    amount: 1000000n,
+  })
+
+  expect(toRawDataHex(hex41)).toBe(canonical.rawDataHex)
+  expect(toRawDataHex(base58)).toBe(canonical.rawDataHex)
+  expect(toRawDataHex(bytes)).toBe(canonical.rawDataHex)
+  expect(getTransactionId(base58)).toBe(canonical.txID)
+  expect(getTransactionId(bytes)).toBe(canonical.txID)
+})
+
 test('toRawDataHex is bare lowercase hex (no 0x)', () => {
   const hex = toRawDataHex(decodeRawData(canonical.rawDataHex))
   expect(hex.startsWith('0x')).toBe(false)
@@ -327,7 +404,7 @@ test.each(
 })
 
 test('serializeRawData omits zero fee_limit / timestamp (proto3 defaults)', () => {
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -356,7 +433,7 @@ test('serializeRawData omits zero fee_limit / timestamp (proto3 defaults)', () =
 // spread-based "simplification" of concatBytes/bytesToHex would overflow here.
 test('serializes a 1MB contract bytecode to a txID without a stack overflow (K4)', () => {
   const bytecode = new Uint8Array(1024 * 1024).fill(0xab)
-  const rawData: RawData = {
+  const rawData: RawDataInput = {
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,
@@ -389,20 +466,18 @@ test('raw-level byte fields reject odd-nibble hex instead of left-padding', () =
   // These are already-serialized bytes: '123' padded to '0123' would sign
   // different bytes than the caller wrote. Whole bytes only — SIZE is not
   // checked here (that is the action layer's business), only fidelity.
-  const base = { contract: [] }
-  expect(() =>
-    toRawDataHex({ ...base, ref_block_bytes: '123' } as RawData),
-  ).toThrow('odd length')
-  expect(() =>
-    toRawDataHex({ ...base, ref_block_hash: '0102030405060' } as RawData),
-  ).toThrow('odd length')
-  expect(() => toRawDataHex({ ...base, data: 'abc' } as RawData)).toThrow(
+  const base: RawDataInput = { contract: [] }
+  expect(() => toRawDataHex({ ...base, ref_block_bytes: '123' })).toThrow(
     'odd length',
   )
+  expect(() =>
+    toRawDataHex({ ...base, ref_block_hash: '0102030405060' }),
+  ).toThrow('odd length')
+  expect(() => toRawDataHex({ ...base, data: 'abc' })).toThrow('odd length')
 })
 
 test('int64 inputs reject what cannot round-trip', () => {
-  const transfer = (amount: Int64): RawData => ({
+  const transfer = (amount: Int64): RawDataInput => ({
     ref_block_bytes: '1234',
     ref_block_hash: '0102030405060708',
     expiration: 1700000060000n,

@@ -16,8 +16,9 @@ import {
 } from '../../../../src/utils/transaction/contracts/balance.js'
 import type {
   CancelAllUnfreezeV2Contract,
-  FreezeBalanceV2Contract,
-  UnfreezeBalanceV2Contract,
+  CancelAllUnfreezeV2ContractInput,
+  FreezeBalanceV2ContractInput,
+  UnfreezeBalanceV2ContractInput,
 } from '../../../../src/utils/transaction/types.js'
 import { ResourceCode } from '../../../../src/utils/transaction/types.js'
 
@@ -46,12 +47,10 @@ test('owner-only contracts round-trip', () => {
       encodeWithdrawExpireUnfreezeContract(x),
     ),
   ).toStrictEqual(x)
-  const cancel: CancelAllUnfreezeV2Contract = x
-  expect(
-    decodeCancelAllUnfreezeV2Contract(
-      encodeCancelAllUnfreezeV2Contract(cancel),
-    ),
-  ).toStrictEqual(cancel)
+  const cancel: CancelAllUnfreezeV2ContractInput = x
+  const decodedCancel: CancelAllUnfreezeV2Contract =
+    decodeCancelAllUnfreezeV2Contract(encodeCancelAllUnfreezeV2Contract(cancel))
+  expect(decodedCancel).toStrictEqual(cancel)
 })
 
 test('encodeFreezeBalanceV2Contract', () => {
@@ -82,7 +81,7 @@ test('encodeUnfreezeBalanceV2Contract', () => {
 })
 
 test('freeze/unfreeze decode to the canonical form (name enums, number int64)', () => {
-  const freeze: FreezeBalanceV2Contract = {
+  const freeze: FreezeBalanceV2ContractInput = {
     owner_address: v1,
     frozen_balance: 1_000_000n,
     resource: ResourceCode.ENERGY,
@@ -96,7 +95,7 @@ test('freeze/unfreeze decode to the canonical form (name enums, number int64)', 
   })
 
   // BANDWIDTH is the zero enum: omitted on the wire and in the decoded JSON.
-  const unfreeze: UnfreezeBalanceV2Contract = {
+  const unfreeze: UnfreezeBalanceV2ContractInput = {
     owner_address: v1,
     unfreeze_balance: 1_000_000n,
     resource: ResourceCode.BANDWIDTH,
@@ -129,7 +128,13 @@ test('TRON_POWER: name refuses to encode, wire value 2 round-trips as 2', () => 
     unfreeze_balance: 1_000_000,
     resource: 2,
   })
-  expect(bytesToHex(encodeUnfreezeBalanceV2Contract(decoded))).toBe(
-    `0x0a15${v1}10c0843d1802`,
-  )
+  // Re-encode the decoded fields through the encode-side spelling: the decoded
+  // `owner_address` is a plain `string`, so re-pin it to the typed address
+  // literal (asserted identical just above); the int64 and the numeric enum
+  // come straight from `decoded`.
+  expect(
+    bytesToHex(
+      encodeUnfreezeBalanceV2Contract({ ...decoded, owner_address: v1 }),
+    ),
+  ).toBe(`0x0a15${v1}10c0843d1802`)
 })

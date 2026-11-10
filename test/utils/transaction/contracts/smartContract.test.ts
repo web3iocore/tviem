@@ -9,8 +9,8 @@ import {
   encodeTriggerSmartContract,
 } from '../../../../src/utils/transaction/contracts/smartContract.js'
 import type {
-  CreateSmartContract,
-  TriggerSmartContract,
+  CreateSmartContractInput,
+  TriggerSmartContractInput,
 } from '../../../../src/utils/transaction/types.js'
 import {
   EntryType,
@@ -47,7 +47,7 @@ test('encodeTriggerSmartContract: call_value is field 3', () => {
 })
 
 test('decode(encode(x)) canonicalizes (TriggerSmartContract)', () => {
-  const x: TriggerSmartContract = {
+  const x: TriggerSmartContractInput = {
     owner_address: v1,
     contract_address: usdt,
     call_value: 0n,
@@ -97,7 +97,7 @@ test('encodeCreateSmartContract: call_token_value(3) / token_id(4)', () => {
 })
 
 test('full nested SmartContract/ABI/Entry/Param encodes and round-trips', () => {
-  const x: CreateSmartContract = {
+  const x: CreateSmartContractInput = {
     owner_address: v1,
     new_contract: {
       origin_address: v1,

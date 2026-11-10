@@ -91,9 +91,7 @@ test('updates owner + active permissions byte-for-byte against the gold vector',
     'getnowblock',
     'broadcasttransaction',
   ])
-  const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
-    raw_data_hex: string
-  }
+  const body = parseBroadcast(bodyOf('broadcasttransaction'))
   expect(body.raw_data_hex).toBe(fixture?.rawDataHex)
 })
 

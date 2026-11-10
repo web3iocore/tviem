@@ -19,7 +19,7 @@ import {
   contractTypeUrlPrefix,
 } from '../../utils/transaction/registry.js'
 import type { RawContractInput } from '../../utils/transaction/serializeRawData.js'
-import type { UpdateEnergyLimitContract } from '../../utils/transaction/types.js'
+import type { UpdateEnergyLimitContractInput } from '../../utils/transaction/types.js'
 import {
   type BuildAndBroadcastErrorType,
   type BuildAndBroadcastReturnType,
@@ -97,7 +97,7 @@ function assemble(
   if (!source) throw new AccountNotFoundError()
   const account = parseAccount(source)
 
-  const value: UpdateEnergyLimitContract = {
+  const value: UpdateEnergyLimitContractInput = {
     owner_address: addressToHex(account.address),
     contract_address: addressToHex(contractAddress),
     origin_energy_limit: originEnergyLimit,

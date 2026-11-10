@@ -8,6 +8,7 @@ import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import {
   type RawData,
+  type RawDataInput,
   toRawDataHex,
 } from '../../../src/utils/transaction/serializeRawData.js'
 import {
@@ -333,7 +334,8 @@ describe('signTransaction', () => {
     // `bytes` accepts raw bytes on the encode side, and a snapshot that
     // turned a Uint8Array into a plain object would serialize to something
     // else entirely — the transaction would fail its own integrity check.
-    const raw_data: RawData = {
+    // The canonical vector's owner is pk1, spelled here as an input address.
+    const raw_data: RawDataInput = {
       ...canonicalRawData,
       contract: [
         {
@@ -341,20 +343,19 @@ describe('signTransaction', () => {
           parameter: {
             type_url: 'type.googleapis.com/protocol.AccountUpdateContract',
             value: {
-              owner_address: (
-                canonicalRawData.contract[0]!.parameter.value as Record<
-                  string,
-                  unknown
-                >
-              ).owner_address,
+              owner_address: pk1Address,
               account_name: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
             },
           },
         },
       ],
-    } as RawData
+    }
+    // `SignableTransaction.raw_data` is declared in the decoded shape; the
+    // sign path nonetheless serializes whatever model it is handed, which is
+    // what this test exercises — so the input-shaped model is widened past
+    // the declaration here.
     const signed = signTransaction({
-      transaction: triple(raw_data),
+      transaction: triple(raw_data as unknown as RawData),
       privateKey: pk1,
     })
     expect(signed.signature).toHaveLength(1)
