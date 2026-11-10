@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { hashMessage } from '../../../src/utils/signature/hashMessage.js'
+import { parseSignature } from '../../../src/utils/signature/sign.js'
 import { signMessage } from '../../../src/utils/signature/signMessage.js'
 import {
   recoverMessageAddress,
@@ -158,5 +159,42 @@ describe('malformed wire signatures', () => {
         signature: `${messageSignature.slice(0, -2)}1d`,
       }),
     ).toThrow('Expected 0, 1, 27 or 28')
+  })
+})
+
+describe('signature component inputs', () => {
+  const parsed = parseSignature(`0x${messageSignature}`)
+
+  test('parseSignature output recovers the address', () => {
+    expect(recoverMessageAddress({ message, signature: parsed })).toBe(address)
+    expect(verifyMessage({ message, signature: parsed, address })).toBe(true)
+  })
+
+  test('yParity alone is enough (no v)', () => {
+    const { r, s, yParity } = parsed
+    expect(
+      recoverMessageAddress({ message, signature: { r, s, yParity } }),
+    ).toBe(address)
+  })
+
+  test('a bigint v is accepted (viem-style components)', () => {
+    const { r, s } = parsed
+    expect(
+      recoverMessageAddress({ message, signature: { r, s, v: 27n } }),
+    ).toBe(address)
+  })
+
+  test('v takes precedence over yParity, and a bad v fails', () => {
+    const { r, s } = parsed
+    expect(
+      verifyMessage({
+        message,
+        signature: { r, s, v: 27, yParity: 1 },
+        address,
+      }),
+    ).toBe(true)
+    expect(
+      verifyMessage({ message, signature: { r, s, v: 29 }, address }),
+    ).toBe(false)
   })
 })

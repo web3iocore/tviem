@@ -2,7 +2,11 @@ import { describe, expect, test } from 'vitest'
 
 import { BaseError } from '../../../src/errors/base.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
-import { serializeSignature, sign } from '../../../src/utils/signature/sign.js'
+import {
+  parseSignature,
+  serializeSignature,
+  sign,
+} from '../../../src/utils/signature/sign.js'
 
 // §2.3 transaction signing (pk = 1).
 const pk1 =
@@ -131,5 +135,110 @@ describe('serializeSignature input validation', () => {
   test('valid components serialize to exactly 65 bytes', () => {
     const out = serializeSignature({ r, s, v: 28 })
     expect(out).toBe(`0x${'11'.repeat(32)}${'22'.repeat(32)}1c`)
+  })
+})
+
+describe('sign: `to` selects the output form', () => {
+  const object = sign({ hash: txId, privateKey: pk1 })
+
+  test("'object' is the default", () => {
+    expect(sign({ hash: txId, privateKey: pk1, to: 'object' })).toEqual(object)
+  })
+
+  test("'hex' returns the 0x-prefixed 65-byte signature", () => {
+    expect(sign({ hash: txId, privateKey: pk1, to: 'hex' })).toBe(
+      `0x${txSignature}`,
+    )
+  })
+
+  test("'bytes' returns the 65 raw bytes", () => {
+    const bytes = sign({ hash: txId, privateKey: pk1, to: 'bytes' })
+    expect(bytes).toBeInstanceOf(Uint8Array)
+    expect(bytes).toHaveLength(65)
+    expect(bytes).toEqual(hexToBytes(`0x${txSignature}`))
+  })
+
+  test('yParity carries the recovery id', () => {
+    expect(object.yParity).toBe(1)
+    expect(object.yParity).toBe(object.recovery)
+    expect(sign({ hash: messageDigest, privateKey: pk1 }).yParity).toBe(0)
+  })
+})
+
+describe('parseSignature', () => {
+  const components = sign({ hash: txId, privateKey: pk1 })
+
+  test('splits a 0x-prefixed signature into its components', () => {
+    expect(parseSignature(`0x${txSignature}`)).toEqual(components)
+  })
+
+  test('accepts the bare wire form (as carried by transaction.signature[])', () => {
+    expect(parseSignature(txSignature)).toEqual(components)
+  })
+
+  test('round-trips with serializeSignature and sign', () => {
+    expect(serializeSignature(parseSignature(`0x${txSignature}`))).toBe(
+      `0x${txSignature}`,
+    )
+    expect(
+      parseSignature(sign({ hash: txId, privateKey: pk1, to: 'hex' })),
+    ).toEqual(components)
+  })
+
+  test('normalizes upper-case hex to lower-case components', () => {
+    const parsed = parseSignature(txSignature.toUpperCase())
+    expect(parsed.r).toBe(components.r)
+    expect(parsed.s).toBe(components.s)
+    expect(parsed.serialized).toBe(components.serialized)
+  })
+
+  test.each([
+    ['00', 27, 0],
+    ['01', 28, 1],
+    ['1b', 27, 0],
+    ['1c', 28, 1],
+  ])('reads a recovery byte of %s as v=%i / yParity=%i', (byte, v, yParity) => {
+    const parsed = parseSignature(`${txSignature.slice(0, 128)}${byte}`)
+    expect(parsed.v).toBe(v)
+    expect(parsed.yParity).toBe(yParity)
+    expect(parsed.recovery).toBe(yParity)
+  })
+
+  test.each([
+    ['too short', txSignature.slice(0, 128)],
+    ['too long', `${txSignature}00`],
+    ['non-hex', `${txSignature.slice(0, 128)}zz`],
+    [
+      'a recovery byte outside {0, 1, 27, 28}',
+      `${txSignature.slice(0, 128)}02`,
+    ],
+  ])('rejects %s', (_, value) => {
+    expect(() => parseSignature(value)).toThrow(BaseError)
+    expect(() => parseSignature(`0x${value}`)).toThrow(BaseError)
+  })
+})
+
+describe('serializeSignature: recovery id input forms', () => {
+  const { r, s } = sign({ hash: txId, privateKey: pk1 })
+
+  test('accepts v as a bigint (viem-style components)', () => {
+    expect(serializeSignature({ r, s, v: 28n })).toBe(`0x${txSignature}`)
+  })
+
+  test('accepts yParity when v is absent', () => {
+    expect(serializeSignature({ r, s, yParity: 1 })).toBe(`0x${txSignature}`)
+    expect(serializeSignature({ r, s, yParity: 0 }).endsWith('1b')).toBe(true)
+  })
+
+  test('v takes precedence over yParity', () => {
+    expect(serializeSignature({ r, s, v: 28, yParity: 0 })).toBe(
+      `0x${txSignature}`,
+    )
+  })
+
+  test('rejects a missing recovery id and a yParity outside {0, 1}', () => {
+    expect(() => serializeSignature({ r, s })).toThrow(/yParity/)
+    expect(() => serializeSignature({ r, s, yParity: 2 })).toThrow(/yParity/)
+    expect(() => serializeSignature({ r, s, v: 127n })).toThrow(/Invalid v/)
   })
 })

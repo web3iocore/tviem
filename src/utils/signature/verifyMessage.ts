@@ -13,11 +13,18 @@ import {
   publicKeyToAddress,
 } from '../address/publicKeyToAddress.js'
 import { type HashMessageErrorType, hashMessage } from './hashMessage.js'
-import type { Signature } from './sign.js'
+import type { SerializeSignatureParameters } from './sign.js'
 
-/** A signature accepted for recovery: a {@link Signature}, `0x`-prefixed or
- * bare wire-form hex (`r ++ s ++ v`, 130 chars), or a 65-byte array. */
-export type SignatureInput = Signature | Hex | ByteArray | string
+/**
+ * A signature accepted for recovery: its components (`r`, `s` and `v` or
+ * `yParity` — a {@link Signature} fits), `0x`-prefixed or bare wire-form hex
+ * (`r ++ s ++ v`, 130 chars), or a 65-byte array.
+ */
+export type SignatureInput =
+  | SerializeSignatureParameters
+  | Hex
+  | ByteArray
+  | string
 
 function toComponents(signature: SignatureInput): {
   r: bigint
@@ -25,11 +32,11 @@ function toComponents(signature: SignatureInput): {
   recovery: number
 } {
   if (typeof signature === 'object' && 'r' in signature) {
-    const { r, s, v, recovery } = signature
+    const { r, s, v, yParity } = signature
     return {
       r: BigInt(r),
       s: BigInt(s),
-      recovery: recovery ?? toRecovery(v),
+      recovery: toRecovery(v !== undefined ? Number(v) : yParity),
     }
   }
   const bytes =
@@ -49,7 +56,7 @@ function toComponents(signature: SignatureInput): {
  * Maps a recovery byte to the raw recovery id. The accepted set is exactly
  * `{0, 1, 27, 28}` — bare recovery ids and their Ethereum-offset forms.
  */
-function toRecovery(v: number): number {
+function toRecovery(v: number | undefined): number {
   if (v === 0 || v === 1) return v
   if (v === 27 || v === 28) return v - 27
   throw new BaseError(`Invalid recovery value: ${v}. Expected 0, 1, 27 or 28.`)

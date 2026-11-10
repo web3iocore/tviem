@@ -7,8 +7,10 @@ import type {
   SignableMessage,
 } from '../../../src/types/misc.js'
 import {
+  parseSignature,
   type Signature,
   type SignParameters,
+  type SignTo,
   sign,
 } from '../../../src/utils/signature/sign.js'
 import {
@@ -23,7 +25,8 @@ import {
 } from '../../../src/utils/signature/verifyMessage.js'
 
 test('sign: parameter shape — hash is Hex | ByteArray', () => {
-  expectTypeOf(sign).parameter(0).toEqualTypeOf<SignParameters>()
+  expectTypeOf(sign).parameter(0).toEqualTypeOf<SignParameters<SignTo>>()
+  expectTypeOf<SignParameters['to']>().toEqualTypeOf<SignTo | undefined>()
   expectTypeOf<SignParameters['hash']>().toEqualTypeOf<Hex | ByteArray>()
 
   // both digest input forms are accepted
@@ -42,7 +45,13 @@ test('sign: returns the TRON Signature (r/s/v/recovery/hex/serialized)', () => {
   })
 
   expectTypeOf(sig).toEqualTypeOf<Signature>()
-  expectTypeOf(sign).returns.toEqualTypeOf<Signature>()
+  // `to` selects the output form (as in viem's sign).
+  const params = { hash: sig.r, privateKey: sig.r } as const
+  expectTypeOf(sign({ ...params, to: 'object' })).toEqualTypeOf<Signature>()
+  expectTypeOf(sign({ ...params, to: 'hex' })).toEqualTypeOf<Hex>()
+  expectTypeOf(sign({ ...params, to: 'bytes' })).toEqualTypeOf<ByteArray>()
+  expectTypeOf(parseSignature).returns.toEqualTypeOf<Signature>()
+  expectTypeOf<Signature['yParity']>().toEqualTypeOf<number>()
 
   expectTypeOf<Signature['r']>().toEqualTypeOf<Hex>()
   expectTypeOf<Signature['s']>().toEqualTypeOf<Hex>()

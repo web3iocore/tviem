@@ -1139,7 +1139,10 @@ export {
   type TypedDataTypes,
 } from './utils/signature/hashTypedData.js'
 export {
+  type ParseSignatureErrorType,
+  parseSignature,
   type SerializeSignatureErrorType,
+  type SerializeSignatureParameters,
   type Signature,
   type SignErrorType,
   serializeSignature,
