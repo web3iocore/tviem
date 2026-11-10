@@ -246,6 +246,10 @@ export type TransactionRevertedErrorType = TransactionRevertedError & {
 export class TransactionRevertedError extends BaseError {
   /** The reverted receipt, as `getTransactionInfo` returns it. */
   receipt: TransactionInfo
+  /** The receipt's `revertReason`, when it carries one. */
+  reason: string | undefined
+  /** The receipt's precise execution result (`REVERT`, `OUT_OF_ENERGY`, …). */
+  result: string | undefined
 
   constructor({
     hash,
@@ -256,9 +260,17 @@ export class TransactionRevertedError extends BaseError {
   }) {
     super(`Transaction${hash ? ` "${hash}"` : ''} reverted.`, {
       name: 'TransactionRevertedError',
+      metaMessages: [
+        receipt.result !== undefined ? `Result: ${receipt.result}` : undefined,
+        receipt.revertReason !== undefined
+          ? `Reason: ${receipt.revertReason}`
+          : undefined,
+      ].filter((m): m is string => Boolean(m)),
     })
 
     this.receipt = receipt
+    this.reason = receipt.revertReason
+    this.result = receipt.result
   }
 }
 

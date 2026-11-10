@@ -194,6 +194,8 @@ describe('waitForTransactionReceipt', () => {
       id: 'r',
       blockNumber: 5,
       status: 'reverted' as const,
+      result: 'REVERT',
+      revertReason: 'ERC20: insufficient balance',
       contractResult: ['08c379a0'],
       energyFee: 1_000n,
     }
@@ -208,6 +210,12 @@ describe('waitForTransactionReceipt', () => {
     expect(err).not.toBeInstanceOf(TronRpcError)
     expect(err.shortMessage).toBe('Transaction "r" reverted.')
     expect(err.receipt).toBe(receipt)
+    expect(err.result).toBe('REVERT')
+    expect(err.reason).toBe('ERC20: insufficient balance')
+    expect(err.metaMessages).toEqual([
+      'Result: REVERT',
+      'Reason: ERC20: insufficient balance',
+    ])
   })
 })
 

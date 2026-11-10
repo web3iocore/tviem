@@ -832,8 +832,10 @@ export type {
   SignableMessage,
 } from './types/misc.js'
 export type {
+  InternalTransaction,
   TransactionInfo,
   TransactionLog,
+  TransactionResult,
   TransactionStatus,
 } from './types/transaction.js'
 export type {

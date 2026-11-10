@@ -1,6 +1,6 @@
 {
   "endpoint": "gettransactioninfobyid",
-  "description": "Hand-crafted successful TRC20 transfer receipt (SolidityNode). receipt.result SUCCESS -> status success. One Transfer(address,address,uint256) log: log[].address is EVM-form (bare 20-byte hex, no 41 prefix, as the node actually returns) 928c9af0651632157ef27a2cf17ca72c575a4d21 -> Base58 TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY; topics/data are bare hex and must come out 0x-prefixed. contract_address maps 41-hex -> Base58.",
+  "description": "Hand-crafted successful TRC20 transfer receipt (SolidityNode). receipt.result SUCCESS -> status success. One Transfer(address,address,uint256) log: log[].address is EVM-form (bare 20-byte hex, no 41 prefix, as the node actually returns) 928c9af0651632157ef27a2cf17ca72c575a4d21 -> Base58 TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY; topics/data are bare hex and must come out 0x-prefixed. contract_address maps 41-hex -> Base58. Also carries receipt.origin_energy_usage / energy_penalty_total, packingFee and one internal_transactions entry (TRX + TRC10 call values, note hex \"call\").",
   "request": {
     "node": "solidity",
     "path": "gettransactioninfobyid",
@@ -21,7 +21,9 @@
       "energy_usage_total": 13000,
       "energy_fee": 2730000,
       "net_usage": 345,
-      "result": "SUCCESS"
+      "result": "SUCCESS",
+      "origin_energy_usage": 3000,
+      "energy_penalty_total": 500
     },
     "log": [
       {
@@ -32,6 +34,25 @@
           "000000000000000000000000928c9af0651632157ef27a2cf17ca72c575a4d21"
         ],
         "data": "00000000000000000000000000000000000000000000000000000000000f4240"
+      }
+    ],
+    "packingFee": 0,
+    "internal_transactions": [
+      {
+        "hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "caller_address": "41928c9af0651632157ef27a2cf17ca72c575a4d21",
+        "transferTo_address": "417e5f4552091a69125d5dfcb7b8c2659029395bdf",
+        "callValueInfo": [
+          {
+            "callValue": 1000000
+          },
+          {
+            "callValue": 5,
+            "tokenId": "1000001"
+          }
+        ],
+        "note": "63616c6c",
+        "rejected": false
       }
     ]
   },

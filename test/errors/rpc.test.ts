@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 
 import { BaseError } from '../../src/errors/base.js'
 import {
@@ -9,10 +9,12 @@ import {
   ContractFunctionRevertedError,
   TransactionExpiredError,
   TransactionMismatchError,
+  TransactionRevertedError,
   TronRpcError,
   UserRejectedRequestError,
   WaitForTransactionReceiptTimeoutError,
 } from '../../src/errors/rpc.js'
+import type { TransactionInfo } from '../../src/types/transaction.js'
 
 test('AccountNotFoundError is a BaseError with the expected name / message', () => {
   const err = new AccountNotFoundError()
@@ -235,4 +237,52 @@ test('UserRejectedRequestError carries the wallet error as cause (details / walk
   // Wrapping it in another error still lets a caller find the rejection.
   const outer = new CallExecutionError(err)
   expect(outer.walk((e) => e instanceof UserRejectedRequestError)).toBe(err)
+})
+
+describe('TransactionRevertedError', () => {
+  const base = {
+    id: 'ab',
+    blockNumber: 1n,
+    blockTimeStamp: 0n,
+    status: 'reverted',
+    fee: 0n,
+    energyUsage: 0n,
+    energyUsageTotal: 0n,
+    energyFee: 0n,
+    netUsage: 0n,
+    netFee: 0n,
+    originEnergyUsage: 0n,
+    energyPenaltyTotal: 0n,
+    packingFee: 0n,
+    contractResult: [],
+    logs: [],
+    internalTransactions: [],
+  } satisfies TransactionInfo
+
+  test('carries the receipt, its result and its reason', () => {
+    const receipt: TransactionInfo = {
+      ...base,
+      result: 'OUT_OF_ENERGY',
+      revertReason: 'Not enough energy',
+    }
+    const err = new TransactionRevertedError({ hash: 'ab', receipt })
+    expect(err).toBeInstanceOf(BaseError)
+    expect(err.name).toBe('TransactionRevertedError')
+    expect(err.shortMessage).toBe('Transaction "ab" reverted.')
+    expect(err.receipt).toBe(receipt)
+    expect(err.result).toBe('OUT_OF_ENERGY')
+    expect(err.reason).toBe('Not enough energy')
+    expect(err.metaMessages).toEqual([
+      'Result: OUT_OF_ENERGY',
+      'Reason: Not enough energy',
+    ])
+  })
+
+  test('omits absent result and reason', () => {
+    const err = new TransactionRevertedError({ receipt: base })
+    expect(err.shortMessage).toBe('Transaction reverted.')
+    expect(err.result).toBeUndefined()
+    expect(err.reason).toBeUndefined()
+    expect(err.metaMessages).toEqual([])
+  })
 })

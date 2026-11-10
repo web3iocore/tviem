@@ -5,6 +5,7 @@ import type { ErrorType } from '../../errors/utils.js'
 import type { TronHexAddress } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
 import type {
+  InternalTransaction,
   TransactionInfo,
   TransactionLog,
   TransactionStatus,
@@ -14,6 +15,7 @@ import {
   toBase58,
 } from '../../utils/address/toBase58.js'
 import { bareHex } from '../../utils/encoding/bareHex.js'
+import { decodeNodeMessage, decodeRevertData } from '../utils/decodeRevert.js'
 import { isEmptyResponse } from './getNowBlock.js'
 
 export type GetTransactionInfoParameters = {
@@ -42,9 +44,25 @@ type RawReceipt = {
   energy_usage?: number | undefined
   energy_usage_total?: number | undefined
   energy_fee?: number | undefined
+  origin_energy_usage?: number | undefined
+  energy_penalty_total?: number | undefined
   net_usage?: number | undefined
   net_fee?: number | undefined
   result?: string | undefined
+}
+
+type RawInternalTransaction = {
+  hash?: string | undefined
+  caller_address?: string | undefined
+  transferTo_address?: string | undefined
+  callValueInfo?:
+    | readonly {
+        callValue?: number | undefined
+        tokenId?: string | undefined
+      }[]
+    | undefined
+  note?: string | undefined
+  rejected?: boolean | undefined
 }
 
 type RawLog = {
@@ -65,6 +83,10 @@ type RawTransactionInfo = {
   log?: readonly RawLog[] | undefined
   /** Top-level execution result, e.g. `'FAILED'` for a reverted contract call. */
   result?: string | undefined
+  /** Failure message, hex-encoded. */
+  resMessage?: string | undefined
+  internal_transactions?: readonly RawInternalTransaction[] | undefined
+  packingFee?: number | undefined
 }
 
 /**
@@ -186,6 +208,14 @@ export async function getTransactionInfo(
     energyFee: BigInt(receipt.energy_fee ?? 0),
     netUsage: BigInt(receipt.net_usage ?? 0),
     netFee: BigInt(receipt.net_fee ?? 0),
+    originEnergyUsage: BigInt(receipt.origin_energy_usage ?? 0),
+    energyPenaltyTotal: BigInt(receipt.energy_penalty_total ?? 0),
+    packingFee: BigInt(response.packingFee ?? 0),
+    ...(receipt.result !== undefined ? { result: receipt.result } : {}),
+    ...(response.resMessage !== undefined
+      ? { resMessage: response.resMessage }
+      : {}),
+    ...revertReasonOf(response),
     contractResult: response.contractResult ?? [],
     ...(response.contract_address
       ? {
@@ -195,5 +225,49 @@ export async function getTransactionInfo(
         }
       : {}),
     logs: (response.log ?? []).map(formatLog),
+    internalTransactions: (response.internal_transactions ?? []).map(
+      formatInternalTransaction,
+    ),
+  }
+}
+
+/**
+ * The revert reason of a failed receipt: the `Error(string)` text in
+ * `contractResult[0]`, else the decoded `resMessage`. Absent on success.
+ */
+function revertReasonOf(response: RawTransactionInfo): {
+  revertReason?: string
+} {
+  const result = response.receipt?.result
+  if (result === undefined || result === 'SUCCESS') return {}
+  const reason =
+    decodeRevertData(response.contractResult?.[0]).reason ??
+    decodeNodeMessage(response.resMessage)
+  return reason !== undefined ? { revertReason: reason } : {}
+}
+
+function formatInternalTransaction(
+  internal: RawInternalTransaction,
+): InternalTransaction {
+  return {
+    hash: internal.hash ?? '',
+    ...(internal.caller_address
+      ? { callerAddress: toBase58(internal.caller_address as TronHexAddress) }
+      : {}),
+    ...(internal.transferTo_address
+      ? {
+          transferToAddress: toBase58(
+            internal.transferTo_address as TronHexAddress,
+          ),
+        }
+      : {}),
+    callValueInfo: (internal.callValueInfo ?? []).map((info) => ({
+      callValue: BigInt(info.callValue ?? 0),
+      ...(info.tokenId !== undefined ? { tokenId: info.tokenId } : {}),
+    })),
+    ...(internal.note !== undefined
+      ? { note: decodeNodeMessage(internal.note) }
+      : {}),
+    rejected: internal.rejected ?? false,
   }
 }

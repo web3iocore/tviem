@@ -36,6 +36,25 @@ test('maps a successful TRC20 receipt (status, resources, log addresses)', async
   ])
   // contract_address 41-hex -> Base58.
   expect(info.contractAddress).toBe('TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY')
+  expect(info.result).toBe('SUCCESS')
+  expect(info.revertReason).toBeUndefined()
+  expect(info.resMessage).toBeUndefined()
+  expect(info.originEnergyUsage).toBe(3000n)
+  expect(info.energyPenaltyTotal).toBe(500n)
+  expect(info.packingFee).toBe(0n)
+  expect(info.internalTransactions).toEqual([
+    {
+      hash: '1'.repeat(64),
+      callerAddress: 'TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY',
+      transferToAddress: 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC',
+      callValueInfo: [
+        { callValue: 1000000n },
+        { callValue: 5n, tokenId: '1000001' },
+      ],
+      note: 'call',
+      rejected: false,
+    },
+  ])
 
   // log[].address EVM-form bare hex -> Base58; topics/data get 0x-prefixed.
   const log = info.logs[0]
@@ -71,6 +90,33 @@ test('maps a reverted receipt (receipt.result REVERT + result FAILED)', async ()
   expect(info.status).toBe('reverted')
   expect(info.logs).toHaveLength(0)
   expect(info.contractResult[0]?.startsWith('08c379a0')).toBe(true)
+  // The precise result and the decoded Error(string) text are kept.
+  expect(info.result).toBe('REVERT')
+  expect(info.resMessage).toBe('4552433230')
+  expect(info.revertReason).toBe('ERC20: insufficient balance')
+  expect(info.internalTransactions).toEqual([])
+})
+
+test('a failure without Error(string) data falls back to resMessage for revertReason', async () => {
+  const { transport } = createMockTransport({
+    responses: {
+      gettransactioninfobyid: {
+        fn: () => ({
+          id: 'ee',
+          blockNumber: 7,
+          receipt: { result: 'OUT_OF_ENERGY', energy_usage_total: 10 },
+          result: 'FAILED',
+          resMessage: '4e6f7420656e6f75676820656e65726779', // "Not enough energy"
+        }),
+      },
+    },
+  })
+  const client = createPublicClient({ transport })
+  const info = await client.getTransactionInfo({ hash: 'ee' })
+  if (!info) throw new Error('expected receipt')
+  expect(info.status).toBe('reverted')
+  expect(info.result).toBe('OUT_OF_ENERGY')
+  expect(info.revertReason).toBe('Not enough energy')
 })
 
 test('a plain transfer (no receipt.result, result != FAILED) is success', async () => {
@@ -88,6 +134,11 @@ test('a plain transfer (no receipt.result, result != FAILED) is success', async 
   expect(info.status).toBe('success')
   expect(info.netUsage).toBe(268n)
   expect(info.logs).toHaveLength(0)
+  // No contract ran: no result, no reason, no internal transfers.
+  expect(info.result).toBeUndefined()
+  expect(info.revertReason).toBeUndefined()
+  expect(info.internalTransactions).toEqual([])
+  expect(info.packingFee).toBe(0n)
 })
 
 // A log missing its address omits the field instead of fabricating
