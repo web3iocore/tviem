@@ -188,7 +188,7 @@ Subpath exports, ESM + CJS, `sideEffects: false`:
 | Entry | Contents |
 | --- | --- |
 | `@tronweb3/tviem` | clients, transports, actions, common utils |
-| `@tronweb3/tviem/accounts` | local private-key, mnemonic & HD accounts |
+| `@tronweb3/tviem/accounts` | local private-key, mnemonic & HD accounts; private-key signing utilities |
 | `@tronweb3/tviem/actions` | standalone, tree-shakable chain actions |
 | `@tronweb3/tviem/chains` | `mainnet`, `nile`, `shasta` chain definitions |
 | `@tronweb3/tviem/utils` | addresses, units, hashing, ABI, protobuf |

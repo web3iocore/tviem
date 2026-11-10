@@ -2,10 +2,13 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import * as accounts from '../../src/accounts/index.js'
+import * as signTransactionUtil from '../../src/accounts/utils/signTransaction.js'
 import * as actions from '../../src/actions/index.js'
 import * as chains from '../../src/chains/index.js'
 import * as root from '../../src/index.js'
 import * as utils from '../../src/utils/index.js'
+import * as signMessageUtil from '../../src/utils/signature/signMessage.js'
+import * as signTypedDataUtil from '../../src/utils/signature/signTypedData.js'
 
 const read = (relative: string) =>
   JSON.parse(
@@ -71,6 +74,40 @@ describe('package exports surface (freeze guard)', () => {
       'chains',
       'utils',
     ])
+  })
+
+  // The same name from the root and `./actions` is the same binding (the
+  // action); the private-key utilities of the same name live only under
+  // `./accounts`, as in viem.
+  test.each([
+    [
+      'signMessage',
+      root.signMessage,
+      actions.signMessage,
+      accounts.signMessage,
+    ],
+    [
+      'signTransaction',
+      root.signTransaction,
+      actions.signTransaction,
+      accounts.signTransaction,
+    ],
+    [
+      'signTypedData',
+      root.signTypedData,
+      actions.signTypedData,
+      accounts.signTypedData,
+    ],
+  ])('%s: root and ./actions export the action; ./accounts the key utility', (name, fromRoot, fromActions, fromAccounts) => {
+    expect(fromRoot).toBe(fromActions)
+    expect(fromAccounts).not.toBe(fromActions)
+    expect(name in utils).toBe(false)
+  })
+
+  test('./accounts exports the private-key signing utilities themselves', () => {
+    expect(accounts.signMessage).toBe(signMessageUtil.signMessage)
+    expect(accounts.signTypedData).toBe(signTypedDataUtil.signTypedData)
+    expect(accounts.signTransaction).toBe(signTransactionUtil.signTransaction)
   })
 
   test('root + subpath export names are frozen', () => {

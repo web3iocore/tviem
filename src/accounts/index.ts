@@ -6,6 +6,16 @@ export {
   parseAccount,
 } from '../types/account.js'
 export {
+  type SignMessageErrorType,
+  type SignMessageParameters,
+  signMessage,
+} from '../utils/signature/signMessage.js'
+export {
+  type SignTypedDataErrorType,
+  type SignTypedDataParameters,
+  signTypedData,
+} from '../utils/signature/signTypedData.js'
+export {
   type GenerateMnemonicErrorType,
   generateMnemonic,
 } from './generateMnemonic.js'

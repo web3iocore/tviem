@@ -55,10 +55,6 @@ export {
   type PrivateKeyToAddressErrorType,
   privateKeyToAddress,
 } from './accounts/utils/privateKeyToAddress.js'
-export {
-  type SignTransactionErrorType,
-  signTransaction,
-} from './accounts/utils/signTransaction.js'
 // Contract facade + read (public) & write (wallet) actions — also available via
 // the `@tronweb3/tviem/actions` subpath.
 export {
@@ -385,6 +381,24 @@ export {
   type SetAccountIdReturnType,
   setAccountId,
 } from './actions/wallet/setAccountId.js'
+export {
+  type SignMessageErrorType,
+  type SignMessageParameters,
+  type SignMessageReturnType,
+  signMessage,
+} from './actions/wallet/signMessage.js'
+export {
+  type SignTransactionErrorType,
+  type SignTransactionParameters,
+  type SignTransactionReturnType,
+  signTransaction,
+} from './actions/wallet/signTransaction.js'
+export {
+  type SignTypedDataErrorType,
+  type SignTypedDataParameters,
+  type SignTypedDataReturnType,
+  signTypedData,
+} from './actions/wallet/signTypedData.js'
 export {
   type BuildUndelegateResourceErrorType,
   type BuildUndelegateResourceParameters,
@@ -1130,16 +1144,6 @@ export {
   type SignErrorType,
   serializeSignature,
 } from './utils/signature/sign.js'
-export {
-  type SignMessageErrorType,
-  type SignMessageParameters,
-  signMessage,
-} from './utils/signature/signMessage.js'
-export {
-  type SignTypedDataErrorType,
-  type SignTypedDataParameters,
-  signTypedData,
-} from './utils/signature/signTypedData.js'
 export {
   type RecoverMessageAddressErrorType,
   type RecoverMessageAddressParameters,

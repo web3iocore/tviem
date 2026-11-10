@@ -12,7 +12,9 @@ exports[`package exports surface (freeze guard) > root + subpath export names ar
     "parseAccount",
     "privateKeyToAccount",
     "privateKeyToAddress",
+    "signMessage",
     "signTransaction",
+    "signTypedData",
     "toAccount",
   ],
   "actions": [
@@ -504,8 +506,6 @@ exports[`package exports surface (freeze guard) > root + subpath export names ar
     "serializeSignature",
     "serializeTransaction",
     "sha256",
-    "signMessage",
-    "signTypedData",
     "size",
     "slice",
     "sliceBytes",

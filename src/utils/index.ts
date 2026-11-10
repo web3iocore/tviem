@@ -267,16 +267,6 @@ export {
   serializeSignature,
 } from './signature/sign.js'
 export {
-  type SignMessageErrorType,
-  type SignMessageParameters,
-  signMessage,
-} from './signature/signMessage.js'
-export {
-  type SignTypedDataErrorType,
-  type SignTypedDataParameters,
-  signTypedData,
-} from './signature/signTypedData.js'
-export {
   type RecoverMessageAddressErrorType,
   type RecoverMessageAddressParameters,
   type RecoverPublicKeyErrorType,

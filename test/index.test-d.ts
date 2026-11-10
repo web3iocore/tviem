@@ -1,5 +1,10 @@
 import { expectTypeOf, test } from 'vitest'
-import { privateKeyToAddress } from '../src/accounts/index.js'
+import {
+  privateKeyToAddress,
+  signMessage as signMessageWithKey,
+  signTransaction as signTransactionWithKey,
+  signTypedData as signTypedDataWithKey,
+} from '../src/accounts/index.js'
 import type {
   Address,
   ByteArray,
@@ -22,6 +27,9 @@ import {
   keccak256,
   nile,
   parseTrx,
+  signMessage,
+  signTransaction,
+  signTypedData,
   toBase58,
   toEvm,
 } from '../src/index.js'
@@ -105,4 +113,30 @@ test('RequestErrorType is importable from the root entrypoint', () => {
   // The error-union building block every action's *ErrorType references; it
   // must be nameable by consumers, not only resolvable structurally.
   expectTypeOf<RequestErrorType>().not.toBeNever()
+})
+
+test('root sign* exports are the client actions; ./accounts holds the key utilities', () => {
+  // Actions take `(client, parameters)`; the utilities take a single object
+  // carrying `privateKey`.
+  expectTypeOf(signMessage)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<2>()
+  expectTypeOf(signTransaction)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<2>()
+  expectTypeOf(signTypedData)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<2>()
+  expectTypeOf(signMessageWithKey)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<1>()
+  expectTypeOf(signTransactionWithKey)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<1>()
+  expectTypeOf(signTypedDataWithKey)
+    .parameters.toHaveProperty('length')
+    .toEqualTypeOf<1>()
+  expectTypeOf<
+    Parameters<typeof signTransactionWithKey>[0]
+  >().not.toHaveProperty('address')
 })
