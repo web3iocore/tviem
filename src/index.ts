@@ -159,7 +159,6 @@ export {
   triggerConstantContract,
 } from './actions/public/triggerConstantContract.js'
 export {
-  type TransactionReceipt,
   type WaitForTransactionReceiptErrorType,
   type WaitForTransactionReceiptParameters,
   type WaitForTransactionReceiptReturnType,

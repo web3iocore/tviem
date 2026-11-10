@@ -1,3 +1,4 @@
+import type { TransactionInfo } from '../types/transaction.js'
 import { BaseError } from './base.js'
 
 /**
@@ -243,19 +244,15 @@ export type TransactionRevertedErrorType = TransactionRevertedError & {
   name: 'TransactionRevertedError'
 }
 export class TransactionRevertedError extends BaseError {
-  /**
-   * The reverted receipt. Structurally typed (rather than importing the
-   * Action's `TransactionReceipt`) to keep this module free of dependencies on
-   * the Actions layer; a receipt from a Client override is accepted too.
-   */
-  receipt: { status?: 'success' | 'reverted'; [key: string]: unknown }
+  /** The reverted receipt, as `getTransactionInfo` returns it. */
+  receipt: TransactionInfo
 
   constructor({
     hash,
     receipt,
   }: {
     hash?: string | undefined
-    receipt: { status?: 'success' | 'reverted'; [key: string]: unknown }
+    receipt: TransactionInfo
   }) {
     super(`Transaction${hash ? ` "${hash}"` : ''} reverted.`, {
       name: 'TransactionRevertedError',

@@ -9,6 +9,7 @@ import {
   type WaitForTransactionReceiptTimeoutErrorType,
 } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
+import type { TransactionInfo } from '../../types/transaction.js'
 import { getAction } from '../../utils/getAction.js'
 import { type GetNowBlockErrorType, getNowBlock } from './getNowBlock.js'
 import {
@@ -63,17 +64,8 @@ export type WaitForTransactionReceiptParameters = {
   throwOnRevert?: boolean | undefined
 }
 
-/** The resolved transaction receipt (a subset of `TransactionInfo`). */
-export type TransactionReceipt = {
-  /** The transaction id. */
-  id?: string
-  /** The number of the block the transaction was included in. */
-  blockNumber?: number | bigint
-  /** Execution status. */
-  status?: 'success' | 'reverted'
-  [key: string]: unknown
-}
-export type WaitForTransactionReceiptReturnType = TransactionReceipt
+/** The resolved receipt: the same {@link TransactionInfo} `getTransactionInfo` returns. */
+export type WaitForTransactionReceiptReturnType = TransactionInfo
 
 export type WaitForTransactionReceiptErrorType =
   | BaseErrorType
@@ -206,7 +198,7 @@ export async function waitForTransactionReceipt(
       receipt = await getReceipt({ hash, confirmed })
     }
 
-    const packed = receipt as TransactionReceipt
+    const packed = receipt as TransactionInfo
 
     // Phase 2 — wait for the requested block depth. The head is read from the
     // same node as the receipt: comparing a solidified receipt block against an
