@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import type { Address, EvmAddress } from '../../../src/types/address.js'
+import { parseSignature } from '../../../src/utils/signature/sign.js'
 import { signTypedData } from '../../../src/utils/signature/signTypedData.js'
 import {
   recoverTypedDataAddress,
@@ -56,9 +57,23 @@ describe('recoverTypedDataAddress', () => {
     ).toBe(pk1Base58)
   })
 
-  test('round-trips a freshly signed Signature object', () => {
+  test('accepts the Hex returned by signTypedData directly', () => {
     const signature = signTypedData({ ...typedData, privateKey: pk1 })
+    expect(signature).toBe(mailSignature)
     expect(recoverTypedDataAddress({ ...typedData, signature })).toBe(pk1Base58)
+    expect(
+      verifyTypedData({ ...typedData, signature, address: pk1Base58 }),
+    ).toBe(true)
+  })
+
+  test('accepts parseSignature(signTypedData(...)) as a Signature object', () => {
+    const signature = parseSignature(
+      signTypedData({ ...typedData, privateKey: pk1 }),
+    )
+    expect(recoverTypedDataAddress({ ...typedData, signature })).toBe(pk1Base58)
+    expect(
+      verifyTypedData({ ...typedData, signature, address: pk1Base58 }),
+    ).toBe(true)
   })
 })
 

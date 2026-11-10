@@ -11,12 +11,14 @@ import {
   type Signature,
   type SignParameters,
   type SignTo,
+  serializeSignature,
   sign,
 } from '../../../src/utils/signature/sign.js'
 import {
   type SignMessageParameters,
   signMessage,
 } from '../../../src/utils/signature/signMessage.js'
+import { signTypedData } from '../../../src/utils/signature/signTypedData.js'
 import {
   type RecoverMessageAddressParameters,
   recoverMessageAddress,
@@ -37,7 +39,7 @@ test('sign: parameter shape — hash is Hex | ByteArray', () => {
   expectTypeOf<SignParameters['privateKey']>().toEqualTypeOf<Hex | string>()
 })
 
-test('sign: returns the TRON Signature (r/s/v/recovery/hex/serialized)', () => {
+test('sign: returns the TRON Signature (exactly r/s/v/yParity)', () => {
   const sig = sign({
     hash: '0x0000000000000000000000000000000000000000000000000000000000000001',
     privateKey:
@@ -51,16 +53,38 @@ test('sign: returns the TRON Signature (r/s/v/recovery/hex/serialized)', () => {
   expectTypeOf(sign({ ...params, to: 'hex' })).toEqualTypeOf<Hex>()
   expectTypeOf(sign({ ...params, to: 'bytes' })).toEqualTypeOf<ByteArray>()
   expectTypeOf(parseSignature).returns.toEqualTypeOf<Signature>()
-  expectTypeOf<Signature['yParity']>().toEqualTypeOf<number>()
+  expectTypeOf(serializeSignature).returns.toEqualTypeOf<Hex>()
+  // The object form is directly serializable.
+  expectTypeOf(sig).toExtend<Parameters<typeof serializeSignature>[0]>()
 
+  // Signature is exactly { r, s, v, yParity }.
+  expectTypeOf<Signature>().toEqualTypeOf<{
+    r: Hex
+    s: Hex
+    v: number
+    yParity: number
+  }>()
+  expectTypeOf<keyof Signature>().toEqualTypeOf<'r' | 's' | 'v' | 'yParity'>()
   expectTypeOf<Signature['r']>().toEqualTypeOf<Hex>()
   expectTypeOf<Signature['s']>().toEqualTypeOf<Hex>()
   expectTypeOf<Signature['v']>().toEqualTypeOf<number>()
-  expectTypeOf<Signature['recovery']>().toEqualTypeOf<number>()
-  // bare wire-form hex (no 0x prefix) is a plain string
-  expectTypeOf<Signature['hex']>().toEqualTypeOf<string>()
-  // 0x-prefixed serialized form is branded Hex
-  expectTypeOf<Signature['serialized']>().toEqualTypeOf<Hex>()
+  expectTypeOf<Signature['yParity']>().toEqualTypeOf<number>()
+
+  // The pre-RC fields are gone: the bare `hex`, the `serialized` Hex and the
+  // `recovery` alias of `yParity`. Use `to: 'hex'` / serializeSignature /
+  // `.yParity` instead.
+  // @ts-expect-error — `hex` was removed from Signature
+  sig.hex
+  // @ts-expect-error — `serialized` was removed from Signature
+  sig.serialized
+  // @ts-expect-error — `recovery` was removed from Signature (use yParity)
+  sig.recovery
+  // @ts-expect-error — `hex` is not a key of Signature
+  type _Hex = Signature['hex']
+  // @ts-expect-error — `serialized` is not a key of Signature
+  type _Serialized = Signature['serialized']
+  // @ts-expect-error — `recovery` is not a key of Signature
+  type _Recovery = Signature['recovery']
 })
 
 test('signMessage: message is the SignableMessage (string | { raw }) union', () => {
@@ -77,9 +101,31 @@ test('signMessage: message is the SignableMessage (string | { raw }) union', () 
   expectTypeOf<string>().toExtend<SignableMessage>()
   expectTypeOf<{ raw: Hex }>().toExtend<SignableMessage>()
   expectTypeOf<{ raw: ByteArray }>().toExtend<SignableMessage>()
+})
 
-  // signMessage yields the same TRON Signature as sign
-  expectTypeOf(signMessage).returns.toEqualTypeOf<Signature>()
+test('signMessage / signTypedData: return the 0x-prefixed 65-byte Hex', () => {
+  // The TronWeb / TronLink form — not the Signature object.
+  expectTypeOf(signMessage).returns.toEqualTypeOf<Hex>()
+  expectTypeOf(signTypedData).returns.toEqualTypeOf<Hex>()
+  expectTypeOf(signMessage).returns.not.toEqualTypeOf<Signature>()
+  expectTypeOf(signTypedData).returns.not.toEqualTypeOf<Signature>()
+
+  // Equal to the `to: 'hex'` form of sign, and splittable by parseSignature.
+  const sig = signMessage({
+    message: 'hello',
+    privateKey:
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+  })
+  expectTypeOf(sig).toEqualTypeOf<ReturnType<typeof sign<'hex'>>>()
+  expectTypeOf(parseSignature(sig)).toEqualTypeOf<Signature>()
+  // and it is accepted by the verify/recover helpers as-is
+  expectTypeOf(sig).toExtend<VerifyMessageParameters['signature']>()
+  expectTypeOf(sig).toExtend<RecoverMessageAddressParameters['signature']>()
+
+  // @ts-expect-error — the Hex has no `serialized` (it *is* the serialized form)
+  sig.serialized
+  // @ts-expect-error — the Hex has no `r` component; use parseSignature(sig).r
+  sig.r
 })
 
 test('verifyMessage: returns boolean', () => {

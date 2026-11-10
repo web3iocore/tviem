@@ -13,7 +13,7 @@ import {
   parseAccount,
 } from '../../types/account.js'
 import type { Address } from '../../types/address.js'
-import type { Signature } from '../../utils/signature/sign.js'
+import type { Hex } from '../../types/misc.js'
 import type { SignMessageErrorType as SignMessageErrorType_account } from '../../utils/signature/signMessage.js'
 import {
   type AssertSigningAccountErrorType,
@@ -24,7 +24,7 @@ export type SignMessageParameters = AccountSignMessageParameters & {
   /** The signing account (falls back to `client.account`). */
   account?: TronAccount | Address | undefined
 }
-export type SignMessageReturnType = Signature
+export type SignMessageReturnType = Hex
 
 export type SignMessageErrorType =
   | AccountNotFoundErrorType
@@ -41,7 +41,7 @@ export type SignMessageErrorType =
  *
  * @param client The Client to use.
  * @param parameters `message` (UTF-8 string or `{ raw }`), optional `account`.
- * @returns The TRON-wire {@link Signature}.
+ * @returns The `0x`-prefixed 65-byte signature (`r ++ s ++ v`).
  */
 export async function signMessage(
   client: Client,

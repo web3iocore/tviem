@@ -11,7 +11,6 @@ import type {
 import type { Address } from '../../src/types/address.js'
 import type { Hex } from '../../src/types/misc.js'
 import type { MaybePromise } from '../../src/types/utils.js'
-import type { Signature } from '../../src/utils/signature/sign.js'
 
 const mnemonic =
   'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
@@ -38,17 +37,17 @@ test('HD account exposes the full signing surface', async () => {
   const account = mnemonicToAccount(mnemonic)
   // Typed MaybePromise (like every account); the awaited value is concrete.
   expectTypeOf(account.signMessage({ message: 'gm' })).toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf(
     account.signTypedData({ types: {}, primaryType: 'X' }),
-  ).toEqualTypeOf<MaybePromise<Signature>>()
+  ).toEqualTypeOf<MaybePromise<Hex>>()
   expectTypeOf(
     await account.signMessage({ message: 'gm' }),
-  ).toEqualTypeOf<Signature>()
+  ).toEqualTypeOf<Hex>()
   expectTypeOf(
     await account.signTypedData({ types: {}, primaryType: 'X' }),
-  ).toEqualTypeOf<Signature>()
+  ).toEqualTypeOf<Hex>()
   expectTypeOf<
     Awaited<ReturnType<typeof account.signTransaction>>
   >().toEqualTypeOf<SignableTransaction>()

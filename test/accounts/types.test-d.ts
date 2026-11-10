@@ -34,24 +34,24 @@ test('account fields are branded/narrowed', () => {
   expectTypeOf(account.type).toEqualTypeOf<'local'>()
 })
 
-test('signing methods are typed MaybePromise; the awaited value is the TRON-wire Signature / SignableTransaction', async () => {
+test('signing methods are typed MaybePromise; the awaited value is the signature Hex / SignableTransaction', async () => {
   const account = privateKeyToAccount(
     '0x0000000000000000000000000000000000000000000000000000000000000001',
   )
   // Every account — key-backed included — is typed `MaybePromise<T>`, so
   // callers always `await`; key-backed accounts happen to resolve sync.
   expectTypeOf(account.signMessage({ message: 'gm' })).toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf(
     await account.signMessage({ message: 'gm' }),
-  ).toEqualTypeOf<Signature>()
+  ).toEqualTypeOf<Hex>()
   expectTypeOf(
     account.signTypedData({ types: {}, primaryType: 'X' }),
-  ).toEqualTypeOf<MaybePromise<Signature>>()
+  ).toEqualTypeOf<MaybePromise<Hex>>()
   expectTypeOf(
     await account.signTypedData({ types: {}, primaryType: 'X' }),
-  ).toEqualTypeOf<Signature>()
+  ).toEqualTypeOf<Hex>()
   const transaction: SignableTransaction = {
     txID: 'ab',
     raw_data: {} as RawData,
@@ -73,10 +73,10 @@ test('signing methods are typed MaybePromise; the awaited value is the TRON-wire
 
 test('TronCustomSource signer methods are typed MaybePromise', () => {
   expectTypeOf<ReturnType<TronCustomSource['signMessage']>>().toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf<ReturnType<TronCustomSource['signTypedData']>>().toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf<ReturnType<TronCustomSource['signTransaction']>>().toEqualTypeOf<
     MaybePromise<SignableTransaction>
@@ -97,7 +97,8 @@ test('compat: key-backed accounts remain assignable to TronCustomSource', () => 
 })
 
 test('compat: sync and async object literals are both assignable to TronCustomSource', () => {
-  const signature = {} as Signature
+  // Message / typed-data signers resolve to the 0x-prefixed 65-byte hex.
+  const signature = '0x' as Hex
   const signed = {} as SignableTransaction
   const syncSource = {
     address: 'T' as Address,
@@ -130,16 +131,36 @@ test('compat: sync and async object literals are both assignable to TronCustomSo
     },
   }
   expectTypeOf(toAccount(asLiteral)).toEqualTypeOf<TronCustomAccount>()
-  // A Promise of the wrong value is still rejected.
+  // A Promise of the wrong value is still rejected: the structured
+  // `Signature` object (the pre-rc.1 return) is no longer accepted.
   const wrong: TronCustomSource = {
     address: 'T' as Address,
     publicKey: '0x04' as Hex,
-    // @ts-expect-error — must resolve to a Signature, not a string.
-    signMessage: async () => '0xdead',
+    // @ts-expect-error — must resolve to the Hex signature, not a Signature object.
+    signMessage: async () => ({}) as Signature,
     signTypedData: async () => signature,
     signTransaction: async () => signed,
   }
   void wrong
+  const wrongTyped: TronCustomSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    signMessage: async () => signature,
+    // @ts-expect-error — must resolve to the Hex signature, not a Signature object.
+    signTypedData: () => ({}) as Signature,
+    signTransaction: async () => signed,
+  }
+  void wrongTyped
+  // A bare (non-0x) string is not `Hex` either.
+  const bare: TronCustomSource = {
+    address: 'T' as Address,
+    publicKey: '0x04' as Hex,
+    // @ts-expect-error — a bare hex string is not `Hex`.
+    signMessage: async () => 'dead' as string,
+    signTypedData: async () => signature,
+    signTransaction: async () => signed,
+  }
+  void bare
 })
 
 test('SignableTransaction requires the full triple — partial forms are a type error', () => {

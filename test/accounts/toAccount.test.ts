@@ -57,9 +57,9 @@ describe('toAccount', () => {
   test('a private key still works through privateKeyToAccount + toAccount(source)', async () => {
     const account = toAccount(privateKeyToAccount(pk1))
     expect(account.address).toBe(pk1Address)
-    expect(
-      (await account.signMessage({ message: 'hello world' })).serialized,
-    ).toBe(helloWorldSig)
+    expect(await account.signMessage({ message: 'hello world' })).toBe(
+      helloWorldSig,
+    )
     // No raw-digest signer: blind signing is not part of the account surface.
     expect('sign' in account).toBe(false)
   })
@@ -89,9 +89,9 @@ describe('toAccount', () => {
       signTypedData: base.signTypedData,
       signTransaction: base.signTransaction,
     })
-    expect(
-      (await account.signMessage({ message: 'hello world' })).serialized,
-    ).toBe(helloWorldSig)
+    expect(await account.signMessage({ message: 'hello world' })).toBe(
+      helloWorldSig,
+    )
     const signed = await account.signTransaction(canonicalTransaction())
     expect(signed.txID).toBe(txID)
     expect(signed.signature).toEqual([canonicalSig])
@@ -129,9 +129,9 @@ describe('toAccount', () => {
     const account = toAccount(new Signer())
 
     expect(account.address).toBe(pk1Address)
-    expect(
-      (await account.signMessage({ message: 'hello world' })).serialized,
-    ).toBe(helloWorldSig)
+    expect(await account.signMessage({ message: 'hello world' })).toBe(
+      helloWorldSig,
+    )
     expect(
       (await account.signTransaction(canonicalTransaction())).signature,
     ).toEqual([canonicalSig])
@@ -285,7 +285,7 @@ describe('toAccount: sync / async custom-source compatibility', () => {
 
     // Byte-for-byte what the key-backed account itself returns.
     expect(message).toEqual(base.signMessage({ message: 'hello world' }))
-    expect((message as Awaited<typeof message>).serialized).toBe(helloWorldSig)
+    expect(message).toBe(helloWorldSig)
     expect(typed).toEqual(base.signTypedData(typedData))
     expect(tx).toEqual(base.signTransaction(canonicalTransaction()))
     expect((tx as Awaited<typeof tx>).signature).toEqual([canonicalSig])
@@ -301,7 +301,7 @@ describe('toAccount: sync / async custom-source compatibility', () => {
     expect(await message).toEqual(
       await base.signMessage({ message: 'hello world' }),
     )
-    expect((await message).serialized).toBe(helloWorldSig)
+    expect(await message).toBe(helloWorldSig)
     expect(await account.signTypedData(typedData)).toEqual(
       await base.signTypedData(typedData),
     )
@@ -323,7 +323,7 @@ describe('toAccount: sync / async custom-source compatibility', () => {
 
     const message = account.signMessage({ message: 'hello world' })
     expect(message).toBeInstanceOf(Promise)
-    expect((await message).serialized).toBe(helloWorldSig)
+    expect(await message).toBe(helloWorldSig)
 
     const tx = account.signTransaction(canonicalTransaction())
     expect(tx).not.toBeInstanceOf(Promise)
@@ -391,11 +391,9 @@ describe('toAccount: sync / async custom-source compatibility', () => {
     const { signMessage, signTransaction, multiSign } = account
 
     // Detached from the account object: still bound to the signer.
-    expect((await signMessage({ message: 'hello world' })).serialized).toBe(
-      helloWorldSig,
-    )
-    expect((await account.signTypedData(typedData)).serialized).toBe(
-      (await privateKeyToAccount(pk1).signTypedData(typedData)).serialized,
+    expect(await signMessage({ message: 'hello world' })).toBe(helloWorldSig)
+    expect(await account.signTypedData(typedData)).toBe(
+      await privateKeyToAccount(pk1).signTypedData(typedData),
     )
     expect((await signTransaction(canonicalTransaction())).signature).toEqual([
       canonicalSig,

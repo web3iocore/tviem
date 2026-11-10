@@ -43,9 +43,17 @@ describe('recoverMessageAddress', () => {
     ).toBe(address)
   })
 
-  test('accepts a Signature object', () => {
+  test('accepts the Hex returned by signMessage directly', () => {
     const signature = signMessage({ message, privateKey: pk1 })
+    expect(signature).toBe(`0x${messageSignature}`)
     expect(recoverMessageAddress({ message, signature })).toBe(address)
+    expect(verifyMessage({ message, signature, address })).toBe(true)
+  })
+
+  test('accepts parseSignature(signMessage(...)) as a Signature object', () => {
+    const signature = parseSignature(signMessage({ message, privateKey: pk1 }))
+    expect(recoverMessageAddress({ message, signature })).toBe(address)
+    expect(verifyMessage({ message, signature, address })).toBe(true)
   })
 
   test('round-trips freshly signed messages', () => {

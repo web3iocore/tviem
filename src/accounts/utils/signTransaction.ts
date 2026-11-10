@@ -137,7 +137,9 @@ export function signTransactionAs(
       `The transaction's owner_address does not match the signing account (${address}).`,
     )
 
-  const sig = sign({ hash: `0x${bareHex(txID)}`, privateKey }).hex
+  const sig = bareHex(
+    sign({ hash: `0x${bareHex(txID)}`, privateKey, to: 'hex' }),
+  )
   const existing = transaction.signature ?? []
   // Compare by bytes, not by string: `sig` is bare lowercase hex, so an
   // existing entry in `0x`-prefixed or upper-case form is the SAME signature

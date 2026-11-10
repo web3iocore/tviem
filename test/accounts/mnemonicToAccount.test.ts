@@ -103,7 +103,7 @@ describe('mnemonicToAccount', () => {
     expect(
       verifyMessage({
         message: 'gm from HD',
-        signature: signature.serialized,
+        signature,
         address: account.address,
       }),
     ).toBe(true)
@@ -118,7 +118,7 @@ describe('mnemonicToAccount', () => {
     expect(
       verifyTypedData({
         ...typedData,
-        signature: tdSig.serialized,
+        signature: tdSig,
         address: account.address,
       }),
     ).toBe(true)
@@ -157,7 +157,7 @@ describe('hdKeyToAccount / generateMnemonic', () => {
 })
 
 describe('sync compatibility (signer surface typed MaybePromise)', () => {
-  // HD accounts are key-backed: typed `MaybePromise<Signature>`, but they
+  // HD accounts are key-backed: typed `MaybePromise<Hex>`, but they
   // still resolve synchronously, and awaiting yields the identical value.
   const isThenable = (value: unknown) =>
     typeof value === 'object' &&

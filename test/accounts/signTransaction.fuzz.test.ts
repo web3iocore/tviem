@@ -52,7 +52,11 @@ describe('signTransaction fuzz (differential vs TronWeb)', () => {
     const privateKey = PRIVATE_KEY[fixture.privateKeyLabel]
 
     // Core: the raw secp256k1 signature over the txID digest matches TronWeb.
-    const raw = sign({ hash: `0x${fixture.txID}`, privateKey }).hex
+    const raw = sign({
+      hash: `0x${fixture.txID}`,
+      privateKey,
+      to: 'hex',
+    }).slice(2)
     expect(raw).toBe(fixture.signature)
 
     // Full pipeline (only when the signer owns the transaction): the triple

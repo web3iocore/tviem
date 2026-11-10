@@ -174,8 +174,8 @@ const account = toAccount({
       throw error
     }
   },
-  // These resolve to a `Signature` object (see `sign`); map
-  // rejections the same way.
+  // These resolve to the 0x-prefixed 65-byte signature hex, the form
+  // TronWeb and TronLink return; map rejections the same way.
   signMessage: (parameters) => injectedWallet.signMessage(parameters),
   signTypedData: (parameters) => injectedWallet.signTypedData(parameters),
 })

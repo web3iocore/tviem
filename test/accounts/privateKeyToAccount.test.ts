@@ -1,9 +1,20 @@
 import { describe, expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import type { SignableTransaction } from '../../src/accounts/types.js'
+import { hashMessage } from '../../src/utils/signature/hashMessage.js'
+import {
+  parseSignature,
+  serializeSignature,
+  sign,
+} from '../../src/utils/signature/sign.js'
+import {
+  recoverMessageAddress,
+  verifyMessage,
+} from '../../src/utils/signature/verifyMessage.js'
 import { decodeRawData } from '../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../src/utils/transaction/getTransactionId.js'
 import { toRawDataHex } from '../../src/utils/transaction/serializeRawData.js'
+import { loadSigMessageFixtures } from '../fixtures/sig/loader.js'
 import { loadTxFixtureFile, loadTxFixtures } from '../fixtures/tx/loader.js'
 
 // Only pk=1 is a permitted trivial private key.
@@ -20,6 +31,11 @@ const txID = '407ec75dad4545890e5788ef78555ecab9dc72d56df29da4ebbd508022bdbaba'
 // §2.3 signature over that id (bare TRON wire form, ends `ae001c`, v=0x1c=28).
 const txSignature =
   '4d6f1e54ea593e5118c2d1b3701a4cab4d5235a418e9e46dba8c5f033bc4af0f6c04a08241de23936dffdedc869eac45533f9479a6bf372a38382b168b65ae001c'
+
+// §2.2 TronWeb-verified TIP-191 signature of "sign this message" (pk=1):
+// the `0x`-prefixed 65-byte `r ++ s ++ v` form, v=0x1b=27.
+const messageSignature =
+  '0x9db3012a68317a97618479e218f3ca6849714071c2a8f07c160f1a804b114a8e166364cb124269a0edea614f50ae2acd0fd3a2c97ae89f45b4811427fb6136b71b'
 
 const txCheckError = 'The transaction failed its integrity check (txCheck).'
 
@@ -67,10 +83,81 @@ describe('privateKeyToAccount', () => {
     const signature = await account.signMessage({
       message: 'sign this message',
     })
-    expect(signature.serialized).toBe(
-      '0x9db3012a68317a97618479e218f3ca6849714071c2a8f07c160f1a804b114a8e166364cb124269a0edea614f50ae2acd0fd3a2c97ae89f45b4811427fb6136b71b',
-    )
-    expect(signature.v).toBe(27)
+    // The account returns the `0x`-prefixed 65-byte hex directly — the same
+    // string TronWeb's signMessageV2 / TronLink return.
+    expect(signature).toBe(messageSignature)
+    expect(parseSignature(signature).v).toBe(27)
+  })
+
+  describe('compatibility: message / typed-data signatures are 0x hex', () => {
+    const pk = { pk1, pk2 } as const
+    const fixtures = loadSigMessageFixtures()
+    const messageOf = (fixture: (typeof fixtures)[number]) =>
+      fixture.rawHex !== undefined
+        ? { raw: fixture.rawHex as `0x${string}` }
+        : fixture.message!
+
+    test('signMessage returns the TronWeb fixture `signature` string exactly', async () => {
+      expect(fixtures.length).toBeGreaterThan(0)
+      for (const fixture of fixtures) {
+        const account = privateKeyToAccount(pk[fixture.privateKeyLabel])
+        const signature = await account.signMessage({
+          message: messageOf(fixture),
+        })
+        expect(signature).toBe(fixture.signature)
+        expect(signature).toMatch(/^0x[0-9a-f]{130}$/)
+      }
+    })
+
+    test('parseSignature(signMessage(...)) equals sign({ hash: hashMessage(...) })', async () => {
+      for (const fixture of fixtures) {
+        const privateKey = pk[fixture.privateKeyLabel]
+        const message = messageOf(fixture)
+        const parsed = parseSignature(
+          await privateKeyToAccount(privateKey).signMessage({ message }),
+        )
+        const direct = sign({ hash: hashMessage(message), privateKey })
+        expect(parsed).toEqual(direct)
+        expect(parsed).toEqual({
+          r: direct.r,
+          s: direct.s,
+          v: direct.v,
+          yParity: direct.yParity,
+        })
+        expect(hashMessage(message)).toBe(fixture.digest)
+      }
+    })
+
+    test('serializeSignature(parseSignature(sig)) round-trips the account hex', async () => {
+      for (const fixture of fixtures) {
+        const signature = await privateKeyToAccount(
+          pk[fixture.privateKeyLabel],
+        ).signMessage({ message: messageOf(fixture) })
+        expect(serializeSignature(parseSignature(signature))).toBe(signature)
+      }
+      const typed = await privateKeyToAccount(pk1).signTypedData({
+        domain: { name: 'Example', version: '1', chainId: 728126428n },
+        types: { Msg: [{ name: 'text', type: 'string' }] },
+        primaryType: 'Msg',
+        message: { text: 'hi' },
+      })
+      expect(typed).toMatch(/^0x[0-9a-f]{130}$/)
+      expect(serializeSignature(parseSignature(typed))).toBe(typed)
+    })
+
+    test('verifyMessage / recoverMessageAddress accept the returned hex directly', async () => {
+      for (const fixture of fixtures) {
+        const account = privateKeyToAccount(pk[fixture.privateKeyLabel])
+        const message = messageOf(fixture)
+        const signature = await account.signMessage({ message })
+        expect(recoverMessageAddress({ message, signature })).toBe(
+          fixture.address,
+        )
+        expect(
+          verifyMessage({ message, signature, address: account.address }),
+        ).toBe(true)
+      }
+    })
   })
 
   test('signTransaction signs the full triple and appends the signature', async () => {
@@ -280,23 +367,24 @@ describe('sync compatibility (signer surface typed MaybePromise)', () => {
     message: { text: 'hi' },
   } as const
 
-  test('signMessage returns the Signature synchronously; awaiting is identical', async () => {
+  test('signMessage returns the signature hex synchronously; awaiting is identical', async () => {
     const account = privateKeyToAccount(pk1)
     const sync = account.signMessage({ message: 'sign this message' })
     expect(isThenable(sync)).toBe(false)
+    expect(typeof sync).toBe('string')
     const awaited = await account.signMessage({ message: 'sign this message' })
-    expect(awaited).toEqual(sync)
-    expect(awaited.serialized).toBe(
-      '0x9db3012a68317a97618479e218f3ca6849714071c2a8f07c160f1a804b114a8e166364cb124269a0edea614f50ae2acd0fd3a2c97ae89f45b4811427fb6136b71b',
-    )
+    expect(awaited).toBe(sync)
+    expect(awaited).toBe(messageSignature)
   })
 
-  test('signTypedData returns the Signature synchronously; awaiting is identical', async () => {
+  test('signTypedData returns the signature hex synchronously; awaiting is identical', async () => {
     const account = privateKeyToAccount(pk1)
     const sync = account.signTypedData(typedData)
     expect(isThenable(sync)).toBe(false)
+    expect(typeof sync).toBe('string')
+    expect(sync).toMatch(/^0x[0-9a-f]{130}$/)
     const awaited = await account.signTypedData(typedData)
-    expect(awaited).toEqual(sync)
+    expect(awaited).toBe(sync)
   })
 
   test('signTransaction returns the transaction synchronously; awaiting is identical', async () => {

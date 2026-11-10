@@ -1,12 +1,21 @@
 // Signatures are pinned byte-for-byte from TronWeb's `utils.typedData
 // .signTypedData(domain, types, value, pk)` (pk=1). tviem's `sign()` already
 // emits the same `0x||r||s||v` (v=1b/1c) wire form.
-import { describe, expect, test } from 'vitest'
+import { describe, expect, expectTypeOf, test } from 'vitest'
 
 import type { EvmAddress } from '../../../src/types/address.js'
+import type { Hex } from '../../../src/types/misc.js'
 import { hashTypedData } from '../../../src/utils/signature/hashTypedData.js'
-import { sign } from '../../../src/utils/signature/sign.js'
+import {
+  parseSignature,
+  serializeSignature,
+  sign,
+} from '../../../src/utils/signature/sign.js'
 import { signTypedData } from '../../../src/utils/signature/signTypedData.js'
+import {
+  recoverTypedDataAddress,
+  verifyTypedData,
+} from '../../../src/utils/signature/verifyTypedData.js'
 
 const pk1 =
   '0x0000000000000000000000000000000000000000000000000000000000000001' as const
@@ -43,26 +52,68 @@ const typedData = { domain, types, primaryType: 'Mail', message } as const
 describe('signTypedData', () => {
   test('signs to the TronWeb-verified signature (v = 28)', () => {
     const signature = signTypedData({ ...typedData, privateKey: pk1 })
-    expect(signature.serialized).toBe(mailSignature)
-    expect(signature.hex).toBe(mailSignature.slice(2))
-    expect(signature.v).toBe(28)
+    // Byte-for-byte what TronWeb's `signTypedData` returned for this input.
+    expect(signature).toBe(mailSignature)
+    expect(signature.slice(2)).toBe(mailSignature.slice(2))
+    expect(parseSignature(signature).v).toBe(28)
   })
 
-  test('equals sign({ hash: hashTypedData(...) })', () => {
-    expect(signTypedData({ ...typedData, privateKey: pk1 }).serialized).toBe(
-      sign({ hash: hashTypedData(typedData), privateKey: pk1 }).serialized,
+  test('returns the 0x-prefixed 65-byte r ++ s ++ v Hex string', () => {
+    const signature = signTypedData({ ...typedData, privateKey: pk1 })
+    expectTypeOf(signature).toEqualTypeOf<Hex>()
+    expect(typeof signature).toBe('string')
+    expect(signature).toMatch(/^0x[0-9a-f]{130}$/)
+  })
+
+  test('equals sign({ hash: hashTypedData(...), to: "hex" })', () => {
+    expect(signTypedData({ ...typedData, privateKey: pk1 })).toBe(
+      sign({ hash: hashTypedData(typedData), privateKey: pk1, to: 'hex' }),
     )
   })
 
-  test('accepts a bare (no 0x) private key', () => {
+  test('parses to the same components as sign({ hash: hashTypedData(...) })', () => {
+    const parsed = parseSignature(
+      signTypedData({ ...typedData, privateKey: pk1 }),
+    )
+    const low = sign({ hash: hashTypedData(typedData), privateKey: pk1 })
+    expect(parsed).toStrictEqual(low)
+    expect(parsed.r).toBe(`0x${mailSignature.slice(2, 66)}`)
+    expect(parsed.s).toBe(`0x${mailSignature.slice(66, 130)}`)
+    expect(parsed.v).toBe(28)
+    expect(parsed.yParity).toBe(1)
+  })
+
+  test('serializeSignature(parseSignature(sig)) round-trips', () => {
+    const signature = signTypedData({ ...typedData, privateKey: pk1 })
+    expect(serializeSignature(parseSignature(signature))).toBe(signature)
+    expect(serializeSignature(parseSignature(mailSignature))).toBe(
+      mailSignature,
+    )
+  })
+
+  test('the returned Hex feeds verifyTypedData / recoverTypedDataAddress directly', () => {
+    const signature = signTypedData({ ...typedData, privateKey: pk1 })
+    const address = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
+    expect(recoverTypedDataAddress({ ...typedData, signature })).toBe(address)
+    expect(verifyTypedData({ ...typedData, signature, address })).toBe(true)
     expect(
-      signTypedData({ ...typedData, privateKey: pk1.slice(2) }).serialized,
-    ).toBe(mailSignature)
+      verifyTypedData({
+        ...typedData,
+        signature,
+        address: 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K',
+      }),
+    ).toBe(false)
+  })
+
+  test('accepts a bare (no 0x) private key', () => {
+    expect(signTypedData({ ...typedData, privateKey: pk1.slice(2) })).toBe(
+      mailSignature,
+    )
   })
 
   test('is deterministic (RFC 6979) by default', () => {
-    expect(signTypedData({ ...typedData, privateKey: pk1 }).hex).toBe(
-      signTypedData({ ...typedData, privateKey: pk1 }).hex,
+    expect(signTypedData({ ...typedData, privateKey: pk1 })).toBe(
+      signTypedData({ ...typedData, privateKey: pk1 }),
     )
   })
 
@@ -72,8 +123,9 @@ describe('signTypedData', () => {
       privateKey: pk1,
       extraEntropy: true,
     })
-    expect(randomized.serialized).not.toBe(mailSignature)
-    expect([27, 28]).toContain(randomized.v)
+    expect(randomized).not.toBe(mailSignature)
+    expect(randomized).toMatch(/^0x[0-9a-f]{130}$/)
+    expect([27, 28]).toContain(parseSignature(randomized).v)
   })
 
   test('signs a kitchen-sink struct to the TronWeb-verified signature', () => {
@@ -112,7 +164,7 @@ describe('signTypedData', () => {
         primaryType: 'Sink',
         message: sink,
         privateKey: pk1,
-      }).serialized,
+      }),
     ).toBe(
       '0x408903aa47c943d02cf6e2cea736a8946c24e0b2300b88f570ebf7b6b7afb4ee748f776a70fa6b3956ca9284a38faa45d98543ed68b32863ef97bb12491fa0111c',
     )

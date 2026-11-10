@@ -25,66 +25,93 @@ const messageSignature =
 describe('sign', () => {
   test('§2.3: signs the tx digest to the authoritative signature (…ae001c)', () => {
     const signature = sign({ hash: txId, privateKey: pk1 })
-    expect(signature.hex).toBe(txSignature)
-    expect(signature.serialized).toBe(`0x${txSignature}`)
-    expect(signature.serialized.endsWith('001c')).toBe(true)
+    const serialized = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    expect(serialized.slice(2)).toBe(txSignature)
+    expect(serialized).toBe(`0x${txSignature}`)
+    expect(serializeSignature(signature)).toBe(`0x${txSignature}`)
+    expect(serialized.endsWith('001c')).toBe(true)
     expect(signature.v).toBe(28)
-    expect(signature.recovery).toBe(1)
+    expect(signature.yParity).toBe(1)
   })
 
   test('§2.2: signs the TIP-191 message digest (…6b71b, v = 27)', () => {
     const signature = sign({ hash: messageDigest, privateKey: pk1 })
-    expect(signature.hex).toBe(messageSignature)
-    expect(signature.serialized).toBe(`0x${messageSignature}`)
+    const serialized = sign({ hash: messageDigest, privateKey: pk1, to: 'hex' })
+    expect(serialized.slice(2)).toBe(messageSignature)
+    expect(serialized).toBe(`0x${messageSignature}`)
+    expect(serializeSignature(signature)).toBe(`0x${messageSignature}`)
     expect(signature.v).toBe(27)
-    expect(signature.recovery).toBe(0)
+    expect(signature.yParity).toBe(0)
   })
 
   test('accepts a bytes digest and a bare (no 0x) private key', () => {
     const signature = sign({
       hash: hexToBytes(txId),
       privateKey: pk1.slice(2),
+      to: 'hex',
     })
-    expect(signature.hex).toBe(txSignature)
+    expect(signature.slice(2)).toBe(txSignature)
   })
 
   test('is deterministic (RFC 6979) by default', () => {
-    const a = sign({ hash: txId, privateKey: pk1 })
-    const b = sign({ hash: txId, privateKey: pk1 })
-    expect(a.hex).toBe(b.hex)
+    const a = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    const b = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    expect(a).toBe(b)
+    expect(sign({ hash: txId, privateKey: pk1 })).toEqual(
+      sign({ hash: txId, privateKey: pk1 }),
+    )
   })
 
   test('extraEntropy changes the signature (proves the default is deterministic)', () => {
-    const deterministic = sign({ hash: txId, privateKey: pk1 })
+    const deterministic = sign({ hash: txId, privateKey: pk1, to: 'hex' })
     const randomized = sign({ hash: txId, privateKey: pk1, extraEntropy: true })
-    expect(randomized.hex).not.toBe(deterministic.hex)
-    // Still a valid TRON-form signature.
-    expect(randomized.hex).toHaveLength(130)
+    const randomizedHex = serializeSignature(randomized)
+    expect(randomizedHex).not.toBe(deterministic)
+    // Still a valid TRON-form signature (65 bytes = 130 bare hex chars).
+    expect(randomizedHex.slice(2)).toHaveLength(130)
     expect([27, 28]).toContain(randomized.v)
+    expect(randomized.yParity).toBe(randomized.v - 27)
   })
 
   test('accepts the advertised 0x-hex form of extraEntropy', () => {
-    const deterministic = sign({ hash: txId, privateKey: pk1 })
+    const deterministic = sign({ hash: txId, privateKey: pk1, to: 'hex' })
     const salted = sign({
       hash: txId,
       privateKey: pk1,
       extraEntropy: '0xdeadbeef',
+      to: 'hex',
     })
-    expect(salted.hex).not.toBe(deterministic.hex)
-    expect(salted.hex).toHaveLength(130)
+    expect(salted).not.toBe(deterministic)
+    expect(salted.slice(2)).toHaveLength(130)
     // RFC 6979 with fixed extra entropy stays deterministic.
     const again = sign({
       hash: txId,
       privateKey: pk1,
       extraEntropy: '0xdeadbeef',
+      to: 'hex',
     })
-    expect(again.hex).toBe(salted.hex)
+    expect(again).toBe(salted)
   })
 
   test('r/s components are 0x-prefixed 32-byte hex', () => {
     const signature = sign({ hash: txId, privateKey: pk1 })
     expect(signature.r).toBe(`0x${txSignature.slice(0, 64)}`)
     expect(signature.s).toBe(`0x${txSignature.slice(64, 128)}`)
+  })
+
+  test('the object form carries exactly r, s, v and yParity', () => {
+    const signature = sign({ hash: txId, privateKey: pk1 })
+    expect(Object.keys(signature).sort()).toEqual(['r', 's', 'v', 'yParity'])
+    expect(signature).toEqual({
+      r: `0x${txSignature.slice(0, 64)}`,
+      s: `0x${txSignature.slice(64, 128)}`,
+      v: 28,
+      yParity: 1,
+    })
+    // The removed fields are gone at runtime too.
+    expect(signature).not.toHaveProperty('hex')
+    expect(signature).not.toHaveProperty('serialized')
+    expect(signature).not.toHaveProperty('recovery')
   })
 
   test('throws on a non-32-byte hash', () => {
@@ -105,8 +132,13 @@ describe('serializeSignature', () => {
   })
 
   test('round-trips with sign', () => {
-    const { r, s, v, serialized } = sign({ hash: txId, privateKey: pk1 })
+    const { r, s, v } = sign({ hash: txId, privateKey: pk1 })
+    const serialized = sign({ hash: txId, privateKey: pk1, to: 'hex' })
     expect(serializeSignature({ r, s, v })).toBe(serialized)
+    // The whole object form is a valid input as well.
+    expect(serializeSignature(sign({ hash: txId, privateKey: pk1 }))).toBe(
+      serialized,
+    )
   })
 })
 
@@ -158,9 +190,17 @@ describe('sign: `to` selects the output form', () => {
     expect(bytes).toEqual(hexToBytes(`0x${txSignature}`))
   })
 
+  test('all three forms agree', () => {
+    const hex = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    expect(serializeSignature(object)).toBe(hex)
+    expect(sign({ hash: txId, privateKey: pk1, to: 'bytes' })).toEqual(
+      hexToBytes(hex),
+    )
+  })
+
   test('yParity carries the recovery id', () => {
     expect(object.yParity).toBe(1)
-    expect(object.yParity).toBe(object.recovery)
+    expect(object.yParity).toBe(object.v - 27)
     expect(sign({ hash: messageDigest, privateKey: pk1 }).yParity).toBe(0)
   })
 })
@@ -169,7 +209,15 @@ describe('parseSignature', () => {
   const components = sign({ hash: txId, privateKey: pk1 })
 
   test('splits a 0x-prefixed signature into its components', () => {
-    expect(parseSignature(`0x${txSignature}`)).toEqual(components)
+    const parsed = parseSignature(`0x${txSignature}`)
+    expect(parsed).toEqual(components)
+    expect(parsed).toEqual({
+      r: `0x${txSignature.slice(0, 64)}`,
+      s: `0x${txSignature.slice(64, 128)}`,
+      v: 28,
+      yParity: 1,
+    })
+    expect(Object.keys(parsed).sort()).toEqual(['r', 's', 'v', 'yParity'])
   })
 
   test('accepts the bare wire form (as carried by transaction.signature[])', () => {
@@ -180,16 +228,23 @@ describe('parseSignature', () => {
     expect(serializeSignature(parseSignature(`0x${txSignature}`))).toBe(
       `0x${txSignature}`,
     )
-    expect(
-      parseSignature(sign({ hash: txId, privateKey: pk1, to: 'hex' })),
-    ).toEqual(components)
+    const hex = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    const parsed = parseSignature(hex)
+    expect(parsed.r).toBe(components.r)
+    expect(parsed.s).toBe(components.s)
+    expect(parsed.v).toBe(components.v)
+    expect(parsed.yParity).toBe(components.yParity)
+    expect(parsed).toEqual(components)
+    expect(serializeSignature(parsed)).toBe(hex)
   })
 
   test('normalizes upper-case hex to lower-case components', () => {
     const parsed = parseSignature(txSignature.toUpperCase())
     expect(parsed.r).toBe(components.r)
     expect(parsed.s).toBe(components.s)
-    expect(parsed.serialized).toBe(components.serialized)
+    expect(parsed.v).toBe(components.v)
+    expect(parsed.yParity).toBe(components.yParity)
+    expect(serializeSignature(parsed)).toBe(`0x${txSignature}`)
   })
 
   test.each([
@@ -201,7 +256,7 @@ describe('parseSignature', () => {
     const parsed = parseSignature(`${txSignature.slice(0, 128)}${byte}`)
     expect(parsed.v).toBe(v)
     expect(parsed.yParity).toBe(yParity)
-    expect(parsed.recovery).toBe(yParity)
+    expect(parsed.v - 27).toBe(yParity)
   })
 
   test.each([

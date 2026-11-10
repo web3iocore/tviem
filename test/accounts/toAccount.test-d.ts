@@ -99,10 +99,10 @@ test('toAccount: accepts a fully async source without casts', () => {
 
 test('TronCustomAccount: signing methods return MaybePromise<...>', () => {
   expectTypeOf<TronCustomAccount['signMessage']>().returns.toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf<TronCustomAccount['signTypedData']>().returns.toEqualTypeOf<
-    MaybePromise<Signature>
+    MaybePromise<Hex>
   >()
   expectTypeOf<TronCustomAccount['signTransaction']>().returns.toEqualTypeOf<
     MaybePromise<SignableTransaction>
@@ -115,10 +115,10 @@ test('TronCustomAccount: signing methods return MaybePromise<...>', () => {
   const account = toAccount({} as TronCustomSource)
   expectTypeOf(
     account.signMessage({} as AccountSignMessageParameters),
-  ).resolves.toEqualTypeOf<Signature>()
+  ).resolves.toEqualTypeOf<Hex>()
   expectTypeOf(
     account.signTypedData({} as AccountSignTypedDataParameters),
-  ).resolves.toEqualTypeOf<Signature>()
+  ).resolves.toEqualTypeOf<Hex>()
 })
 
 test('toAccount: a source resolving to the wrong type is rejected', () => {
@@ -128,8 +128,24 @@ test('toAccount: a source resolving to the wrong type is rejected', () => {
   const badMessage: TronCustomSource = {
     address: local.address,
     publicKey: local.publicKey,
-    // @ts-expect-error a signature is a `Signature`, not a hex string
-    signMessage: async () => '0xdeadbeef',
+    // @ts-expect-error a signature is the `Hex` string, not a `Signature` object
+    signMessage: async () => ({}) as Signature,
+    signTypedData: local.signTypedData,
+    signTransaction: local.signTransaction,
+  }
+  const badTypedData: TronCustomSource = {
+    address: local.address,
+    publicKey: local.publicKey,
+    signMessage: local.signMessage,
+    // @ts-expect-error a signature is the `Hex` string, not a `Signature` object
+    signTypedData: () => ({}) as Signature,
+    signTransaction: local.signTransaction,
+  }
+  const bareString: TronCustomSource = {
+    address: local.address,
+    publicKey: local.publicKey,
+    // @ts-expect-error a bare (non-0x) string is not `Hex`
+    signMessage: async () => 'deadbeef' as string,
     signTypedData: local.signTypedData,
     signTransaction: local.signTransaction,
   }
@@ -142,15 +158,26 @@ test('toAccount: a source resolving to the wrong type is rejected', () => {
     signTransaction: async () => 'signed',
   }
   toAccount(badMessage)
+  toAccount(badTypedData)
+  toAccount(bareString)
   toAccount(badTransaction)
 
   // inline, the whole call is rejected
-  // @ts-expect-error no overload accepts a Promise<string> signer
+  // @ts-expect-error no overload accepts a Promise<Signature> signer
   toAccount({
     address: local.address,
     publicKey: local.publicKey,
-    signMessage: async () => '0xdeadbeef',
+    signMessage: async () => ({}) as Signature,
     signTypedData: local.signTypedData,
+    signTransaction: local.signTransaction,
+  })
+
+  // a source resolving to the 0x hex (what TronWeb / TronLink return) is fine
+  toAccount({
+    address: local.address,
+    publicKey: local.publicKey,
+    signMessage: async () => '0xdeadbeef' as Hex,
+    signTypedData: () => '0xdeadbeef' as Hex,
     signTransaction: local.signTransaction,
   })
 })

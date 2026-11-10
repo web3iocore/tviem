@@ -7,7 +7,6 @@ import {
   type BytesToHexErrorType,
   bytesToHex,
 } from '../utils/encoding/toHex.js'
-import type { Signature } from '../utils/signature/sign.js'
 import {
   type SignMessageErrorType,
   signMessage,
@@ -86,9 +85,9 @@ export function privateKeyToAccount(
     publicKey,
     source: 'privateKey',
     type: 'local',
-    signMessage: ({ message }): Signature =>
+    signMessage: ({ message }): Hex =>
       signMessage({ message, privateKey: keyHex }),
-    signTypedData: (parameters): Signature =>
+    signTypedData: (parameters): Hex =>
       signTypedData({ ...parameters, privateKey: keyHex }),
     signTransaction: (
       transaction: SignableTransaction,

@@ -5,7 +5,7 @@ import {
   type HashTypedDataParameters,
   hashTypedData,
 } from './hashTypedData.js'
-import { type Signature, type SignErrorType, sign } from './sign.js'
+import { type SignErrorType, sign } from './sign.js'
 
 export type SignTypedDataParameters = HashTypedDataParameters & {
   /** The secp256k1 private key, as `0x`-prefixed or bare hex. */
@@ -32,21 +32,22 @@ export type SignTypedDataErrorType =
  *
  * @param parameters `domain`, `types`, `primaryType`, `message`, the private
  * key and optional extra entropy.
- * @returns The signature (TRON wire form), exposing `r`/`s`/`v`/`recovery`,
- * the bare `hex` form and the `0x`-prefixed `serialized` form.
+ * @returns The `0x`-prefixed 65-byte signature (`r ++ s ++ v`), the form
+ * TronWeb and TronLink return. Split it with `parseSignature`.
  *
  * @example
  * signTypedData({ domain, types, primaryType: 'Mail', message, privateKey })
- *   .serialized
+ * // '0x...'
  */
 export function signTypedData({
   privateKey,
   extraEntropy,
   ...typedData
-}: SignTypedDataParameters): Signature {
+}: SignTypedDataParameters): Hex {
   return sign({
     hash: hashTypedData(typedData),
     privateKey,
     ...(extraEntropy !== undefined ? { extraEntropy } : {}),
+    to: 'hex',
   })
 }

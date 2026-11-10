@@ -15,15 +15,6 @@ export type Signature = {
   v: number
   /** Recovery id: `0 | 1`. */
   yParity: number
-  /** Recovery id: `0 | 1`. Same value as `yParity`. */
-  recovery: number
-  /**
-   * TRON `transaction.signature[]` form: bare lowercase hex
-   * `r(32) ++ s(32) ++ v(1)` (130 chars, no `0x` prefix).
-   */
-  hex: string
-  /** `0x`-prefixed `r(32) ++ s(32) ++ v(1)` (65 bytes). */
-  serialized: Hex
 }
 
 export type SerializeSignatureErrorType = BaseErrorType | ErrorType
@@ -114,17 +105,7 @@ export function parseSignature(signature: Hex | string): Signature {
 
 /** Builds the {@link Signature} object from components. */
 function toSignature(r: Hex, s: Hex, yParity: number): Signature {
-  const v = yParity + 27
-  const serialized = serializeSignature({ r, s, v })
-  return {
-    r,
-    s,
-    v,
-    yParity,
-    recovery: yParity,
-    hex: serialized.slice(2),
-    serialized,
-  }
+  return { r, s, v: yParity + 27, yParity }
 }
 
 /** Output form of {@link sign}. */
@@ -162,13 +143,14 @@ export type SignErrorType = BaseErrorType | HexToBytesErrorType | ErrorType
  * The digest is signed as-is (never re-hashed); nonces are RFC 6979
  * deterministic with canonical low-`s`, matching TronWeb's `ECKeySign`.
  *
- * @param parameters Hash, private key and optional extra entropy.
- * @returns The signature, exposing `r`/`s`/`v`/`recovery`, the bare `hex` wire
- * form and the `0x`-prefixed `serialized` form.
+ * @param parameters Hash, private key, optional extra entropy, and the output
+ * form `to`.
+ * @returns The {@link Signature} components by default; the `0x`-prefixed
+ * 65-byte hex with `to: 'hex'`; the 65 raw bytes with `to: 'bytes'`.
  *
  * @example
- * sign({ hash: '0x407ec7...', privateKey: '0x00...01' }).hex
- * // '4d6f1e...ae001c'
+ * sign({ hash: '0x407ec7...', privateKey: '0x00...01', to: 'hex' })
+ * // '0x4d6f1e...ae001c'
  */
 export function sign<to extends SignTo = 'object'>({
   hash,
@@ -199,8 +181,8 @@ export function sign<to extends SignTo = 'object'>({
   const signature = toSignature(rHex, sHex, recovery)
 
   return (() => {
-    if (to === 'hex') return signature.serialized
-    if (to === 'bytes') return hexToBytes(signature.serialized)
-    return signature
+    if (to === 'object') return signature
+    const serialized = serializeSignature(signature)
+    return to === 'hex' ? serialized : hexToBytes(serialized)
   })() as SignReturnType<to>
 }

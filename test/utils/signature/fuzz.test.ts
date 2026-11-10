@@ -10,6 +10,11 @@ import {
   type HashTypedDataParameters,
   hashTypedData,
 } from '../../../src/utils/signature/hashTypedData.js'
+import {
+  parseSignature,
+  serializeSignature,
+  sign,
+} from '../../../src/utils/signature/sign.js'
 import { signMessage } from '../../../src/utils/signature/signMessage.js'
 import { signTypedData } from '../../../src/utils/signature/signTypedData.js'
 import {
@@ -71,9 +76,18 @@ describe('signature message fuzz (differential vs TronWeb)', () => {
     // Digest matches the gold standard.
     expect(hashMessage(message)).toBe(fixture.digest)
 
-    // Our signature is byte-identical to TronWeb's.
+    // Our signature (the 0x-prefixed 65-byte Hex) is byte-identical to
+    // TronWeb's signMessageV2 output.
     const signed = signMessage({ message, privateKey })
-    expect(signed.serialized).toBe(fixture.signature)
+    expect(signed).toBe(fixture.signature)
+
+    // The Hex splits into the same components the low-level sign() yields
+    // over the digest, and re-serializes to itself.
+    const parsed = parseSignature(signed)
+    expect(parsed).toEqual(sign({ hash: hashMessage(message), privateKey }))
+    expect([27, 28]).toContain(parsed.v)
+    expect(parsed.yParity).toBe(parsed.v - 27)
+    expect(serializeSignature(parsed)).toBe(signed)
 
     // Recovery from the gold-standard signature yields the right signer.
     expect(
@@ -84,7 +98,7 @@ describe('signature message fuzz (differential vs TronWeb)', () => {
     expect(
       verifyMessage({
         message,
-        signature: signed.serialized,
+        signature: signed,
         address: fixture.address as Address,
       }),
     ).toBe(true)
@@ -106,9 +120,16 @@ describe('typed-data fuzz (differential vs TronWeb)', () => {
     // Digest matches the gold standard.
     expect(hashTypedData(params)).toBe(fixture.digest)
 
-    // Our signature is byte-identical to TronWeb's.
+    // Our signature (the 0x-prefixed 65-byte Hex) is byte-identical to
+    // TronWeb's _signTypedData output.
     const signed = signTypedData({ ...params, privateKey })
-    expect(signed.serialized).toBe(fixture.signature)
+    expect(signed).toBe(fixture.signature)
+
+    // The Hex splits into the same components the low-level sign() yields
+    // over the digest, and re-serializes to itself.
+    const parsed = parseSignature(signed)
+    expect(parsed).toEqual(sign({ hash: hashTypedData(params), privateKey }))
+    expect(serializeSignature(parsed)).toBe(signed)
 
     // Recovery from the gold-standard signature yields the right signer.
     expect(
@@ -119,7 +140,7 @@ describe('typed-data fuzz (differential vs TronWeb)', () => {
     expect(
       verifyTypedData({
         ...params,
-        signature: signed.serialized,
+        signature: signed,
         address: fixture.address as Address,
       }),
     ).toBe(true)

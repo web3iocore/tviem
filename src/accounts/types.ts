@@ -3,7 +3,6 @@ import type { Address } from '../types/address.js'
 import type { Hex, SignableMessage } from '../types/misc.js'
 import type { MaybePromise } from '../types/utils.js'
 import type { HashTypedDataParameters } from '../utils/signature/hashTypedData.js'
-import type { Signature } from '../utils/signature/sign.js'
 import type { RawData } from '../utils/transaction/serializeRawData.js'
 
 export type { SignableMessage } from '../types/misc.js'
@@ -91,13 +90,11 @@ export type TronCustomSource = {
   /** The uncompressed secp256k1 public key (`0x04…`, 65 bytes). */
   publicKey: Hex
   /** Signs a message per TIP-191. */
-  signMessage: (
-    parameters: AccountSignMessageParameters,
-  ) => MaybePromise<Signature>
+  signMessage: (parameters: AccountSignMessageParameters) => MaybePromise<Hex>
   /** Signs TIP-712 typed structured data. */
   signTypedData: (
     parameters: AccountSignTypedDataParameters,
-  ) => MaybePromise<Signature>
+  ) => MaybePromise<Hex>
   /** Signs a transaction, appending to its `signature` list. */
   signTransaction: (
     transaction: SignableTransaction,

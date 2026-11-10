@@ -9,7 +9,11 @@ import type {
 import type { Address } from '../../src/types/address.js'
 import type { Hex, SignableMessage } from '../../src/types/misc.js'
 import type { MaybePromise } from '../../src/types/utils.js'
-import type { Signature } from '../../src/utils/signature/sign.js'
+import {
+  parseSignature,
+  type Signature,
+  serializeSignature,
+} from '../../src/utils/signature/sign.js'
 
 // pk=1, in both accepted input forms.
 const pk0x =
@@ -53,17 +57,15 @@ test('privateKeyToAccount: signMessage method signature', () => {
   const account = privateKeyToAccount(pk0x)
 
   expectTypeOf(account.signMessage).toEqualTypeOf<
-    (parameters: AccountSignMessageParameters) => MaybePromise<Signature>
+    (parameters: AccountSignMessageParameters) => MaybePromise<Hex>
   >()
   expectTypeOf(account.signMessage)
     .parameter(0)
     .toEqualTypeOf<AccountSignMessageParameters>()
-  expectTypeOf(account.signMessage).returns.toEqualTypeOf<
-    MaybePromise<Signature>
-  >()
+  expectTypeOf(account.signMessage).returns.toEqualTypeOf<MaybePromise<Hex>>()
   expectTypeOf<
     Awaited<ReturnType<typeof account.signMessage>>
-  >().toEqualTypeOf<Signature>()
+  >().toEqualTypeOf<Hex>()
 
   // the message input is the `SignableMessage` union
   expectTypeOf<
@@ -75,17 +77,15 @@ test('privateKeyToAccount: signTypedData method signature', () => {
   const account = privateKeyToAccount(pk0x)
 
   expectTypeOf(account.signTypedData).toEqualTypeOf<
-    (parameters: AccountSignTypedDataParameters) => MaybePromise<Signature>
+    (parameters: AccountSignTypedDataParameters) => MaybePromise<Hex>
   >()
   expectTypeOf(account.signTypedData)
     .parameter(0)
     .toEqualTypeOf<AccountSignTypedDataParameters>()
-  expectTypeOf(account.signTypedData).returns.toEqualTypeOf<
-    MaybePromise<Signature>
-  >()
+  expectTypeOf(account.signTypedData).returns.toEqualTypeOf<MaybePromise<Hex>>()
   expectTypeOf<
     Awaited<ReturnType<typeof account.signTypedData>>
-  >().toEqualTypeOf<Signature>()
+  >().toEqualTypeOf<Hex>()
 })
 
 test('privateKeyToAccount: signTransaction method signature', () => {
@@ -105,16 +105,42 @@ test('privateKeyToAccount: signTransaction method signature', () => {
   >().toEqualTypeOf<SignableTransaction>()
 })
 
-test('privateKeyToAccount: returned Signature shape (r/s/v/hex/serialized)', async () => {
+test('privateKeyToAccount: signMessage / signTypedData resolve to the Hex signature', async () => {
   const sig = await privateKeyToAccount(pk0x).signMessage({ message: 'gm' })
+  const typed = await privateKeyToAccount(pk0x).signTypedData({
+    types: {},
+    primaryType: 'X',
+  })
 
-  expectTypeOf(sig).toEqualTypeOf<Signature>()
-  expectTypeOf(sig.r).toEqualTypeOf<Hex>()
-  expectTypeOf(sig.s).toEqualTypeOf<Hex>()
-  expectTypeOf(sig.v).toEqualTypeOf<number>()
-  expectTypeOf(sig.recovery).toEqualTypeOf<number>()
-  expectTypeOf(sig.hex).toEqualTypeOf<string>()
-  expectTypeOf(sig.serialized).toEqualTypeOf<Hex>()
+  expectTypeOf(sig).toEqualTypeOf<Hex>()
+  expectTypeOf(typed).toEqualTypeOf<Hex>()
+  expectTypeOf(sig).not.toEqualTypeOf<Signature>()
+  // The hex is not the structured object: components come from parseSignature.
+  // @ts-expect-error — `r` does not exist on the Hex string.
+  sig.r
+  // @ts-expect-error — `serialized` does not exist on the Hex string.
+  sig.serialized
+})
+
+test('parseSignature(sig): Signature has exactly r/s/v/yParity', async () => {
+  const sig = await privateKeyToAccount(pk0x).signMessage({ message: 'gm' })
+  const parsed = parseSignature(sig)
+
+  expectTypeOf(parsed).toEqualTypeOf<Signature>()
+  expectTypeOf<keyof Signature>().toEqualTypeOf<'r' | 's' | 'v' | 'yParity'>()
+  expectTypeOf(parsed.r).toEqualTypeOf<Hex>()
+  expectTypeOf(parsed.s).toEqualTypeOf<Hex>()
+  expectTypeOf(parsed.v).toEqualTypeOf<number>()
+  expectTypeOf(parsed.yParity).toEqualTypeOf<number>()
+  // @ts-expect-error — `hex` was removed from Signature.
+  parsed.hex
+  // @ts-expect-error — `serialized` was removed from Signature.
+  parsed.serialized
+  // @ts-expect-error — `recovery` was removed from Signature (use yParity).
+  parsed.recovery
+
+  // The round trip types back to the Hex the account returned.
+  expectTypeOf(serializeSignature(parsed)).toEqualTypeOf<Hex>()
 })
 
 test('privateKeyToAccount: multiSign is typed MaybePromise; awaited is the transaction', () => {
