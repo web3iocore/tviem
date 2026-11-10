@@ -1,5 +1,8 @@
 import { secp256k1 } from '@noble/curves/secp256k1'
-
+import {
+  type ParsePrivateKeyErrorType,
+  parsePrivateKey,
+} from '../../accounts/utils/parsePrivateKey.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
   InvalidHashError,
@@ -142,6 +145,7 @@ export type SignErrorType =
   | BaseErrorType
   | HexToBytesErrorType
   | InvalidHashErrorType
+  | ParsePrivateKeyErrorType
   | ErrorType
 
 /**
@@ -177,7 +181,7 @@ export function sign<to extends SignTo = 'object'>({
     return hash
   })()
 
-  const keyHex = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey
+  const keyHex = parsePrivateKey(privateKey)
 
   // String entropy is `0x`-prefixed hex of one or more whole bytes; it is
   // decoded here since noble takes bytes.

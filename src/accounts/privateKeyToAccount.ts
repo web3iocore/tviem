@@ -29,6 +29,10 @@ import {
   multiSignTransaction,
 } from './utils/multiSignTransaction.js'
 import {
+  type ParsePrivateKeyErrorType,
+  parsePrivateKey,
+} from './utils/parsePrivateKey.js'
+import {
   type PrivateKeyToAddressErrorType,
   privateKeyToAddress,
 } from './utils/privateKeyToAddress.js'
@@ -38,6 +42,7 @@ import {
 } from './utils/signTransaction.js'
 
 export type PrivateKeyToAccountErrorType =
+  | ParsePrivateKeyErrorType
   | PrivateKeyToAddressErrorType
   | BytesToHexErrorType
   | CloneTransactionErrorType
@@ -59,9 +64,9 @@ export type PrivateKeyToAccountErrorType =
  * `sign`; every signature is over a transaction, message or typed data (see
  * {@link TronCustomSource}).
  *
- * Accepts a 32-byte private key as `0x`-prefixed or bare hex. The key must be a
- * full 32 bytes — a short or malformed key is rejected by the secp256k1 layer,
- * never silently zero-padded (the caller guarantees the key).
+ * Accepts a 32-byte private key as `0x`-prefixed or bare hex; a `0X` prefix
+ * and surrounding whitespace are tolerated. Any other form, or a value outside
+ * the secp256k1 range, throws `InvalidPrivateKeyError`.
  *
  * @param privateKey The secp256k1 private key, as `0x`-prefixed or bare hex.
  * @returns A {@link TronLocalAccount}.
@@ -75,7 +80,7 @@ export type PrivateKeyToAccountErrorType =
 export function privateKeyToAccount(
   privateKey: Hex | string,
 ): TronLocalAccount {
-  const keyHex = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey
+  const keyHex = parsePrivateKey(privateKey)
 
   const address = privateKeyToAddress(keyHex)
   const publicKey = bytesToHex(secp256k1.getPublicKey(keyHex, false))

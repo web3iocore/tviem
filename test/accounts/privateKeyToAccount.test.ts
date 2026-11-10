@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import type { SignableTransaction } from '../../src/accounts/types.js'
+import { InvalidPrivateKeyError } from '../../src/errors/account.js'
 import { hashMessage } from '../../src/utils/signature/hashMessage.js'
 import {
   parseSignature,
@@ -416,5 +417,86 @@ describe('sync compatibility (signer surface typed MaybePromise)', () => {
     expect(() =>
       account.signTransaction({} as unknown as SignableTransaction),
     ).toThrow(txCheckError)
+  })
+})
+
+describe('private-key input forms', () => {
+  const canonical = privateKeyToAccount(pk1)
+  const bare = pk1.slice(2)
+  // A key whose hex is not all digits, so echoes are detectable.
+  const key = '4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318'
+  const keyAccount = privateKeyToAccount(`0x${key}`)
+  const order =
+    'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'
+
+  test.each([
+    ['a 0X prefix', `0X${bare}`],
+    ['no prefix', bare],
+    ['surrounding whitespace', `  0x${bare}\n`],
+    ['a tab and a 0X prefix', `\t0X${bare} `],
+  ])('accepts %s as the same key', (_, input) => {
+    const account = privateKeyToAccount(input)
+    expect(account.address).toBe(canonical.address)
+    expect(account.publicKey).toBe(canonical.publicKey)
+    expect(account.signMessage({ message: 'gm' })).toBe(
+      canonical.signMessage({ message: 'gm' }),
+    )
+  })
+
+  test('upper-case hex is the same key', () => {
+    expect(privateKeyToAccount(`0x${key.toUpperCase()}`).address).toBe(
+      keyAccount.address,
+    )
+  })
+
+  test.each([
+    ['63 hex characters', `0x${key.slice(1)}`, 'format'],
+    ['65 hex characters', `0x${key}0`, 'format'],
+    ['a non-hex character', `0x${key.slice(1)}g`, 'format'],
+    ['a Base58Check address', address, 'format'],
+    ['an inner space', `0x${key.slice(0, 32)} ${key.slice(32)}`, 'format'],
+    ['an empty string', '', 'format'],
+    ['zero', `0x${'0'.repeat(64)}`, 'range'],
+    ['the curve order n', `0x${order}`, 'range'],
+    ['all ff', `0x${'f'.repeat(64)}`, 'range'],
+  ] as const)('rejects %s without echoing it', (_, input, reason) => {
+    const error = (() => {
+      try {
+        privateKeyToAccount(input)
+      } catch (e) {
+        return e as InvalidPrivateKeyError
+      }
+      throw new Error('expected a throw')
+    })()
+    expect(error).toBeInstanceOf(InvalidPrivateKeyError)
+    expect(error.shortMessage).toBe(
+      new InvalidPrivateKeyError({ reason }).shortMessage,
+    )
+    for (const piece of [
+      input,
+      input.slice(0, 6),
+      input.slice(-6),
+      BigInt(`0x${'f'.repeat(64)}`).toString(),
+    ])
+      if (piece.length >= 4) expect(error.message).not.toContain(piece)
+    // Nor the input's length (checked on shortMessage: the full message ends
+    // with the package version, whose digits are unrelated).
+    expect(error.shortMessage).not.toMatch(new RegExp(`\\b${input.length}\\b`))
+  })
+
+  test.each([
+    ['null', null],
+    ['a number', 42],
+    ['bytes', new Uint8Array(32).fill(1)],
+    ['an object', {}],
+  ])('rejects %s (not a string)', (_, input) => {
+    expect(() => privateKeyToAccount(input as unknown as string)).toThrow(
+      InvalidPrivateKeyError,
+    )
+  })
+
+  test('the largest valid key (n - 1) is accepted', () => {
+    const nMinus1 = `0x${(BigInt(`0x${order}`) - 1n).toString(16).padStart(64, '0')}`
+    expect(privateKeyToAccount(nMinus1).address).toMatch(/^T/)
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import { privateKeyToAddress } from '../../../src/accounts/utils/privateKeyToAddress.js'
+import { InvalidPrivateKeyError } from '../../../src/errors/account.js'
 
 // §2.1 global test vectors (byte-compared against TronWeb).
 const v1 = {
@@ -42,5 +43,25 @@ describe('privateKeyToAddress', () => {
     expect(() => privateKeyToAddress('0x00')).toThrow()
     // Not hex.
     expect(() => privateKeyToAddress('0xzz')).toThrow()
+  })
+})
+
+describe('privateKeyToAddress: input forms', () => {
+  test('a 0X prefix and surrounding whitespace map to the same address', () => {
+    const expected = privateKeyToAddress(v1.privateKey)
+    const bare = v1.privateKey.replace(/^0x/, '')
+    expect(privateKeyToAddress(`0X${bare}`)).toBe(expected)
+    expect(privateKeyToAddress(` ${v1.privateKey} `)).toBe(expected)
+  })
+
+  test('malformed and out-of-range keys throw InvalidPrivateKeyError', () => {
+    for (const bad of [
+      '0x01',
+      '1',
+      `0x${'0'.repeat(64)}`,
+      `0x${'f'.repeat(64)}`,
+      `0x${'z'.repeat(64)}`,
+    ])
+      expect(() => privateKeyToAddress(bad)).toThrow(InvalidPrivateKeyError)
   })
 })

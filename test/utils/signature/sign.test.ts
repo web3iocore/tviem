@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
+import { InvalidPrivateKeyError } from '../../../src/errors/account.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { InvalidHashError } from '../../../src/errors/data.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
@@ -360,5 +361,33 @@ describe('serializeSignature: recovery id input forms', () => {
     expect(() => serializeSignature({ r, s })).toThrow(/yParity/)
     expect(() => serializeSignature({ r, s, yParity: 2 })).toThrow(/yParity/)
     expect(() => serializeSignature({ r, s, v: 127n })).toThrow(/Invalid v/)
+  })
+})
+
+describe('sign: private-key input validation', () => {
+  test('a 0X prefix and surrounding whitespace sign identically', () => {
+    const expected = sign({ hash: txId, privateKey: pk1, to: 'hex' })
+    expect(
+      sign({ hash: txId, privateKey: `0X${pk1.slice(2)}`, to: 'hex' }),
+    ).toBe(expected)
+    expect(sign({ hash: txId, privateKey: ` ${pk1} `, to: 'hex' })).toBe(
+      expected,
+    )
+  })
+
+  test.each([
+    ['63 hex characters', pk1.slice(0, -1)],
+    ['non-hex', `0x${'g'.repeat(64)}`],
+    ['zero', `0x${'0'.repeat(64)}`],
+    ['all ff (out of range)', `0x${'f'.repeat(64)}`],
+  ])('rejects %s with InvalidPrivateKeyError, never echoing the key', (_, privateKey) => {
+    expect(() => sign({ hash: txId, privateKey })).toThrow(
+      InvalidPrivateKeyError,
+    )
+    try {
+      sign({ hash: txId, privateKey })
+    } catch (error) {
+      expect((error as Error).message).not.toContain(privateKey.slice(2, 10))
+    }
   })
 })

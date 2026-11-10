@@ -94,6 +94,9 @@ test('root barrel exposes createTransport / createWalletClient / node errors', (
   expect(
     new mod.AccountTypeNotSupportedError({ type: 'json-rpc' }),
   ).toBeInstanceOf(mod.BaseError)
+  expect(new mod.InvalidPrivateKeyError({ reason: 'format' })).toBeInstanceOf(
+    mod.BaseError,
+  )
 })
 
 test('root barrel exposes UserRejectedRequestError as a BaseError subclass', () => {

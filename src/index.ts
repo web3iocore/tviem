@@ -655,6 +655,10 @@ export {
   type UnsupportedPackedAbiTypeErrorType,
 } from './errors/abi.js'
 export {
+  InvalidPrivateKeyError,
+  type InvalidPrivateKeyErrorType,
+} from './errors/account.js'
+export {
   InvalidAddressError,
   type InvalidAddressErrorType,
 } from './errors/address.js'
