@@ -349,6 +349,47 @@ test('normalizeTronError form 3: { result:false, code, hex message, txid } → T
   expect(err.shortMessage).toBe('signature error')
 })
 
+test.each([
+  'broadcasttransaction',
+  '/wallet/broadcasttransaction',
+  'broadcasthex',
+  '/wallet/broadcasthex',
+])('normalizeTronError form 3 on %s: a rejection without `result` → TronBroadcastError', (path) => {
+  // The body a node sends: a `false` result is left out of the JSON.
+  const body = {
+    code: 'SIGERROR',
+    txid: 'deadbeef01',
+    message: stringToHex('Validate signature error'),
+  }
+  const err = caught(() => normalizeTronError(body, { node: 'full', path }))
+  expect(err).toBeInstanceOf(TronBroadcastError)
+  expect(err.name).toBe('TronBroadcastError')
+  expect(err.code).toBe('SIGERROR')
+  expect(err.txid).toBe('deadbeef01')
+  expect(err.shortMessage).toBe('Validate signature error')
+  expect(err.response).toEqual(body)
+})
+
+test('normalizeTronError: a success acknowledgement on a broadcast path is returned unchanged', () => {
+  const path = '/wallet/broadcasttransaction'
+  const ack = { result: true, txid: 'deadbeef01' }
+  expect(normalizeTronError(ack, { node: 'full', path })).toBe(ack)
+  const withCode = { code: 'SUCCESS', txid: 'deadbeef01' }
+  expect(normalizeTronError(withCode, { node: 'full', path })).toBe(withCode)
+})
+
+test('normalizeTronError: a top-level code without `result` stays a TronNodeError off the broadcast paths', () => {
+  const err = caught(() =>
+    normalizeTronError(
+      { code: 'SIGERROR', txid: 'deadbeef01', message: stringToHex('x') },
+      NODE,
+    ),
+  )
+  expect(err).toBeInstanceOf(TronNodeError)
+  expect(err).not.toBeInstanceOf(TronBroadcastError)
+  expect(err.name).toBe('TronNodeError')
+})
+
 test('normalizeTronError form 4: non-success top-level code + hex message → TronNodeError', () => {
   const err = caught(() =>
     normalizeTronError(

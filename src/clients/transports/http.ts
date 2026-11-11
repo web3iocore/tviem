@@ -138,6 +138,12 @@ function isSuccessCode(code: unknown): boolean {
   return code === 'SUCCESS' || code === 0 || code === '0' || code === 200
 }
 
+/** Whether a request path names one of the full node's broadcast endpoints. */
+function isBroadcastPath(path: string): boolean {
+  const endpoint = path.split('?')[0]!.split('/').filter(Boolean).pop()
+  return endpoint === 'broadcasttransaction' || endpoint === 'broadcasthex'
+}
+
 /**
  * Everything a `client.request` round-trip can throw: the HTTP layer
  * (network failure, timeout) plus the four documented TRON node error
@@ -189,8 +195,16 @@ export function normalizeTronError(
       response: body,
     })
 
-  // Form 3: { result: false, code } — broadcast rejection.
-  if (b.result === false && b.code)
+  // Form 3: { result: false, code } — broadcast rejection. java-tron's JSON
+  // rendering leaves out a `false` result (proto3 default), so on a broadcast
+  // endpoint the body is `{ code, txid, message }` with no `result` key.
+  if (
+    b.code &&
+    (b.result === false ||
+      (b.result === undefined &&
+        !isSuccessCode(b.code) &&
+        isBroadcastPath(path)))
+  )
     throw new TronBroadcastError(decodeNodeMessage(b.message), {
       code: String(b.code),
       txid: typeof b.txid === 'string' ? b.txid : undefined,

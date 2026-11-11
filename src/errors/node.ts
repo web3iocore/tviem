@@ -79,7 +79,11 @@ export class TronContractValidateError extends TronNodeError {
 export type TronBroadcastErrorType = TronBroadcastError & {
   name: 'TronBroadcastError'
 }
-/** Node rejected a broadcast with `{ result: false, code, message }`. */
+/**
+ * Node rejected a broadcast with `{ code, txid, message }` — the node's JSON
+ * leaves out the `false` result; a body spelling `result: false` is the same
+ * rejection.
+ */
 export class TronBroadcastError extends TronNodeError {
   /** The transaction id the broadcast was rejected for, if reported. */
   txid?: string | undefined

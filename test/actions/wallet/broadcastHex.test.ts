@@ -238,6 +238,31 @@ test('maps an expiration rejection to TransactionExpiredError', async () => {
   )
 })
 
+test('a rejection whose body carries no `result` key is a TronBroadcastError with the txid', async () => {
+  // The body a node sends: a `false` result is left out of the JSON.
+  const { transport } = createMockTransport({
+    responses: {
+      broadcasthex: {
+        error: {
+          code: 'SIGERROR',
+          txid: TX_ID,
+          message: '56616c6964617465207369676e6174757265206572726f72',
+        },
+      },
+    },
+  })
+  const client = createClient({ transport })
+  const err = (await broadcastHex(client, {
+    transaction: BROADCAST_HEX,
+  }).catch((e) => e)) as TronBroadcastError
+
+  expect(err).toBeInstanceOf(TronBroadcastError)
+  expect(err.name).toBe('TronBroadcastError')
+  expect(err.code).toBe('SIGERROR')
+  expect(err.txid).toBe(TX_ID)
+  expect(err.shortMessage).toBe('Validate signature error')
+})
+
 test('refuses an empty acknowledgement body instead of resolving', async () => {
   // An LB stub / warming node answers `{}` — neither `result: true` nor any
   // rejection shape. The transaction may never have reached a node, so this

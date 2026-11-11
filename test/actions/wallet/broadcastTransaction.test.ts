@@ -274,6 +274,49 @@ test('the expiration remap keeps the node rejection as cause', async () => {
   expect(cause.response).toEqual(rejection)
 })
 
+test('a rejection whose body carries no `result` key is a TronBroadcastError with the txid', async () => {
+  // The body a node sends: a `false` result is left out of the JSON.
+  const rejection = {
+    code: 'SIGERROR',
+    txid: TX_ID,
+    message: '56616c6964617465207369676e6174757265206572726f72',
+  }
+  const { transport } = createMockTransport({
+    responses: { broadcasttransaction: { error: rejection } },
+  })
+  const client = createClient({ transport })
+  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
+    (e) => e,
+  )) as TronBroadcastError
+
+  expect(err).toBeInstanceOf(TronBroadcastError)
+  expect(err.name).toBe('TronBroadcastError')
+  expect(err.code).toBe('SIGERROR')
+  expect(err.txid).toBe(TX_ID)
+  expect(err.shortMessage).toBe('Validate signature error')
+})
+
+test('an expiration rejection without a `result` key maps to TransactionExpiredError', async () => {
+  const { transport } = createMockTransport({
+    responses: {
+      broadcasttransaction: {
+        error: {
+          code: 'TRANSACTION_EXPIRATION_ERROR',
+          txid: TX_ID,
+          message: '5472616e73616374696f6e2065787069726564',
+        },
+      },
+    },
+  })
+  const client = createClient({ transport })
+  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
+    (e) => e,
+  )) as TransactionExpiredError
+
+  expect(err).toBeInstanceOf(TransactionExpiredError)
+  expect(err.cause).toBeInstanceOf(TronBroadcastError)
+})
+
 test('refuses an empty acknowledgement body instead of resolving', async () => {
   // An LB stub / warming node answers `{}` — neither `result: true` nor any
   // rejection shape. The transaction may never have reached a node, so this
