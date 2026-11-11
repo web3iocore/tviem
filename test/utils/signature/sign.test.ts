@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest'
-
 import { InvalidPrivateKeyError } from '../../../src/errors/account.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { InvalidHashError } from '../../../src/errors/data.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import { InvalidSignatureError } from '../../../src/errors/signature.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 import {
   parseSignature,
@@ -389,5 +390,72 @@ describe('sign: private-key input validation', () => {
     } catch (error) {
       expect((error as Error).message).not.toContain(privateKey.slice(2, 10))
     }
+  })
+})
+
+describe('error classes', () => {
+  function errorOf(fn: () => unknown): unknown {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  const r = `0x${'11'.repeat(32)}` as const
+  const s = `0x${'22'.repeat(32)}` as const
+
+  test.each([
+    [
+      'a short r',
+      () => serializeSignature({ r: '0x12', s, v: 27 }),
+      'Invalid signature r',
+    ],
+    [
+      'a short s',
+      () => serializeSignature({ r, s: '0x12', v: 27 }),
+      'Invalid signature s',
+    ],
+    [
+      'a v outside 27 | 28',
+      () => serializeSignature({ r, s, v: 29 }),
+      'Invalid v: 29.',
+    ],
+    [
+      'a yParity outside 0 | 1',
+      () => serializeSignature({ r, s, yParity: 2 }),
+      'Invalid yParity: 2.',
+    ],
+    [
+      'a short signature hex',
+      () => parseSignature('0x12'),
+      'Invalid signature hex',
+    ],
+    [
+      'a recovery byte outside the accepted set',
+      () => parseSignature(`${r}${s.slice(2)}05`),
+      'Invalid recovery value: 5.',
+    ],
+  ])('%s throws an InvalidSignatureError', (_, fn, message) => {
+    const error = errorOf(fn)
+    expect(error).toBeInstanceOf(InvalidSignatureError)
+    expect((error as InvalidSignatureError).name).toBe('InvalidSignatureError')
+    expect((error as InvalidSignatureError).shortMessage).toContain(message)
+  })
+
+  test('malformed extraEntropy throws an InvalidParameterError', () => {
+    const error = errorOf(() =>
+      sign({ hash: txId, privateKey: pk1, extraEntropy: '0x1' }),
+    )
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'extraEntropy',
+      reason: 'format',
+    })
+    expect((error as InvalidParameterError).shortMessage).toBe(
+      'Invalid extraEntropy: expected 0x-prefixed hex of one or more whole bytes.',
+    )
   })
 })

@@ -130,12 +130,15 @@ export async function broadcastTransaction(
   // nested accessor live to answer txCheck one way and the request body —
   // which the node rebuilds the transaction from — another.
   const source = parameters.signedTransaction
-  const snapshot = cloneTransaction({
-    txID: source.txID,
-    raw_data: source.raw_data,
-    raw_data_hex: source.raw_data_hex,
-    signature: source.signature,
-  })
+  const snapshot = cloneTransaction(
+    {
+      txID: source.txID,
+      raw_data: source.raw_data,
+      raw_data_hex: source.raw_data_hex,
+      signature: source.signature,
+    },
+    'signedTransaction',
+  )
   const { txID, signature } = snapshot
 
   // Pre-condition: never broadcast an unsigned transaction.

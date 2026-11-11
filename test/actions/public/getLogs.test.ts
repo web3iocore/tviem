@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import { getLogs } from '../../../src/actions/public/getLogs.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { TronRpcError } from '../../../src/errors/rpc.js'
 import { toEventSelector } from '../../../src/utils/hash/toEventSelector.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
@@ -368,6 +369,15 @@ test('blockHash restricts to one block and rejects a block range', async () => {
       toBlock: 'latest',
     } as never),
   ).rejects.toThrow('`blockHash` cannot be used together')
+
+  const err = (await getLogs(client, {
+    blockHash,
+    fromBlock: 1n,
+  } as never).catch((e) => e)) as InvalidParameterError
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.name).toBe('InvalidParameterError')
+  expect(err.param).toBe('blockHash')
+  expect(err.reason).toBe('conflict')
 })
 
 test('throws a TronRpcError on a JSON-RPC error response', async () => {

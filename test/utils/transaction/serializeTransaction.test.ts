@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { MissingFieldError } from '../../../src/errors/parameter.js'
 
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import {
@@ -83,4 +84,12 @@ test('broadcast hex inputs reject odd-nibble hex instead of left-padding', () =>
   expect(() =>
     toBroadcastHex({ raw_data_hex: 'aa', signature: ['b'] } as never),
   ).toThrow('odd length')
+})
+
+test('serializeTransaction throws a MissingFieldError without raw_data and raw_data_hex', () => {
+  const serialize = () => serializeTransaction({ signature: [signature] })
+  expect(serialize).toThrow(MissingFieldError)
+  expect(serialize).toThrow(
+    expect.objectContaining({ name: 'MissingFieldError', field: 'raw_data' }),
+  )
 })

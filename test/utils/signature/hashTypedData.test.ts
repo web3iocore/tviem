@@ -4,9 +4,10 @@
 // and must collapse them to the same 20-byte word (address-form invariance —
 // the one genuinely TRON-specific behavior of the digest).
 import { describe, expect, test } from 'vitest'
-
 import { BytesSizeMismatchError } from '../../../src/errors/abi.js'
 import { IntegerOutOfRangeError } from '../../../src/errors/encoding.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import { TypedDataError } from '../../../src/errors/typedData.js'
 import type { AddressInput, EvmAddress } from '../../../src/types/address.js'
 import { concat } from '../../../src/utils/data/concat.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
@@ -1038,5 +1039,246 @@ describe('input hardening', () => {
     ).toThrow(
       'Invalid trcToken value: expected a bigint, number or decimal string',
     )
+  })
+})
+
+describe('TypedDataError', () => {
+  function errorOf(fn: () => unknown): unknown {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  /** Hashes `{ f: value }` against a one-field struct `T { <type> f }`. */
+  const hashField = (type: string, value: unknown) => () =>
+    hashTypedData({
+      domain,
+      types: { T: [{ name: 'f', type }] },
+      primaryType: 'T',
+      message: { f: value },
+    })
+
+  test.each([
+    ['a missing value', 'string', undefined, 'Missing T.f value'],
+    [
+      'a short fixed-size array',
+      'string[2]',
+      ['a'],
+      'expected an array of length 2',
+    ],
+    [
+      'a non-array for a dynamic array',
+      'string[]',
+      'a',
+      'expected an array, got',
+    ],
+    ['a non-boolean bool', 'bool', 'false', 'Invalid bool value'],
+    ['a non-string string', 'string', 5, 'Invalid string value'],
+    [
+      'an object integer',
+      'uint256',
+      {},
+      'expected a bigint, number or decimal string',
+    ],
+    ['an unsafe-integer number', 'uint256', 2 ** 60, 'is not a safe integer'],
+    [
+      'a non-decimal integer string',
+      'uint256',
+      '0x10',
+      'is not a decimal integer string',
+    ],
+    [
+      'a non-bytes value',
+      'bytes',
+      5,
+      'expected a 0x-prefixed hex string or a Uint8Array',
+    ],
+    [
+      'odd-length bytes hex',
+      'bytes',
+      '0x123',
+      'expected a 0x-prefixed even-length hex string',
+    ],
+  ])('%s carries the field path', (_, type, value, message) => {
+    const error = errorOf(hashField(type, value))
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({ name: 'TypedDataError', path: 'T.f' })
+    expect((error as TypedDataError).shortMessage).toContain(message)
+  })
+
+  const nestedTypes = {
+    Person: [
+      { name: 'name', type: 'string' },
+      { name: 'wallet', type: 'address' },
+    ],
+    Mail: [
+      { name: 'to', type: 'Person' },
+      { name: 'cc', type: 'Person[]' },
+    ],
+  }
+  const person = { name: 'Bob', wallet: PK2 }
+
+  test('the path follows nested structs', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain,
+        types: nestedTypes,
+        primaryType: 'Mail',
+        message: { to: { name: 'Bob' }, cc: [] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      name: 'TypedDataError',
+      path: 'Mail.to.wallet',
+    })
+    expect((error as TypedDataError).shortMessage).toBe(
+      'Missing Person.wallet value (declared as "address").',
+    )
+  })
+
+  test('a non-object struct value carries the path of the struct field', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain,
+        types: nestedTypes,
+        primaryType: 'Mail',
+        message: { to: 5, cc: [] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({ name: 'TypedDataError', path: 'Mail.to' })
+    expect((error as TypedDataError).shortMessage).toBe(
+      'Invalid Person value: expected an object, got number.',
+    )
+  })
+
+  test('the path indexes array elements', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain,
+        types: nestedTypes,
+        primaryType: 'Mail',
+        message: { to: person, cc: [person, { name: 5, wallet: PK1 }] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      name: 'TypedDataError',
+      path: 'Mail.cc[1].name',
+    })
+  })
+
+  test('an unknown domain field is rooted at EIP712Domain', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain: { ...domain, foo: 1 },
+        types: nestedTypes,
+        primaryType: 'Mail',
+        message: { to: person, cc: [] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      name: 'TypedDataError',
+      path: 'EIP712Domain.foo',
+    })
+    expect((error as TypedDataError).shortMessage).toContain(
+      'Unknown domain field "foo"',
+    )
+  })
+
+  test('a derived domain value is rooted at EIP712Domain', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain: { ...domain, chainId: 'abc' as never },
+        types: nestedTypes,
+        primaryType: 'Mail',
+        message: { to: person, cc: [] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      name: 'TypedDataError',
+      path: 'EIP712Domain.chainId',
+    })
+  })
+
+  test('a declared domain value is rooted at EIP712Domain', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        domain: {},
+        types: {
+          ...nestedTypes,
+          EIP712Domain: [{ name: 'name', type: 'string' }],
+        },
+        primaryType: 'Mail',
+        message: { to: person, cc: [] },
+      }),
+    )
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      name: 'TypedDataError',
+      path: 'EIP712Domain.name',
+    })
+    expect((error as TypedDataError).shortMessage).toBe(
+      'Missing EIP712Domain.name value (declared as "string").',
+    )
+  })
+
+  test('an unsupported field type carries no path', () => {
+    const error = errorOf(hashField('bytes33', '0x01'))
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect((error as TypedDataError).name).toBe('TypedDataError')
+    expect((error as TypedDataError).path).toBeUndefined()
+    expect((error as TypedDataError).shortMessage).toBe(
+      'Unsupported TIP-712 field type: "bytes33".',
+    )
+  })
+})
+
+describe('snapshot errors', () => {
+  const failure = (parameters: Record<string, unknown>) => {
+    try {
+      hashTypedData(parameters as never)
+    } catch (error) {
+      return error as InvalidParameterError
+    }
+    throw new Error('expected a throw')
+  }
+  const types = { Mail: [{ name: 'to', type: 'string' }] }
+
+  test('a non-data value is reported under `typedData`', () => {
+    const error = failure({
+      domain: {},
+      types,
+      primaryType: 'Mail',
+      message: { to: () => 'x' },
+    })
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'typedData.message.to',
+      reason: 'type',
+    })
+    // The message keeps its own root label.
+    expect(error.shortMessage).toBe(
+      'Cannot clone the transaction: `transaction.message.to` is a function, but a signable transaction must be plain data.',
+    )
+  })
+
+  test('a circular reference names the path below `typedData`', () => {
+    const message: Record<string, unknown> = { to: 'x' }
+    message.self = message
+    expect(
+      failure({ domain: {}, types, primaryType: 'Mail', message }),
+    ).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'typedData.message.self',
+      reason: 'format',
+    })
   })
 })

@@ -1,6 +1,9 @@
 import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
-import { BaseError } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -15,7 +18,10 @@ import {
   type AddressToHexErrorType,
   addressToHex,
 } from '../../utils/address/addressToHex.js'
-import { int64InputToBigInt } from '../../utils/transaction/int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../../utils/transaction/int64.js'
 import {
   ContractType,
   contractTypeUrlPrefix,
@@ -73,8 +79,10 @@ export type VoteProposalReturnType = BuildAndBroadcastReturnType
 export type VoteProposalErrorType =
   | AccountNotFoundErrorType
   | BuildAndBroadcastErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 export type BuildVoteProposalParameters = VoteProposalParameters & {
@@ -86,8 +94,10 @@ export type BuildVoteProposalReturnType = BuildTransactionReturnType
 export type BuildVoteProposalErrorType =
   | AccountNotFoundErrorType
   | BuildTransactionErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 /**
@@ -108,10 +118,11 @@ function assemble(
   // The two directions are opposite votes with no safe default, so refuse a
   // non-boolean here, the same way `proposalId` is refused below.
   if (typeof isApproval !== 'boolean')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid isApproval: expected a boolean (\`true\` adds approval, \`false\` removes it — opposite votes, so there is no default), got ${
         typeof isApproval === 'string' ? `"${isApproval}"` : String(isApproval)
       }.`,
+      { param: 'isApproval', reason: 'type' },
     )
 
   // Resolve the owner/signing account (per-call, else hoisted on the Client).

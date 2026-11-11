@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { stringToBytes } from '../../../src/utils/encoding/toBytes.js'
 import { keccak256 } from '../../../src/utils/hash/keccak256.js'
 import {
@@ -84,4 +85,22 @@ test('reads a raw message once: the validated bytes are the hashed bytes', () =>
     },
   } as { raw: `0x${string}` }
   expect(hashMessage(message)).toBe(hashMessage({ raw: '0x1111' }))
+})
+
+test('an unprefixed raw hex string throws an InvalidParameterError', () => {
+  let error: unknown
+  try {
+    hashMessage({ raw: 'abcd' as never })
+  } catch (error_) {
+    error = error_
+  }
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'message.raw',
+    reason: 'format',
+  })
+  expect((error as InvalidParameterError).shortMessage).toBe(
+    'Invalid raw message: expected a 0x-prefixed hex string, got "abcd".',
+  )
 })

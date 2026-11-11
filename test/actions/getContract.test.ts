@@ -11,6 +11,7 @@ import {
   AbiEventNotFoundError,
   AbiEventOverloadError,
 } from '../../src/errors/abi.js'
+import { InvalidParameterError } from '../../src/errors/parameter.js'
 import type { Address } from '../../src/types/address.js'
 import { rpc } from '../fixtures/rpc/loader.js'
 import { createMockTransport } from '../mock/createMockTransport.js'
@@ -506,6 +507,19 @@ describe('getContract', () => {
         contract.estimateEnergy.transfer([holder, 1000n], bag),
       ).rejects.toThrow(`\`${key}\` is bound by the contract instance`)
       expect(captured).toEqual({})
+    })
+
+    test('the refusal is an InvalidParameterError naming the bound option', async () => {
+      const { contract } = recordingClient()
+      const bag = { address: other } as {}
+
+      const err = (await contract.read
+        .balanceOf([holder], bag)
+        .catch((e: unknown) => e)) as InvalidParameterError
+      expect(err).toBeInstanceOf(InvalidParameterError)
+      expect(err.name).toBe('InvalidParameterError')
+      expect(err.param).toBe('address')
+      expect(err.reason).toBe('conflict')
     })
 
     test.each([

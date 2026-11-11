@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
@@ -16,7 +19,7 @@ function strip0x(value: string): string {
 }
 
 export type GenContractAddressErrorType =
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BytesToHexErrorType
   | HexToBytesErrorType
   | NormalizeAddressErrorType
@@ -43,8 +46,9 @@ export function genContractAddress(
   // value shifts every owner byte after it and still hashes to a
   // plausible-looking `41…` address.
   if (txHash.length !== 64)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid txId: ${txHash.length} hex chars. Expected a 32-byte (64 hex char) transaction id.`,
+      { param: 'txId', reason: 'format' },
     )
   // Normalizing pins the owner to the validated 21-byte `41…` form and
   // accepts every TRON address form the rest of the SDK does.

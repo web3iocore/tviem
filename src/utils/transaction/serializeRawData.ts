@@ -1,5 +1,10 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
+import {
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
   UnknownContractTypeError,
   type UnknownContractTypeErrorType,
 } from '../../errors/transaction.js'
@@ -15,7 +20,10 @@ import {
   stringToBytes,
 } from '../encoding/toBytes.js'
 import type { EncodeMessageErrorType } from './contracts/codec.js'
-import { int64InputToBigInt } from './int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from './int64.js'
 import {
   type FBytesErrorType,
   type FInt32ErrorType,
@@ -155,7 +163,10 @@ function assertOnlyKeys(
 ): void {
   for (const key of Object.keys(object))
     if (object[key] !== undefined && !allowed.includes(key))
-      throw new BaseError(`Unknown ${what} field "${key}".`)
+      throw new InvalidParameterError(`Unknown ${what} field "${key}".`, {
+        param: key,
+        reason: 'unknown-field',
+      })
 }
 
 /** Encodes one `Transaction.Contract` (type + `Any` parameter + permission). */
@@ -183,22 +194,27 @@ function serializeContract(
   if (getContractCodecByType(typeInt) === undefined)
     throw new UnknownContractTypeError({ type: contract.type })
   if (typeof value === 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Contract parameter for ${
         typeof contract.type === 'string' ? `"${contract.type}"` : contract.type
       } is an undecoded body (bare hex); it cannot be serialized.`,
+      { param: 'contract.parameter.value', reason: 'type' },
     )
   const codec = getContractCodecByTypeUrl(type_url)
   if (!codec)
-    throw new BaseError(`No contract codec registered for "${type_url}".`)
+    throw new InvalidParameterError(
+      `No contract codec registered for "${type_url}".`,
+      { param: 'contract.parameter.type_url', reason: 'range' },
+    )
   // The type (name or integer) and the Any type URL must denote the same
   // contract — a model whose label misrepresents its payload must never
   // serialize (the sign path byte-verifies whatever this emits).
   if (codec.type !== typeInt)
-    throw new BaseError(
+    throw new TransactionIntegrityError(
       `Contract type ${
         typeof contract.type === 'string' ? `"${contract.type}"` : contract.type
       } does not match its parameter type URL "${type_url}".`,
+      { field: 'contract.parameter.type_url' },
     )
   const valueBytes = codec.encode(value)
   const any = concatBytes([
@@ -214,15 +230,27 @@ function serializeContract(
   // passing the truthiness read above as something else.
   if (contract.Permission_id)
     parts.push(
-      fInt32(5, int64InputToBigInt('Permission_id', contract.Permission_id)),
+      fInt32(
+        5,
+        int64InputToBigInt(
+          'Permission_id',
+          contract.Permission_id,
+          'contract.Permission_id',
+        ),
+      ),
     )
   return concatBytes(parts)
 }
 
 export type SerializeRawDataErrorType =
-  // Direct BaseError throws: unknown raw_data / contract / parameter key,
-  // unregistered codec type_url, contract type / type-URL mismatch.
-  | BaseErrorType
+  // Unknown raw_data / contract / parameter key, undecoded contract body,
+  // unregistered codec type_url.
+  | InvalidParameterErrorType
+  // Invalid int64 input (`expiration`, `timestamp`, `fee_limit`,
+  // `Permission_id`).
+  | Int64InputToBigIntErrorType
+  // Contract type / type-URL mismatch.
+  | TransactionIntegrityErrorType
   // Unregistered contract type integer or name.
   | UnknownContractTypeErrorType
   // The registered codec's `encode` surface (address normalization included).

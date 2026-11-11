@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   type ResourceCodeName,
   resourceCodeOf,
@@ -48,4 +49,16 @@ test.each([
   })()
   expect(error).toBeInstanceOf(BaseError)
   expect(error?.message).toContain(`Invalid staking resource "${name}"`)
+})
+
+test('an unknown resource name throws an InvalidParameterError', () => {
+  const resolve = () => resourceCodeOf('TRON_POWER' as ResourceCodeName)
+  expect(resolve).toThrow(InvalidParameterError)
+  expect(resolve).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'resource',
+      reason: 'range',
+    }),
+  )
 })

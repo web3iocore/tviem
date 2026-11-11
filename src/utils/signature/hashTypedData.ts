@@ -11,7 +11,6 @@ import {
   BytesSizeMismatchError,
   type BytesSizeMismatchErrorType,
 } from '../../errors/abi.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
   InvalidDomainError,
   type InvalidDomainErrorType,
@@ -19,6 +18,8 @@ import {
   type InvalidPrimaryTypeErrorType,
   InvalidStructTypeError,
   type InvalidStructTypeErrorType,
+  TypedDataError,
+  type TypedDataErrorType,
 } from '../../errors/typedData.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
@@ -74,13 +75,13 @@ export type HashTypedDataParameters = {
 }
 
 export type HashTypedDataErrorType =
-  | BaseErrorType
   | BytesSizeMismatchErrorType
   | CloneTransactionErrorType
   | InvalidDomainErrorType
   | InvalidPrimaryTypeErrorType
   | InvalidStructTypeErrorType
   | NumberToHexErrorType
+  | TypedDataErrorType
   | ErrorType
 
 /** Canonical domain field order and their EIP-712 types. */
@@ -191,7 +192,7 @@ function encodeField(types: TypedDataTypes, type: string, value: unknown): Hex {
       size: 32,
     })
 
-  throw new BaseError(`Unsupported TIP-712 field type: "${type}".`)
+  throw new TypedDataError(`Unsupported TIP-712 field type: "${type}".`)
 }
 
 /** `typeHash ++ encoded(field)…` for a struct value. */
@@ -239,11 +240,15 @@ function kindOf(value: unknown): string {
   return typeof value
 }
 
-/** Validates every field of a struct value against its declared types. */
+/**
+ * Validates every field of a struct value against its declared types. `path`
+ * is the location of the struct value in the typed data.
+ */
 function validateStruct(
   types: TypedDataTypes,
   type: string,
   data: Record<string, unknown>,
+  path: string,
 ): void {
   for (const field of types[type] ?? []) {
     // EIP-712 has no optional fields: every declared field must be present. A
@@ -251,19 +256,22 @@ function validateStruct(
     // undefined to the empty string) — a plausible digest for a value the
     // caller never wrote.
     if (data?.[field.name] === undefined)
-      throw new BaseError(
+      throw new TypedDataError(
         `Missing ${type}.${field.name} value (declared as "${field.type}").`,
+        { path: `${path}.${field.name}` },
       )
-    validateField(types, field.type, data[field.name])
+    validateField(types, field.type, data[field.name], `${path}.${field.name}`)
   }
 }
 
 /** Validates one value against its declared field type (recursing into
- * structs and arrays). Mirrors `encodeField`'s dispatch order. */
+ * structs and arrays). Mirrors `encodeField`'s dispatch order. `path` is the
+ * location of the value in the typed data. */
 function validateField(
   types: TypedDataTypes,
   type: string,
   value: unknown,
+  path: string,
 ): void {
   if (types[type]) {
     assertStructNotShadowing(type)
@@ -271,10 +279,11 @@ function validateField(
     // fields all read as `undefined`) and only surface as a raw TypeError —
     // or a wrong digest — deep inside encoding.
     if (typeof value !== 'object' || value === null || Array.isArray(value))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected an object, got ${kindOf(value)}.`,
+        { path },
       )
-    validateStruct(types, type, value as Record<string, unknown>)
+    validateStruct(types, type, value as Record<string, unknown>, path)
     return
   }
 
@@ -286,18 +295,22 @@ function validateField(
     // outer dimension, so multi-dimensional arrays check each level in turn.)
     const fixed = type.match(/\[(\d+)\]$/)
     if (fixed && (!Array.isArray(value) || value.length !== Number(fixed[1])))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected an array of length ${fixed[1]}, got ${
           Array.isArray(value) ? value.length : typeof value
         }.`,
+        { path },
       )
     // A dynamic `T[]` must still be an array — anything else would escape as a
     // raw `.map is not a function` TypeError in `encodeField`.
     if (!Array.isArray(value))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected an array, got ${kindOf(value)}.`,
+        { path },
       )
-    for (const item of value) validateField(types, base, item)
+    let index = 0
+    for (const item of value)
+      validateField(types, base, item, `${path}[${index++}]`)
     return
   }
 
@@ -306,10 +319,11 @@ function validateField(
   // is truthy and would encode as `true` (a revoked approval as an approval).
   if (type === 'bool') {
     if (typeof value !== 'boolean')
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid bool value: expected a boolean, got ${
           typeof value === 'string' ? `"${value}"` : String(value)
         }.`,
+        { path },
       )
     return
   }
@@ -321,8 +335,9 @@ function validateField(
   // wrote, and one ethers/viem (which throw here) can never reproduce.
   if (type === 'string') {
     if (typeof value !== 'string')
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid string value: expected a string, got ${kindOf(value)}.`,
+        { path },
       )
     return
   }
@@ -341,16 +356,18 @@ function validateField(
       typeof value !== 'bigint' &&
       typeof value !== 'string'
     )
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected a bigint, number or decimal string, got ${kindOf(value)}. Convert BigNumber-style objects explicitly (e.g. \`BigInt(value.toString())\`).`,
+        { path },
       )
     // A `number` past 2^53 has already been rounded by IEEE-754 before it got
     // here, so `BigInt()` would faithfully encode a value the caller never
     // wrote; a fraction/NaN would otherwise escape as a raw RangeError. Pass a
     // bigint (or decimal string) for values past 2^53.
     if (typeof value === 'number' && !Number.isSafeInteger(value))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: ${value} is not a safe integer. Pass a bigint (or decimal string) for values past 2^53.`,
+        { path },
       )
     // A string must be a plain decimal integer — the same rule the
     // transaction path's `int64InputToBigInt` applies. `BigInt()` coerces far
@@ -362,8 +379,9 @@ function validateField(
     // the signer believes they set. Anything else non-numeric would escape
     // `encodeField` as a raw SyntaxError.
     if (typeof value === 'string' && !/^-?\d+$/.test(value))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: "${value}" is not a decimal integer string.`,
+        { path },
       )
     if (!integerMatch) return // trcToken: no declared width to enforce
     const [, base, bits] = integerMatch
@@ -385,8 +403,9 @@ function validateField(
     // every index reads as 0) and hashed as 32 zero bytes — `[1234]` and
     // `[true]` both signing the digest of `[0x00…00]`.
     if (typeof value !== 'string' && !(value instanceof Uint8Array))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected a 0x-prefixed hex string or a Uint8Array, got ${kindOf(value)}.`,
+        { path },
       )
     // A hex `bytes`/`bytesN` value must be 0x-prefixed whole bytes: an odd
     // nibble count gets a nibble invented by padding (and slips past the
@@ -394,8 +413,9 @@ function validateField(
     // its leading byte to `slice(2)` in hex decoding — either way the
     // digest is over bytes the caller never wrote.
     if (typeof value === 'string' && (!isHex(value) || value.length % 2 !== 0))
-      throw new BaseError(
+      throw new TypedDataError(
         `Invalid ${type} value: expected a 0x-prefixed even-length hex string, got "${value}".`,
+        { path },
       )
     // `bytesN`: must be exactly `N` bytes (`encodeField` would silently
     // right-pad a short value into a different digest).
@@ -445,8 +465,9 @@ function validateTypedData(parameters: HashTypedDataParameters): void {
         (domain as Record<string, unknown>)[key] != null &&
         !declared.has(key)
       )
-        throw new BaseError(
+        throw new TypedDataError(
           `Unknown domain field "${key}": it has no slot in the EIP712Domain struct, so it would be silently dropped from the hash. Declare it in \`types.EIP712Domain\` or remove it.`,
+          { path: `EIP712Domain.${key}` },
         )
   }
 
@@ -457,19 +478,21 @@ function validateTypedData(parameters: HashTypedDataParameters): void {
       types_,
       'EIP712Domain',
       (domain ?? {}) as Record<string, unknown>,
+      'EIP712Domain',
     )
   } else if (domain !== undefined) {
     // The derived domain is encoded against the fixed `DOMAIN_FIELDS` types
     // (never against `types`), so its fields are validated as bare primitives.
     for (const field of DOMAIN_FIELDS) {
       const value = (domain as Record<string, unknown>)[field.name]
-      if (value != null) validateField({}, field.type, value)
+      if (value != null)
+        validateField({}, field.type, value, `EIP712Domain.${field.name}`)
     }
   }
 
   if (primaryType !== 'EIP712Domain') {
     assertStructNotShadowing(primaryType)
-    validateStruct(types_, primaryType, message ?? {})
+    validateStruct(types_, primaryType, message ?? {}, primaryType)
   }
 }
 
@@ -525,7 +548,7 @@ export function hashTypedData(parameters_: HashTypedDataParameters): Hex {
   // the validator one value and hash another — the digest is what gets
   // signed, so the divergence would be signed. The snapshot reads each
   // property once; both traversals then run on plain data.
-  const parameters = cloneTransaction(parameters_)
+  const parameters = cloneTransaction(parameters_, 'typedData')
   validateTypedData(parameters)
   const { domain = {}, types, primaryType, message = {} } = parameters
   const parts: Hex[] = ['0x1901']

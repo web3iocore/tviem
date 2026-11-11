@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
 import type { ByteArray } from '../../types/misc.js'
@@ -38,7 +41,7 @@ export type ResourceCode = (typeof ResourceCode)[keyof typeof ResourceCode]
 export const ResourceCodeName = ['BANDWIDTH', 'ENERGY'] as const
 export type ResourceCodeName = (typeof ResourceCodeName)[number]
 
-export type ResourceCodeOfErrorType = BaseErrorType | ErrorType
+export type ResourceCodeOfErrorType = InvalidParameterErrorType | ErrorType
 
 /**
  * Resolves a staking resource name to its wire value, throwing on anything
@@ -56,8 +59,9 @@ export type ResourceCodeOfErrorType = BaseErrorType | ErrorType
  */
 export function resourceCodeOf(name: ResourceCodeName): ResourceCode {
   if (!Object.hasOwn(ResourceCode, name))
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid staking resource "${name}". Expected one of: ${ResourceCodeName.join(', ')}.`,
+      { param: 'resource', reason: 'range' },
     )
   return ResourceCode[name]
 }

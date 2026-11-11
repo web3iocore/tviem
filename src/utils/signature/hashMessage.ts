@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { ByteArray, Hex, SignableMessage } from '../../types/misc.js'
 import { type ConcatErrorType, concat } from '../data/concat.js'
@@ -20,7 +23,7 @@ export const presignMessagePrefix = '\x19TRON Signed Message:\n'
 
 export type HashMessageErrorType =
   | AssertHexBytesErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | ConcatErrorType
   | HexToBytesErrorType
   | StringToBytesErrorType
@@ -60,8 +63,9 @@ export function hashMessage<to extends 'hex' | 'bytes' = 'hex'>(
       // unprefixed string — either digest is over bytes the caller never
       // wrote, yet is perfectly signable.
       if (!isHex(raw))
-        throw new BaseError(
+        throw new InvalidParameterError(
           `Invalid raw message: expected a 0x-prefixed hex string, got "${raw}".`,
+          { param: 'message.raw', reason: 'format' },
         )
       assertHexBytes(raw)
       return hexToBytes(raw)

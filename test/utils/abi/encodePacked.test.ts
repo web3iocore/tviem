@@ -4,6 +4,7 @@ import {
   UnsupportedPackedAbiType,
 } from '../../../src/errors/abi.js'
 import { InvalidHexValueError } from '../../../src/errors/encoding.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { encodePacked } from '../../../src/utils/abi/encodePacked.js'
 import {
   type FixtureParameter,
@@ -212,5 +213,20 @@ describe('encodePacked (malformed input)', () => {
   test('well-formed byte values still encode unpadded', () => {
     expect(encodePacked(['bytes1', 'bytes1'], ['0x01', '0xff'])).toBe('0x01ff')
     expect(encodePacked(['bytes', 'uint8'], ['0x01', 1n])).toBe('0x0101')
+  })
+})
+
+test('an unsafe-integer number throws an InvalidParameterError', () => {
+  let error: unknown
+  try {
+    encodePacked(['uint256'], [2 ** 60])
+  } catch (error_) {
+    error = error_
+  }
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'values',
+    reason: 'range',
   })
 })

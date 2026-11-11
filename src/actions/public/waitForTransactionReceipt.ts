@@ -1,5 +1,8 @@
 import type { Client } from '../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   TransactionRevertedError,
   type TransactionRevertedErrorType,
@@ -68,7 +71,7 @@ export type WaitForTransactionReceiptParameters = {
 export type WaitForTransactionReceiptReturnType = TransactionInfo
 
 export type WaitForTransactionReceiptErrorType =
-  | BaseErrorType
+  | InvalidParameterErrorType
   | GetNowBlockErrorType
   | GetTransactionInfoErrorType
   | TransactionRevertedErrorType
@@ -145,16 +148,19 @@ export async function waitForTransactionReceipt(
   // a NaN timeout never times out, a NaN confirmations skips the confirmation
   // phase entirely, and a negative interval polls hot — each failing open.
   if (!Number.isFinite(timeout) || timeout < 0)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid timeout: ${timeout}. Expected a finite, non-negative number of milliseconds.`,
+      { param: 'timeout', reason: 'range' },
     )
   if (!Number.isFinite(pollingInterval) || pollingInterval < 0)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid pollingInterval: ${pollingInterval}. Expected a finite, non-negative number of milliseconds.`,
+      { param: 'pollingInterval', reason: 'range' },
     )
   if (!Number.isSafeInteger(confirmations) || confirmations < 1)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid confirmations: ${confirmations}. Expected an integer of at least 1.`,
+      { param: 'confirmations', reason: 'range' },
     )
 
   const getReceipt = getAction(client, getTransactionInfo, 'getTransactionInfo')

@@ -10,6 +10,10 @@ import { describe, expect, test } from 'vitest'
 import { generateMnemonic } from '../../src/accounts/generateMnemonic.js'
 import { hdKeyToAccount } from '../../src/accounts/hdKeyToAccount.js'
 import { mnemonicToAccount } from '../../src/accounts/mnemonicToAccount.js'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../src/errors/parameter.js'
 import { verifyMessage } from '../../src/utils/signature/verifyMessage.js'
 import { verifyTypedData } from '../../src/utils/signature/verifyTypedData.js'
 
@@ -146,6 +150,73 @@ describe('mnemonicToAccount', () => {
         'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon',
       ),
     ).toThrow()
+  })
+
+  test('the validation errors are InvalidParameterErrors naming the parameter', () => {
+    const thrownBy = (fn: () => unknown): unknown => {
+      try {
+        fn()
+      } catch (error) {
+        return error
+      }
+      throw new Error('expected a throw')
+    }
+
+    const passphrase = thrownBy(() =>
+      mnemonicToAccount(mnemonic, { passphrase: 0 as unknown as string }),
+    )
+    expect(passphrase).toBeInstanceOf(InvalidParameterError)
+    expect(passphrase).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'passphrase',
+      reason: 'type',
+      shortMessage:
+        'Invalid passphrase: expected a string or undefined, got number.',
+    })
+
+    const notAString = thrownBy(() =>
+      mnemonicToAccount(null as unknown as string),
+    )
+    expect(notAString).toBeInstanceOf(InvalidParameterError)
+    expect(notAString).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'mnemonic',
+      reason: 'type',
+      shortMessage: 'Invalid mnemonic: expected a string, got null.',
+    })
+
+    const notAPhrase = thrownBy(() =>
+      mnemonicToAccount('not a valid mnemonic phrase'),
+    )
+    expect(notAPhrase).toBeInstanceOf(InvalidParameterError)
+    expect(notAPhrase).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'mnemonic',
+      reason: 'format',
+      shortMessage:
+        'Invalid mnemonic: the phrase is not a valid BIP-39 English mnemonic.',
+    })
+  })
+
+  test('hdKeyToAccount throws a MissingFieldError when the derived node has no private key', () => {
+    const master = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic))
+    // A node whose derivation yields a public-only node.
+    const publicOnly = {
+      derive: (path: string) => master.derive(path).wipePrivateData(),
+    } as unknown as HDKey
+    let caught: unknown
+    try {
+      hdKeyToAccount(publicOnly)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(MissingFieldError)
+    expect(caught).toMatchObject({
+      name: 'MissingFieldError',
+      field: 'privateKey',
+      shortMessage:
+        'The derived HD node has no private key (a public-only node cannot sign).',
+    })
   })
 
   test('getHdKey exposes the derived node', () => {

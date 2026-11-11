@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
-
 import { buildVoteProposal } from '../../../src/actions/wallet/voteProposal.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 import { makeTviemClient, tviemHeader } from './_buildTestHelpers.js'
@@ -108,4 +108,22 @@ test('builds the exact value for a bigint proposalId past 2^53', async () => {
     parameter: { value: { proposal_id: unknown } }
   }
   expect(contract.parameter.value.proposal_id).toBe('9007199254740993')
+})
+
+test('a non-boolean isApproval is an InvalidParameterError', async () => {
+  const client = makeTviemClient()
+
+  const err = await client
+    .buildVoteProposal({
+      proposalId: 1n,
+      isApproval: 'false' as never,
+      blockHeader: tviemHeader,
+    })
+    .catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'isApproval',
+    reason: 'type',
+  })
 })

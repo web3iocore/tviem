@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest'
-
 import { buildSetAccountId } from '../../../src/actions/wallet/setAccountId.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { InvalidHexValueError } from '../../../src/errors/encoding.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 import { makeTviemClient, tviemHeader } from './_buildTestHelpers.js'
@@ -122,4 +122,20 @@ test('throws AccountNotFoundError when no account is available', async () => {
   await expect(
     buildSetAccountId(client, { accountId, blockHeader: tviemHeader }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+test('an out-of-bounds id is an InvalidParameterError on `accountId`', async () => {
+  const client = makeTviemClient()
+
+  for (const accountId of [textOfLength(7), textOfLength(33)]) {
+    const err = await client
+      .buildSetAccountId({ accountId, blockHeader: tviemHeader })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'accountId',
+      reason: 'range',
+    })
+  }
 })

@@ -1,4 +1,9 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  PermissionError,
+  type PermissionErrorType,
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
+} from '../../errors/transaction.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
@@ -32,7 +37,8 @@ export type MultiSignTransactionParameters = {
 export type MultiSignTransactionErrorType =
   | CloneTransactionErrorType
   | SignTransactionErrorType
-  | BaseErrorType
+  | PermissionErrorType
+  | TransactionIntegrityErrorType
   | ErrorType
 
 /**
@@ -90,7 +96,9 @@ export function multiSignTransaction(
   const transaction = cloneTransaction(parameters.transaction)
 
   if (!txCheck(transaction))
-    throw new BaseError('The transaction failed its integrity check (txCheck).')
+    throw new TransactionIntegrityError(
+      'The transaction failed its integrity check (txCheck).',
+    )
 
   const { raw_data } = transaction
 
@@ -101,8 +109,9 @@ export function multiSignTransaction(
     permissionId !== undefined &&
     (!Number.isInteger(permissionId) || permissionId < 0)
   )
-    throw new BaseError(
+    throw new PermissionError(
       `Invalid multi-sig permission id: ${permissionId}. Expected a non-negative integer (an active permission's id is >= 2).`,
+      { permissionId },
     )
 
   // A transaction already bound to a different id is never re-bound — that
@@ -112,8 +121,9 @@ export function multiSignTransaction(
       contract.Permission_id !== undefined &&
       contract.Permission_id !== permissionId
     )
-      throw new BaseError(
+      throw new PermissionError(
         `Permission id mismatch: the transaction is bound to permission ${contract.Permission_id}, but ${permissionId} was supplied.`,
+        { permissionId },
       )
 
   // A fresh positive bind changes the serialized bytes (id 0 encodes to
@@ -124,8 +134,9 @@ export function multiSignTransaction(
     raw_data.contract.some((contract) => contract.Permission_id === undefined)
 
   if (binds && transaction.signature?.length)
-    throw new BaseError(
+    throw new PermissionError(
       `Cannot bind permission id ${permissionId}: the transaction already carries ${transaction.signature.length} signature(s) over the unbound bytes; binding now would invalidate them.`,
+      { permissionId },
     )
 
   // All guards passed — write the permission id into every contract. A fresh
@@ -157,6 +168,9 @@ export function multiSignTransaction(
 function ownerAddressOf(raw_data: RawData): AddressInput {
   const value = raw_data.contract[0]?.parameter.value
   if (typeof value !== 'object')
-    throw new BaseError('The transaction has no readable owner_address.')
+    throw new TransactionIntegrityError(
+      'The transaction has no readable owner_address.',
+      { field: 'owner_address' },
+    )
   return value.owner_address as AddressInput
 }

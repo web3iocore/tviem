@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address } from '../../types/address.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
@@ -10,7 +13,7 @@ import {
 } from './base58check.js'
 
 export type PublicKeyToAddressErrorType =
-  | BaseErrorType
+  | InvalidParameterErrorType
   | HexToBytesErrorType
   | Keccak256ErrorType
   | EncodeBase58CheckErrorType
@@ -33,14 +36,16 @@ export function publicKeyToAddress(publicKey: Hex | ByteArray): Address {
   const body = (() => {
     if (bytes.length === 65) {
       if (bytes[0] !== 0x04)
-        throw new BaseError(
+        throw new InvalidParameterError(
           'Invalid public key: a 65-byte uncompressed public key must start with the `0x04` prefix byte.',
+          { param: 'publicKey', reason: 'format' },
         )
       return bytes.subarray(1)
     }
     if (bytes.length === 64) return bytes
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid public key length: ${bytes.length} bytes. Expected a 65-byte uncompressed ("04"-prefixed) public key, or its 64-byte body.`,
+      { param: 'publicKey', reason: 'format' },
     )
   })()
   const hash = keccak256(body, 'bytes')

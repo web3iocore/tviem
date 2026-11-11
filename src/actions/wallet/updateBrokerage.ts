@@ -1,6 +1,9 @@
 import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -66,7 +69,7 @@ export type UpdateBrokerageReturnType = BuildAndBroadcastReturnType
 
 export type UpdateBrokerageErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildAndBroadcastErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
@@ -80,7 +83,7 @@ export type BuildUpdateBrokerageReturnType = BuildTransactionReturnType
 
 export type BuildUpdateBrokerageErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildTransactionErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
@@ -103,8 +106,9 @@ function assemble(
   // representation and would otherwise escape `BigInt()` as a raw RangeError
   // from the protobuf writer.
   if (!Number.isInteger(brokerage) || brokerage < 0 || brokerage > 100)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid brokerage: ${brokerage}. Expected an integer percentage in [0, 100].`,
+      { param: 'brokerage', reason: 'range' },
     )
 
   const value: UpdateBrokerageContractInput = {

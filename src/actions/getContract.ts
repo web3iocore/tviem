@@ -9,7 +9,7 @@ import type {
 
 import type { Client } from '../clients/createClient.js'
 import { AbiEventNotFoundError, AbiEventOverloadError } from '../errors/abi.js'
-import { BaseError } from '../errors/base.js'
+import { InvalidParameterError } from '../errors/parameter.js'
 import type { ErrorType } from '../errors/utils.js'
 import type { Address } from '../types/address.js'
 import type { ContractFunctionName } from '../types/contract.js'
@@ -514,8 +514,9 @@ function assertNoBoundOptions(
 ): void {
   for (const field of fields)
     if ((options as Record<string, unknown>)[field] !== undefined)
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid \`${field}\` option for \`${method}\`: \`${field}\` is bound by the contract instance and cannot be overridden per call.`,
+        { param: field, reason: 'conflict' },
       )
 }
 

@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { version } from '../../../src/errors/version.js'
 import { normalizeSignature } from '../../../src/utils/hash/normalizeSignature.js'
 
@@ -158,7 +159,9 @@ test('trim spaces', () => {
 test('error: invalid signatures', () => {
   expect(() => normalizeSignature('bar')).toThrowError(
     expect.objectContaining({
-      name: 'BaseError',
+      name: 'InvalidParameterError',
+      param: 'signature',
+      reason: 'format',
       message: `Unable to normalize signature.
 
 Version: @tronweb3/tviem@${version}`,
@@ -167,7 +170,9 @@ Version: @tronweb3/tviem@${version}`,
 
   expect(() => normalizeSignature('bar(uint foo')).toThrowError(
     expect.objectContaining({
-      name: 'BaseError',
+      name: 'InvalidParameterError',
+      param: 'signature',
+      reason: 'format',
       message: `Unable to normalize signature.
 
 Version: @tronweb3/tviem@${version}`,
@@ -176,7 +181,9 @@ Version: @tronweb3/tviem@${version}`,
 
   expect(() => normalizeSignature('baruint foo)')).toThrowError(
     expect.objectContaining({
-      name: 'BaseError',
+      name: 'InvalidParameterError',
+      param: 'signature',
+      reason: 'format',
       message: `Unable to normalize signature.
 
 Version: @tronweb3/tviem@${version}`,
@@ -185,10 +192,27 @@ Version: @tronweb3/tviem@${version}`,
 
   expect(() => normalizeSignature('bar(uint foo, (uint baz)')).toThrowError(
     expect.objectContaining({
-      name: 'BaseError',
+      name: 'InvalidParameterError',
+      param: 'signature',
+      reason: 'format',
       message: `Unable to normalize signature.
 
 Version: @tronweb3/tviem@${version}`,
     }),
   )
+})
+
+test('error: invalid signatures throw an InvalidParameterError', () => {
+  let error: unknown
+  try {
+    normalizeSignature('bar')
+  } catch (error_) {
+    error = error_
+  }
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'signature',
+    reason: 'format',
+  })
 })

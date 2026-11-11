@@ -1,5 +1,8 @@
 import type { SignableTransaction } from '../../accounts/types.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
+} from '../../errors/transaction.js'
 import type { ErrorType } from '../../errors/utils.js'
 import {
   type DecodeRawDataErrorType,
@@ -11,8 +14,8 @@ import {
 } from '../../utils/transaction/txCheck.js'
 
 export type CanonicalizeTransactionErrorType =
-  | BaseErrorType
   | DecodeRawDataErrorType
+  | TransactionIntegrityErrorType
   | TxCheckErrorType
   | ErrorType
 
@@ -42,7 +45,9 @@ export function canonicalizeTransaction<
   transaction extends SignableTransaction,
 >(snapshot: transaction): transaction {
   if (!txCheck(snapshot))
-    throw new BaseError('The transaction failed its integrity check (txCheck).')
+    throw new TransactionIntegrityError(
+      'The transaction failed its integrity check (txCheck).',
+    )
   return {
     ...snapshot,
     ...('visible' in snapshot ? { visible: false } : {}),

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
-
 import { buildUpdateBrokerage } from '../../../src/actions/wallet/updateBrokerage.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 import { makeTviemClient, tviemHeader } from './_buildTestHelpers.js'
@@ -59,4 +59,20 @@ test('throws AccountNotFoundError when no account is available', async () => {
   await expect(
     buildUpdateBrokerage(client, { brokerage: 20, blockHeader: tviemHeader }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+test('an out-of-range brokerage is an InvalidParameterError', async () => {
+  const client = makeTviemClient()
+
+  for (const brokerage of [-1, 101, 20.5]) {
+    const err = await client
+      .buildUpdateBrokerage({ brokerage, blockHeader: tviemHeader })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'brokerage',
+      reason: 'range',
+    })
+  }
 })

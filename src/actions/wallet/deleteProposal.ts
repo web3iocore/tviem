@@ -14,7 +14,10 @@ import {
   type AddressToHexErrorType,
   addressToHex,
 } from '../../utils/address/addressToHex.js'
-import { int64InputToBigInt } from '../../utils/transaction/int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../../utils/transaction/int64.js'
 import {
   ContractType,
   contractTypeUrlPrefix,
@@ -67,6 +70,7 @@ export type DeleteProposalReturnType = BuildAndBroadcastReturnType
 export type DeleteProposalErrorType =
   | AccountNotFoundErrorType
   | BuildAndBroadcastErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
   | ErrorType
@@ -80,6 +84,7 @@ export type BuildDeleteProposalReturnType = BuildTransactionReturnType
 export type BuildDeleteProposalErrorType =
   | AccountNotFoundErrorType
   | BuildTransactionErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
   | ErrorType

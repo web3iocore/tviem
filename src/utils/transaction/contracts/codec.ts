@@ -1,4 +1,13 @@
-import { BaseError, type BaseErrorType } from '../../../errors/base.js'
+import {
+  NodeResponseMalformedError,
+  type NodeResponseMalformedErrorType,
+} from '../../../errors/node.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../../errors/parameter.js'
 import type { ErrorType } from '../../../errors/utils.js'
 import type { TronHexAddress } from '../../../types/address.js'
 import type { ByteArray, Hex } from '../../../types/misc.js'
@@ -15,7 +24,11 @@ import {
   stringToBytes,
 } from '../../encoding/toBytes.js'
 import { bytesToHex } from '../../encoding/toHex.js'
-import { int64InputToBigInt, int64ToJson } from '../int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+  int64ToJson,
+} from '../int64.js'
 import {
   type NormalizeAddressErrorType,
   normalizeAddress,
@@ -85,7 +98,9 @@ export type EncodeMessageErrorType =
   | FInt32ErrorType
   | FIntErrorType
   | FBoolErrorType
-  | BaseErrorType
+  | Int64InputToBigIntErrorType
+  | InvalidParameterErrorType
+  | MissingFieldErrorType
   | ErrorType
 
 /**
@@ -108,7 +123,10 @@ export function encodeMessage(
 ): ByteArray {
   for (const key of Object.keys(message))
     if (message[key] !== undefined && !spec.some((field) => field.name === key))
-      throw new BaseError(`Unknown contract message field "${key}".`)
+      throw new InvalidParameterError(
+        `Unknown contract message field "${key}".`,
+        { param: key, reason: 'unknown-field' },
+      )
   const parts: ByteArray[] = []
   for (const field of [...spec].sort((a, b) => a.no - b.no)) {
     const value = message[field.name]
@@ -116,10 +134,17 @@ export function encodeMessage(
       value === undefined || value === null
         ? new Uint8Array(0)
         : encodeField(field, value)
-    if (field.required && encoded.length === 0)
-      throw new BaseError(
-        `Missing required field "${field.name}" (unset, or set to its proto3 default).`,
-      )
+    if (field.required && encoded.length === 0) {
+      const message = `Missing required field "${field.name}" (unset, or set to its proto3 default).`
+      // An unset field is absent; a supplied value that encodes to nothing is
+      // the proto3 default, which a required field does not accept.
+      if (value === undefined || value === null)
+        throw new MissingFieldError(message, { field: field.name })
+      throw new InvalidParameterError(message, {
+        param: field.name,
+        reason: 'range',
+      })
+    }
     parts.push(encoded)
   }
   return concatBytes(parts)
@@ -147,7 +172,10 @@ function encodeField(field: FieldSpec, value: unknown): ByteArray {
         return fInt32(field.no, int64InputToBigInt(field.name, value as Int64))
       const index = field.names.indexOf(value)
       if (index === -1)
-        throw new BaseError(`Unknown ${field.name} enum name "${value}".`)
+        throw new InvalidParameterError(
+          `Unknown ${field.name} enum name "${value}".`,
+          { param: field.name, reason: 'range' },
+        )
       return fInt32(field.no, index)
     }
     case 'bool': {
@@ -155,10 +183,11 @@ function encodeField(field: FieldSpec, value: unknown): ByteArray {
       // caller would sign the OPPOSITE of what the value spells — a revoked
       // approval as an approval, an unlocked delegation as locked.
       if (typeof value !== 'boolean')
-        throw new BaseError(
+        throw new InvalidParameterError(
           `Invalid ${field.name}: expected a boolean, got ${
             typeof value === 'string' ? `"${value}"` : String(value)
           }.`,
+          { param: field.name, reason: 'type' },
         )
       return fBool(field.no, value)
     }
@@ -193,7 +222,7 @@ function bytesInputToBytes(value: BytesInput): ByteArray {
 
 export type DecodeMessageErrorType =
   | ReadFieldsErrorType
-  | BaseErrorType
+  | NodeResponseMalformedErrorType
   | ErrorType
 
 /**
@@ -229,7 +258,7 @@ export function decodeMessage(
   for (const wire of readMessageFields(bytes)) {
     const field = specByNo.get(wire.fieldNo)
     if (!field || wireTypeOf(field.kind) !== wire.wireType)
-      throw new BaseError(
+      throw new NodeResponseMalformedError(
         `Unknown wire field ${wire.fieldNo} (wire type ${wire.wireType}) in contract message.`,
       )
     switch (field.kind) {

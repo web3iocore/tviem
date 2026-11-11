@@ -1,5 +1,5 @@
 import { stringify } from '../utils/stringify.js'
-import { BaseError } from './base.js'
+import { BaseError, type BaseErrorOptions } from './base.js'
 
 export type InvalidDomainErrorType = InvalidDomainError & {
   name: 'InvalidDomainError'
@@ -40,5 +40,30 @@ export class InvalidStructTypeError extends BaseError {
       metaMessages: ['Struct type must not be a Solidity type or `trcToken`.'],
       name: 'InvalidStructTypeError',
     })
+  }
+}
+
+export type TypedDataErrorType = TypedDataError & {
+  name: 'TypedDataError'
+}
+/**
+ * Typed data does not pass TIP-712 validation: a value does not match its
+ * declared type, a declared field has no value, a field has no declared
+ * type, or a declared type is not a supported TIP-712 type.
+ */
+export class TypedDataError extends BaseError {
+  /**
+   * Where the value sits in the typed data, when known: the struct type name
+   * followed by the field names leading to it (e.g. `Mail.to.wallet`), with
+   * array elements as `[index]`.
+   */
+  path?: string | undefined
+
+  constructor(
+    shortMessage: string,
+    { path, ...options }: BaseErrorOptions & { path?: string | undefined } = {},
+  ) {
+    super(shortMessage, { ...options, name: 'TypedDataError' })
+    this.path = path
   }
 }

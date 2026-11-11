@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
-
 import { buildCreateProposal } from '../../../src/actions/wallet/createProposal.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 import { makeTviemClient, tviemHeader } from './_buildTestHelpers.js'
@@ -162,4 +162,48 @@ test('builds the exact value for a bigint past 2^53', async () => {
     }
   ).parameter.value
   expect(parameters).toEqual([{ key: 9, value: '9007199254740993' }])
+})
+
+test('a duplicate parameter key is an InvalidParameterError on `parameters`', async () => {
+  const client = makeTviemClient()
+
+  const err = await client
+    .buildCreateProposal({
+      parameters: [
+        { key: 9, value: 1 },
+        { key: 9, value: 2 },
+      ],
+      blockHeader: tviemHeader,
+    })
+    .catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'parameters',
+    reason: 'conflict',
+  })
+})
+
+test.each([
+  ['a hex-string key (array form)', [{ key: '0x10', value: 1 }], 'format'],
+  ['an unsafe-number key (array form)', [{ key: 2 ** 53, value: 1 }], 'range'],
+  ['an object value (array form)', [{ key: 9, value: {} }], 'type'],
+  ['a fractional value (map form)', { 9: 1.5 }, 'range'],
+  ['a non-decimal key (map form)', { '0x10': 1 }, 'format'],
+])('%s is an InvalidParameterError on `parameters`', async (_, parameters, reason) => {
+  const client = makeTviemClient()
+
+  const err = await client
+    .buildCreateProposal({
+      parameters: parameters as never,
+      blockHeader: tviemHeader,
+    })
+    .catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'parameters',
+    reason,
+  })
+  expect(err.shortMessage).toMatch(/^Invalid proposal parameter (key|value): /)
 })

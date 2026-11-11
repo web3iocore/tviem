@@ -4,8 +4,11 @@ import {
   parseNodeJson,
   type RequestErrorType,
 } from '../../clients/transports/http.js'
-import { BaseError } from '../../errors/base.js'
 import { TronNodeError } from '../../errors/node.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   TransactionExpiredError,
   type TransactionExpiredErrorType,
@@ -79,6 +82,7 @@ export type BroadcastHexErrorType =
   | Sha256ErrorType
   | TransactionExpiredErrorType
   | TronRpcErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 /**
@@ -141,21 +145,24 @@ export async function broadcastHex(
   for (const field of readMessageFields(bytes)) {
     if (field.fieldNo === 1) {
       if (field.wireType !== 2 || rawData !== undefined)
-        throw new BaseError(
+        throw new InvalidParameterError(
           'The transaction hex does not carry a single well-formed `raw_data` (field 1).',
+          { param: 'transaction', reason: 'format' },
         )
       rawData = field.value
     } else if (field.fieldNo === 2) {
       if (field.wireType !== 2)
-        throw new BaseError(
+        throw new InvalidParameterError(
           'The transaction hex carries a malformed `signature` (field 2).',
+          { param: 'transaction', reason: 'format' },
         )
       signatures += 1
     }
   }
   if (rawData === undefined)
-    throw new BaseError(
+    throw new InvalidParameterError(
       'The transaction hex does not carry a `raw_data` (field 1).',
+      { param: 'transaction', reason: 'format' },
     )
 
   // Pre-condition: never broadcast an unsigned transaction.

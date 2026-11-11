@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { InvalidAddressError } from '../../../src/errors/address.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 import { genContractAddress } from '../../../src/utils/transaction/genContractAddress.js'
@@ -58,4 +59,15 @@ test('owner address-form invariance: 41-hex / base58 / EVM / bytes match', () =>
   expect(genContractAddress(txID, toBase58(owner))).toBe(expected)
   expect(genContractAddress(txID, `0x${owner.slice(2)}`)).toBe(expected)
   expect(genContractAddress(txID, hexToBytes(`0x${owner}`))).toBe(expected)
+})
+
+test('genContractAddress throws an InvalidParameterError for a wrong-length txId', () => {
+  expect(() => genContractAddress('1', owner)).toThrow(InvalidParameterError)
+  expect(() => genContractAddress('1', owner)).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'txId',
+      reason: 'format',
+    }),
+  )
 })

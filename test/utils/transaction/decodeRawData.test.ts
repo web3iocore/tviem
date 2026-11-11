@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest'
-import { UnknownContractTypeError } from '../../../src/errors/transaction.js'
+import {
+  TransactionIntegrityError,
+  UnknownContractTypeError,
+} from '../../../src/errors/transaction.js'
 import { concatBytes } from '../../../src/utils/data/concat.js'
 import { bareHex } from '../../../src/utils/encoding/bareHex.js'
 import {
@@ -282,4 +285,23 @@ test('a type integer outside the enum still throws', () => {
   expect(() =>
     decodeRawData(codeclessRawHex(99, 'type.googleapis.com/protocol.Foo')),
   ).toThrow(UnknownContractTypeError)
+})
+
+test.each([
+  // Type 31 (TriggerSmartContract) wrapping a TransferContract Any.
+  ['a registered type', 31],
+  // Type 52 (MarketSellAssetContract) has no codec.
+  ['a codec-less type', 52],
+])('%s with a mismatched type URL throws a TransactionIntegrityError', (_, type) => {
+  const decode = () =>
+    decodeRawData(
+      codeclessRawHex(type, 'type.googleapis.com/protocol.TransferContract'),
+    )
+  expect(decode).toThrow(TransactionIntegrityError)
+  expect(decode).toThrow(
+    expect.objectContaining({
+      name: 'TransactionIntegrityError',
+      field: 'contract.parameter.type_url',
+    }),
+  )
 })

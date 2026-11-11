@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
 import { concatBytes } from '../data/concat.js'
@@ -34,7 +37,7 @@ export type SerializeTransactionErrorType =
   | BareHexErrorType
   | FMessageErrorType
   | FBytesErrorType
-  | BaseErrorType
+  | MissingFieldErrorType
   | ErrorType
 
 function bareHexToBytes(hex: string): ByteArray {
@@ -69,8 +72,9 @@ export function serializeTransaction(
       : raw_data !== undefined
         ? serializeRawData(raw_data)
         : (() => {
-            throw new BaseError(
+            throw new MissingFieldError(
               'Cannot serialize a transaction without `raw_data` or `raw_data_hex`.',
+              { field: 'raw_data' },
             )
           })()
 

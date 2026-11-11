@@ -3,6 +3,7 @@ import { broadcastHex } from '../../../src/actions/wallet/broadcastHex.js'
 import { createClient } from '../../../src/clients/createClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { TronBroadcastError, TronNodeError } from '../../../src/errors/node.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   TransactionExpiredError,
   TronRpcError,
@@ -281,4 +282,48 @@ test('never retries the broadcast, even when the transport retries', async () =>
     broadcastHex(client, { transaction: BROADCAST_HEX }),
   ).rejects.toThrow()
   expect(attempts).toBe(1)
+})
+
+test('a frame error names the `transaction` parameter', async () => {
+  const { transport, calls } = createMockTransport({
+    responses: { broadcasthex: { response: { result: true } } },
+  })
+  const client = createClient({ transport })
+  const rawDataFrame = toBroadcastHex({ raw_data_hex: RAW_DATA_HEX }).replace(
+    /^0x/,
+    '',
+  )
+
+  for (const [transaction, message] of [
+    // Signature only: field 2 (LEN), no field 1.
+    [
+      `1241${SIG}`,
+      'The transaction hex does not carry a `raw_data` (field 1).',
+    ],
+    // Field 1 twice.
+    [
+      `${rawDataFrame}${rawDataFrame}`,
+      'The transaction hex does not carry a single well-formed `raw_data` (field 1).',
+    ],
+    // Field 1 as a varint.
+    [
+      '0801',
+      'The transaction hex does not carry a single well-formed `raw_data` (field 1).',
+    ],
+    // Field 2 as a varint.
+    [
+      `${rawDataFrame}1001`,
+      'The transaction hex carries a malformed `signature` (field 2).',
+    ],
+  ] as const) {
+    const err = await broadcastHex(client, { transaction }).catch((e) => e)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      shortMessage: message,
+      param: 'transaction',
+      reason: 'format',
+    })
+  }
+  expect(calls).toHaveLength(0)
 })

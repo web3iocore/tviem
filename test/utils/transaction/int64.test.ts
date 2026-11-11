@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   int64InputToBigInt,
   int64ToJson,
@@ -61,5 +62,58 @@ describe('int64ToJson', () => {
     expect(int64ToJson(1n)).toBe(1)
     expect(int64ToJson(-9007199254740991n)).toBe(-9007199254740991)
     expect(int64ToJson(9007199254740992n)).toBe('9007199254740992')
+  })
+})
+
+describe('int64InputToBigInt errors', () => {
+  test.each([
+    ['an unsafe-integer number', 2 ** 53, 'range'],
+    ['a non-primitive', {}, 'type'],
+    ['a non-decimal string', '0x64', 'format'],
+  ])('%s throws an InvalidParameterError naming the field', (_, input, reason) => {
+    expect(() => int64InputToBigInt('amount', input as never)).toThrow(
+      InvalidParameterError,
+    )
+    expect(() => int64InputToBigInt('amount', input as never)).toThrow(
+      expect.objectContaining({
+        name: 'InvalidParameterError',
+        param: 'amount',
+        reason,
+      }),
+    )
+  })
+})
+
+describe('int64InputToBigInt param', () => {
+  const errorOf = (fn: () => unknown) => {
+    try {
+      fn()
+    } catch (error) {
+      return error as InvalidParameterError
+    }
+    throw new Error('expected a throw')
+  }
+
+  test.each([
+    ['an unsafe-integer number', 1.5, 'range'],
+    ['a non-primitive', {}, 'type'],
+    ['a non-decimal string', '0x64', 'format'],
+  ])('%s reports the given `param`, keeping the label in the message', (_, input, reason) => {
+    const labelled = errorOf(() =>
+      int64InputToBigInt('proposal parameter key', input as never),
+    )
+    const named = errorOf(() =>
+      int64InputToBigInt(
+        'proposal parameter key',
+        input as never,
+        'parameters',
+      ),
+    )
+    expect(named).toBeInstanceOf(InvalidParameterError)
+    expect(named).toMatchObject({ param: 'parameters', reason })
+    // Without a `param` the label is reported; the message is the same.
+    expect(labelled.param).toBe('proposal parameter key')
+    expect(named.shortMessage).toBe(labelled.shortMessage)
+    expect(named.shortMessage).toContain('Invalid proposal parameter key: ')
   })
 })

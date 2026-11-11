@@ -14,6 +14,7 @@ import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { InvalidAddressError } from '../../../src/errors/address.js'
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   AccountNotFoundError,
   TransactionMismatchError,
@@ -403,6 +404,12 @@ test('refuses a custom account that does not implement multiSign', async () => {
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)
   expect(err.message).toContain('does not implement `multiSign`')
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'account.multiSign',
+    reason: 'type',
+  })
 })
 
 test('refuses an `account` and a `privateKey` together — two named signers', async () => {
@@ -416,6 +423,12 @@ test('refuses an `account` and a `privateKey` together — two named signers', a
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)
   expect(err.message).toContain('either `account` or `privateKey`, not both')
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'account',
+    reason: 'conflict',
+  })
 })
 
 test('throws AccountNotFoundError when no signer is available', async () => {
@@ -643,6 +656,12 @@ test('the missing-multiSign guard still fires for an async custom source, before
     const err = (await run().catch((e) => e)) as BaseError
     expect(err).toBeInstanceOf(BaseError)
     expect(err.message).toContain('does not implement `multiSign`')
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'account.multiSign',
+      reason: 'type',
+    })
   }
   expect(signed).toEqual([])
   expect(calls).toHaveLength(0)

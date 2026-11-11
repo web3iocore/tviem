@@ -14,7 +14,10 @@ import {
   type AddressToHexErrorType,
   addressToHex,
 } from '../../utils/address/addressToHex.js'
-import { int64InputToBigInt } from '../../utils/transaction/int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../../utils/transaction/int64.js'
 import {
   type FlexErrorType,
   type FlexInput,
@@ -81,6 +84,7 @@ export type ExchangeTransactionReturnType = BuildAndBroadcastReturnType
 export type ExchangeTransactionErrorType =
   | AccountNotFoundErrorType
   | BuildAndBroadcastErrorType
+  | Int64InputToBigIntErrorType
   | FlexErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
@@ -96,6 +100,7 @@ export type BuildExchangeTransactionReturnType = BuildTransactionReturnType
 export type BuildExchangeTransactionErrorType =
   | AccountNotFoundErrorType
   | BuildTransactionErrorType
+  | Int64InputToBigIntErrorType
   | FlexErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType

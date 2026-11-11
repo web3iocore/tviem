@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { cloneTransaction } from '../../../src/utils/transaction/cloneTransaction.js'
 
 const LEVELS = 60
@@ -211,5 +212,83 @@ describe('cloneTransaction', () => {
     let deep: Record<string, unknown> = { leaf: 1 }
     for (let i = 0; i < 100; i++) deep = { deep }
     expect(() => cloneTransaction(deep)).toThrow(/nest/)
+  })
+})
+
+describe('cloneTransaction errors', () => {
+  const dag = () => {
+    let node: Record<string, unknown> = { leaf: 1 }
+    for (let i = 0; i < LEVELS; i++) node = { a: node, b: node }
+    return node
+  }
+  const deep = () => {
+    let node: Record<string, unknown> = { leaf: 1 }
+    for (let i = 0; i < 100; i++) node = { deep: node }
+    return node
+  }
+  const circular = () => {
+    const input: Record<string, unknown> = {}
+    input.self = input
+    return input
+  }
+
+  test.each([
+    // The whole input is refused, so `param` is the root, not the value the
+    // count was reached at.
+    ['too many values', dag, /^transaction$/, 'range'],
+    [
+      'a function value',
+      () => ({ toJSON: () => 1 }),
+      /^transaction\.toJSON$/,
+      'type',
+    ],
+    [
+      'a non-Uint8Array view',
+      () => ({ x: new Int8Array([1]) }),
+      /^transaction\.x$/,
+      'type',
+    ],
+    ['nesting past the depth limit', deep, /^transaction(\.deep)+$/, 'range'],
+    ['a circular reference', circular, /^transaction\.self$/, 'format'],
+  ] as const)('%s throws an InvalidParameterError naming the path', (_, input, param, reason) => {
+    expect(() => cloneTransaction(input())).toThrow(InvalidParameterError)
+    expect(() => cloneTransaction(input())).toThrow(
+      expect.objectContaining({
+        name: 'InvalidParameterError',
+        param: expect.stringMatching(param),
+        reason,
+      }),
+    )
+  })
+
+  test('`param` is rooted at the name the value was passed as', () => {
+    const errorOf = (fn: () => unknown) => {
+      try {
+        fn()
+      } catch (error) {
+        return error as InvalidParameterError
+      }
+      throw new Error('expected a throw')
+    }
+
+    const nested = errorOf(() =>
+      cloneTransaction({ raw_data: [{ x: () => 1 }] }, 'signedTransaction'),
+    )
+    expect(nested).toBeInstanceOf(InvalidParameterError)
+    expect(nested.param).toBe('signedTransaction.raw_data[0].x')
+    // The message keeps its own root label.
+    expect(nested.shortMessage).toBe(
+      'Cannot clone the transaction: `transaction.raw_data[0].x` is a function, but a signable transaction must be plain data.',
+    )
+
+    expect(errorOf(() => cloneTransaction(circular(), 'typedData')).param).toBe(
+      'typedData.self',
+    )
+    expect(errorOf(() => cloneTransaction(dag(), 'typedData')).param).toBe(
+      'typedData',
+    )
+    expect(errorOf(() => cloneTransaction(() => 1, 'typedData')).param).toBe(
+      'typedData',
+    )
   })
 })

@@ -1,7 +1,10 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 
-export type CloneTransactionErrorType = BaseErrorType | ErrorType
+export type CloneTransactionErrorType = InvalidParameterErrorType | ErrorType
 
 /**
  * Transactions nest shallowly (a contract message stays under ~10 levels);
@@ -21,6 +24,14 @@ const maxDepth = 64
  * orders of magnitude below this.
  */
 const maxValues = 1_000_000
+
+/** The root of every path quoted in an error message. */
+const rootLabel = 'transaction'
+
+/** `path` re-rooted at `name`, the parameter the cloned value was passed as. */
+function paramAt(path: string, name: string): string {
+  return `${name}${path.slice(rootLabel.length)}`
+}
 
 /**
  * Deep-copies a transaction into plain data, reading every own enumerable
@@ -50,13 +61,19 @@ const maxValues = 1_000_000
  *   the depth cap — it throws instead of exhausting memory.
  *
  * @param transaction The transaction (or any plain-data value) to snapshot.
+ * @param name The parameter the value was passed as. A thrown error's `param`
+ * is the path of the refused value below it (e.g. `transaction.raw_data.data`),
+ * or the name alone when the value is refused as a whole. Defaults to
+ * `'transaction'`.
  * @returns A structurally equal copy sharing no references with the input.
  */
 export function cloneTransaction<transaction>(
   transaction: transaction,
+  name = rootLabel,
 ): transaction {
-  return cloneValue(transaction, 'transaction', new WeakSet(), 0, {
+  return cloneValue(transaction, rootLabel, new WeakSet(), 0, {
     values: 0,
+    name,
   }) as transaction
 }
 
@@ -65,19 +82,21 @@ function cloneValue(
   path: string,
   stack: WeakSet<object>,
   depth: number,
-  copied: { values: number },
+  copied: { values: number; name: string },
 ): unknown {
   // Counted per value, leaves included, so a huge (or merely claimed — a
   // sparse array's `length`) flat container is bounded the same way.
   if (++copied.values > maxValues)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Cannot clone the transaction: too large — more than ${maxValues} values (reached at \`${path}\`). A shared or generated subtree is likely being duplicated.`,
+      { param: copied.name, reason: 'range' },
     )
 
   if (value === null || typeof value !== 'object') {
     if (typeof value === 'function' || typeof value === 'symbol')
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Cannot clone the transaction: \`${path}\` is a ${typeof value}, but a signable transaction must be plain data.`,
+        { param: paramAt(path, copied.name), reason: 'type' },
       )
     return value
   }
@@ -95,18 +114,21 @@ function cloneValue(
   if (ArrayBuffer.isView(value)) {
     const tagged = Object.prototype.toString.call(value).slice(8, -1)
     if (tagged === 'Uint8Array') return new Uint8Array(value as Uint8Array)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Cannot clone the transaction: \`${path}\` is a ${tagged}; binary data must be a Uint8Array.`,
+      { param: paramAt(path, copied.name), reason: 'type' },
     )
   }
 
   if (depth >= maxDepth)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Cannot clone the transaction: nesting at \`${path}\` exceeds ${maxDepth} levels.`,
+      { param: paramAt(path, copied.name), reason: 'range' },
     )
   if (stack.has(value))
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Cannot clone the transaction: circular reference at \`${path}\`.`,
+      { param: paramAt(path, copied.name), reason: 'format' },
     )
   stack.add(value)
 

@@ -4,6 +4,7 @@ import {
   signTransaction,
   signTransactionAs,
 } from '../../../src/accounts/utils/signTransaction.js'
+import { TransactionIntegrityError } from '../../../src/errors/transaction.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import {
@@ -132,6 +133,44 @@ describe('signTransaction', () => {
     ).toThrow(
       `The transaction's owner_address does not match the signing account (${pk1Address}).`,
     )
+  })
+
+  test('the txCheck failure is a TransactionIntegrityError without a field', () => {
+    let caught: unknown
+    try {
+      signTransaction({
+        transaction: {
+          ...triple(canonicalRawData),
+          txID: 'deadbeef'.repeat(8),
+        },
+        privateKey: pk1,
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(TransactionIntegrityError)
+    expect(caught).toMatchObject({
+      name: 'TransactionIntegrityError',
+      shortMessage: integrityError,
+    })
+    expect((caught as TransactionIntegrityError).field).toBeUndefined()
+  })
+
+  test('the owner mismatch is a TransactionIntegrityError on `owner_address`', () => {
+    let caught: unknown
+    try {
+      signTransaction({
+        transaction: triple(withOwner(canonicalRawData, pk2HexAddress)),
+        privateKey: pk1,
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(TransactionIntegrityError)
+    expect(caught).toMatchObject({
+      name: 'TransactionIntegrityError',
+      field: 'owner_address',
+    })
   })
 
   test('accepts a matching owner across address forms', () => {

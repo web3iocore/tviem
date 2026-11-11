@@ -4,6 +4,7 @@ import {
   AbiEncodingLengthMismatchError,
 } from '../../../src/errors/abi.js'
 import { InvalidHexValueError } from '../../../src/errors/encoding.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { decodeAbiParameters } from '../../../src/utils/abi/decodeAbiParameters.js'
 import { encodeAbiParameters } from '../../../src/utils/abi/encodeAbiParameters.js'
 
@@ -249,5 +250,20 @@ describe('integer values must be safe integers or bigint', () => {
     expect(() =>
       encodeAbiParameters([{ type: 'uint256' }], [9007199254740993n]),
     ).not.toThrow()
+  })
+})
+
+test('an unsafe-integer number throws an InvalidParameterError', () => {
+  let error: unknown
+  try {
+    encodeAbiParameters([{ type: 'uint256' }], [2 ** 60])
+  } catch (error_) {
+    error = error_
+  }
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'values',
+    reason: 'range',
   })
 })

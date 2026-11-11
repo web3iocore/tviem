@@ -1,10 +1,19 @@
 import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
 } from '../../errors/rpc.js'
+import {
+  PermissionError,
+  type PermissionErrorType,
+} from '../../errors/transaction.js'
 import type { ErrorType } from '../../errors/utils.js'
 import {
   type ParseAccountErrorType,
@@ -111,7 +120,9 @@ export type AccountPermissionUpdateReturnType = BuildAndBroadcastReturnType
 
 export type AccountPermissionUpdateErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
+  | MissingFieldErrorType
+  | PermissionErrorType
   | BuildAndBroadcastErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
@@ -126,7 +137,9 @@ export type BuildAccountPermissionUpdateReturnType = BuildTransactionReturnType
 
 export type BuildAccountPermissionUpdateErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
+  | MissingFieldErrorType
+  | PermissionErrorType
   | BuildTransactionErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
@@ -144,10 +157,17 @@ function toPermission(
   type: PermissionType,
 ): PermissionMessageInput {
   if (input.threshold === undefined || input.threshold === null)
-    throw new BaseError(`Invalid ${slot} permission: missing \`threshold\`.`)
+    throw new MissingFieldError(
+      `Invalid ${slot} permission: missing \`threshold\`.`,
+      { field: `${slot}.threshold` },
+    )
   if (!Array.isArray(input.keys) || input.keys.length === 0)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid ${slot} permission: \`keys\` must carry at least one signer.`,
+      {
+        param: `${slot}.keys`,
+        reason: Array.isArray(input.keys) ? 'range' : 'type',
+      },
     )
   return {
     type,
@@ -181,12 +201,14 @@ function toActivePermission(
   // say. Refuse the mismatch; an omitted id is fine (the chain assigns i + 2).
   const expectedId = index + 2
   if (id !== undefined && id !== expectedId)
-    throw new BaseError(
+    throw new PermissionError(
       `Invalid ${slot} permission: \`id\` must be ${expectedId} (active permission ids are assigned by position — the chain stores actives[${index}] as id ${expectedId}). Got ${id}.`,
+      { permissionId: id },
     )
   if (operations === undefined || operations === null)
-    throw new BaseError(
+    throw new MissingFieldError(
       `Invalid ${slot} permission: missing \`operations\` (the 32-byte bitmap of allowed contract types).`,
+      { field: `${slot}.operations` },
     )
   // java-tron rejects any other size; whole-byte hex only, since the codec
   // refuses odd-nibble strings anyway.
@@ -196,8 +218,15 @@ function toActivePermission(
       : typeof operations === 'string' &&
         /^(?:0x)?[0-9a-fA-F]{64}$/.test(operations)
   if (!is32Bytes)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid ${slot} permission: \`operations\` must be a 32-byte bitmap (64 hex chars or a 32-byte Uint8Array).`,
+      {
+        param: `${slot}.operations`,
+        reason:
+          operations instanceof Uint8Array || typeof operations === 'string'
+            ? 'format'
+            : 'type',
+      },
     )
   return {
     ...permission,
@@ -226,13 +255,20 @@ function assemble(
   // empty arrays) with an error that names the parameter, before the codec's
   // opaque required-field guard or the node does.
   if (!owner)
-    throw new BaseError(
+    throw new MissingFieldError(
       'Missing owner permission: an account permission update replaces the whole permission set, so `owner` is required.',
+      { field: 'owner' },
     )
-  if (!actives?.length)
-    throw new BaseError(
-      'Missing active permissions: an account permission update replaces the whole permission set, so `actives` must carry at least one permission.',
-    )
+  if (!actives?.length) {
+    const message =
+      'Missing active permissions: an account permission update replaces the whole permission set, so `actives` must carry at least one permission.'
+    if (actives === undefined || actives === null)
+      throw new MissingFieldError(message, { field: 'actives' })
+    throw new InvalidParameterError(message, {
+      param: 'actives',
+      reason: Array.isArray(actives) ? 'range' : 'type',
+    })
+  }
 
   // Each permission's `type` is forced from the slot it was passed in.
   const value: AccountPermissionUpdateContractInput = {

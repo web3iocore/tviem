@@ -1,11 +1,14 @@
 import type { SignableTransaction } from '../../accounts/types.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import { bareHex } from '../encoding/bareHex.js'
 import { getTransactionId } from './getTransactionId.js'
 import { type RawData, toRawDataHex } from './serializeRawData.js'
 
-export type TxCheckErrorType = BaseErrorType | ErrorType
+export type TxCheckErrorType = InvalidParameterErrorType | ErrorType
 
 /**
  * Verifies a signable transaction's `raw_data`, `raw_data_hex` and `txID`
@@ -35,10 +38,11 @@ export function txCheck(transaction: {
   raw_data_hex?: string | undefined
 }): transaction is SignableTransaction {
   if (typeof transaction !== 'object' || transaction === null)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `txCheck expects a signable transaction object (\`{ txID, raw_data, raw_data_hex }\`), got ${
         transaction === null ? 'null' : typeof transaction
       }.`,
+      { param: 'transaction', reason: 'type' },
     )
   const { txID, raw_data, raw_data_hex } = transaction
   if (!txID || !raw_data || !raw_data_hex) return false

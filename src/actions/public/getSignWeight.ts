@@ -1,7 +1,10 @@
 import type { SignableTransaction } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../errors/parameter.js'
 import type { TransactionMismatchErrorType } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
@@ -61,9 +64,9 @@ export type GetSignWeightReturnType = {
 }
 
 export type GetSignWeightErrorType =
-  | BaseErrorType
   | CanonicalizeTransactionErrorType
   | CloneTransactionErrorType
+  | MissingFieldErrorType
   | RequestErrorType
   | ToBase58ErrorType
   | TransactionMismatchErrorType
@@ -163,8 +166,9 @@ export async function getSignWeight(
   const snapshot = cloneTransaction(parameters.transaction)
 
   if (!snapshot.raw_data_hex || !snapshot.txID)
-    throw new BaseError(
+    throw new MissingFieldError(
       'getSignWeight requires a built transaction carrying `raw_data_hex` and `txID` (sign or multiSign it first).',
+      { field: !snapshot.raw_data_hex ? 'raw_data_hex' : 'txID' },
     )
 
   // The same relay boundary as broadcast: the node rebuilds the transaction

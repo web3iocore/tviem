@@ -7,7 +7,10 @@ import {
   defaultFeeLimit,
   defaultOriginEnergyLimit,
 } from '../../constants/transaction.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -210,7 +213,7 @@ export type DeployContractReturnType = BuildAndBroadcastReturnType & {
 
 export type DeployContractErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildAndBroadcastErrorType
   | EncodeDeployDataErrorType
   | GenContractAddressErrorType
@@ -229,7 +232,7 @@ export type BuildDeployContractReturnType = BuildTransactionReturnType
 
 export type BuildDeployContractErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildTransactionErrorType
   | EncodeDeployDataErrorType
   | ParseAccountErrorType
@@ -277,8 +280,9 @@ function assemble(
   // [0, 100] ("percent not in [0, 100]"), so an out-of-range value would
   // sign a doomed deployment.
   if (consumeUserResourcePercent < 0n || consumeUserResourcePercent > 100n)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid consumeUserResourcePercent: ${consumeUserResourcePercent}. Expected a percentage in [0, 100].`,
+      { param: 'consumeUserResourcePercent', reason: 'range' },
     )
 
   // Build the CreateSmartContract (constructor args ABI-encoded onto bytecode).

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { InvalidSignatureError } from '../../../src/errors/signature.js'
 import { hashMessage } from '../../../src/utils/signature/hashMessage.js'
 import { parseSignature } from '../../../src/utils/signature/sign.js'
 import { signMessage } from '../../../src/utils/signature/signMessage.js'
@@ -204,5 +205,56 @@ describe('signature component inputs', () => {
     expect(
       verifyMessage({ message, signature: { r, s, v: 29 }, address }),
     ).toBe(false)
+  })
+})
+
+describe('recoverPublicKey error classes', () => {
+  function errorOf(fn: () => unknown): unknown {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  const hash = hashMessage('hello')
+
+  test.each([
+    [
+      'a 64-byte array',
+      new Uint8Array(64),
+      'Invalid signature length: 64 bytes.',
+    ],
+    [
+      'a recovery byte outside the accepted set',
+      new Uint8Array(65).fill(5),
+      'Invalid recovery value: 5.',
+    ],
+    [
+      'malformed hex',
+      '0xzz',
+      'Invalid signature hex: expected 130 hex characters',
+    ],
+  ])('%s throws an InvalidSignatureError', (_, signature, message) => {
+    const error = errorOf(() => recoverPublicKey({ hash, signature }))
+    expect(error).toBeInstanceOf(InvalidSignatureError)
+    expect((error as InvalidSignatureError).name).toBe('InvalidSignatureError')
+    expect((error as InvalidSignatureError).shortMessage).toContain(message)
+  })
+
+  test('a component v outside the accepted set throws an InvalidSignatureError', () => {
+    const error = errorOf(() =>
+      recoverPublicKey({
+        hash,
+        signature: {
+          r: `0x${'11'.repeat(32)}`,
+          s: `0x${'22'.repeat(32)}`,
+          v: 29,
+        },
+      }),
+    )
+    expect(error).toBeInstanceOf(InvalidSignatureError)
+    expect((error as InvalidSignatureError).name).toBe('InvalidSignatureError')
   })
 })

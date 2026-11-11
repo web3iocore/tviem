@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { publicKeyToAddress } from '../../../src/utils/address/publicKeyToAddress.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 
@@ -38,5 +38,38 @@ describe('publicKeyToAddress', () => {
     expect(() => publicKeyToAddress(bytes)).toThrow(
       'must start with the `0x04` prefix byte',
     )
+  })
+})
+
+describe('publicKeyToAddress error classes', () => {
+  function errorOf(fn: () => unknown): unknown {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  test('a wrong-length key throws an InvalidParameterError', () => {
+    const error = errorOf(() => publicKeyToAddress(new Uint8Array(63)))
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'publicKey',
+      reason: 'format',
+    })
+  })
+
+  test('a 65-byte key without the 04 prefix throws an InvalidParameterError', () => {
+    const bytes = hexToBytes(v1PublicKey)
+    bytes[0] = 0x02
+    const error = errorOf(() => publicKeyToAddress(bytes))
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'publicKey',
+      reason: 'format',
+    })
   })
 })

@@ -1,5 +1,5 @@
 import type { TronNode } from '../types/transport.js'
-import { BaseError } from './base.js'
+import { BaseError, type BaseErrorOptions } from './base.js'
 
 export type TronNodeErrorParameters = {
   cause?: BaseError | Error | undefined
@@ -113,5 +113,19 @@ export class UnknownNodeError extends BaseError {
       cause,
       name: 'UnknownNodeError',
     })
+  }
+}
+
+export type NodeResponseMalformedErrorType = NodeResponseMalformedError & {
+  name: 'NodeResponseMalformedError'
+}
+/**
+ * A payload does not have the structure it is read as: a node response, or
+ * protobuf wire bytes decoded against a message schema (e.g. a contract
+ * body), whose fields or wire types differ from the expected message.
+ */
+export class NodeResponseMalformedError extends BaseError {
+  constructor(shortMessage: string, options: BaseErrorOptions = {}) {
+    super(shortMessage, { ...options, name: 'NodeResponseMalformedError' })
   }
 }

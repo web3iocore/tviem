@@ -1,8 +1,16 @@
-import { BaseError, type BaseErrorType } from '../../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../../errors/parameter.js'
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray } from '../../../types/misc.js'
 import { concatBytes } from '../../data/concat.js'
-import { int64InputToBigInt } from '../int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../int64.js'
 import { normalizeAddress } from '../normalize.js'
 import { writeUvarint } from '../protobuf/varint.js'
 import {
@@ -62,7 +70,9 @@ function fIntMapEntry(fieldNo: number, value: bigint): ByteArray {
 export type EncodeProposalCreateContractErrorType =
   | FIntErrorType
   | EncodeMessageErrorType
-  | BaseErrorType
+  | Int64InputToBigIntErrorType
+  | InvalidParameterErrorType
+  | MissingFieldErrorType
   | ErrorType
 
 /** Throws when `object` carries a defined key outside `allowed`. */
@@ -73,7 +83,10 @@ function assertOnlyKeys(
 ): void {
   for (const key of Object.keys(object))
     if (object[key] !== undefined && !allowed.includes(key))
-      throw new BaseError(`Unknown ${what} field "${key}".`)
+      throw new InvalidParameterError(`Unknown ${what} field "${key}".`, {
+        param: key,
+        reason: 'unknown-field',
+      })
 }
 
 /**
@@ -108,23 +121,38 @@ export function encodeProposalCreateContract(
   // (`parameters` is chain-required but stays optional: an empty map is
   // absent from the wire, and gold fixtures carry such cases.)
   if (message.owner_address === undefined || message.owner_address === null)
-    throw new BaseError(
+    throw new MissingFieldError(
       'Missing required field "owner_address" (unset, or set to its proto3 default).',
+      { field: 'owner_address' },
     )
   const parts: ByteArray[] = [
     fBytes(1, normalizeAddress(message.owner_address as ContractAddressInput)),
   ]
   const parameters = message.parameters ?? []
   if (!Array.isArray(parameters))
-    throw new BaseError('ProposalCreateContract.parameters must be an array.')
+    throw new InvalidParameterError(
+      'ProposalCreateContract.parameters must be an array.',
+      { param: 'parameters', reason: 'type' },
+    )
 
   const seen = new Set<bigint>()
   for (const entry of parameters) {
     assertOnlyKeys(entry, ['key', 'value'], 'proposal parameter')
-    const key = int64InputToBigInt('proposal parameter key', entry.key)
-    const value = int64InputToBigInt('proposal parameter value', entry.value)
+    const key = int64InputToBigInt(
+      'proposal parameter key',
+      entry.key,
+      'parameters',
+    )
+    const value = int64InputToBigInt(
+      'proposal parameter value',
+      entry.value,
+      'parameters',
+    )
     if (seen.has(key))
-      throw new BaseError(`Duplicate proposal parameter key ${key}.`)
+      throw new InvalidParameterError(
+        `Duplicate proposal parameter key ${key}.`,
+        { param: 'parameters', reason: 'conflict' },
+      )
     seen.add(key)
     // Each map entry force-emits BOTH fields, key and value, even at their
     // proto3 defaults (see fIntMapEntry).

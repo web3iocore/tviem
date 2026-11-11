@@ -4,7 +4,10 @@ import {
   maxAccountIdLength,
   minAccountIdLength,
 } from '../../constants/transaction.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -78,7 +81,7 @@ export type SetAccountIdReturnType = BuildAndBroadcastReturnType
 
 export type SetAccountIdErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildAndBroadcastErrorType
   | FlexErrorType
   | ParseAccountErrorType
@@ -93,7 +96,7 @@ export type BuildSetAccountIdReturnType = BuildTransactionReturnType
 
 export type BuildSetAccountIdErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildTransactionErrorType
   | FlexErrorType
   | ParseAccountErrorType
@@ -120,8 +123,9 @@ function assemble(
   const account_id = flexToHex(accountId)
   const byteLength = account_id.length / 2
   if (byteLength < minAccountIdLength || byteLength > maxAccountIdLength)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid account id: ${byteLength} bytes. Expected ${minAccountIdLength} to ${maxAccountIdLength} bytes — java-tron rejects anything outside that range.`,
+      { param: 'accountId', reason: 'range' },
     )
 
   const value: SetAccountIdContractInput = {

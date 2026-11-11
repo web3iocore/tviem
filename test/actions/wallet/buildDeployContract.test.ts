@@ -3,6 +3,7 @@ import { expect, test } from 'vitest'
 import { buildDeployContract } from '../../../src/actions/wallet/deployContract.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import type { Hex } from '../../../src/types/misc.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
@@ -164,4 +165,20 @@ test('throws on a consumeUserResourcePercent outside [0, 100]', async () => {
       }),
     ).rejects.toThrow(/Invalid consumeUserResourcePercent/)
   }
+})
+
+test('an out-of-range consumeUserResourcePercent is an InvalidParameterError', async () => {
+  const { transport } = buildMock()
+  const client = createWalletClient({ account, transport })
+
+  const err = await buildDeployContract(client, {
+    ...paramsOf(deployValueOf(basic!)),
+    consumeUserResourcePercent: 101n,
+  }).catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'consumeUserResourcePercent',
+    reason: 'range',
+  })
 })

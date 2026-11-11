@@ -1,4 +1,7 @@
-import { BaseError } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
 import { type IsHexErrorType, isHex } from '../data/isHex.js'
@@ -121,7 +124,11 @@ export type HexToBytesOpts = {
   size?: number | undefined
 }
 
-export type HexToBytesErrorType = AssertSizeErrorType | PadErrorType | ErrorType
+export type HexToBytesErrorType =
+  | AssertSizeErrorType
+  | InvalidParameterErrorType
+  | PadErrorType
+  | ErrorType
 
 /**
  * Encodes a hex string into a byte array.
@@ -156,10 +163,11 @@ export function hexToBytes(hex_: Hex, opts: HexToBytesOpts = {}): ByteArray {
     const nibbleLeft = charCodeToBase16(hexString.charCodeAt(j++))
     const nibbleRight = charCodeToBase16(hexString.charCodeAt(j++))
     if (nibbleLeft === undefined || nibbleRight === undefined) {
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid byte sequence ("${hexString[j - 2]}${
           hexString[j - 1]
         }" in "${hexString}").`,
+        { param: 'hex', reason: 'format' },
       )
     }
     bytes[index] = nibbleLeft * 16 + nibbleRight

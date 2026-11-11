@@ -1,4 +1,8 @@
-import { BaseError } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
+import type { ErrorType } from '../../errors/utils.js'
 
 /** JS `MAX_SAFE_INTEGER` as a bigint bound for int64 → JSON. */
 const maxSafe = 9007199254740991n
@@ -12,6 +16,8 @@ export function int64ToJson(value: bigint | number): number | string {
   const v = BigInt(value)
   return v >= -maxSafe && v <= maxSafe ? Number(v) : v.toString()
 }
+
+export type Int64InputToBigIntErrorType = InvalidParameterErrorType | ErrorType
 
 /**
  * Parses an encode-side `Int64` input (`bigint | number | string`) to bigint,
@@ -30,31 +36,37 @@ export function int64ToJson(value: bigint | number): number | string {
  *   bytes — as another. Only primitives, whose value is immutable between
  *   the two reads, are accepted.
  *
- * @param name Field name for the error message.
+ * @param name Label of the value in the error message.
  * @param value The caller's input.
+ * @param param The parameter or field the value was passed as, reported as
+ * the error's `param`. Defaults to `name`.
  * @returns The exact value as a bigint.
  */
 export function int64InputToBigInt(
   name: string,
   value: bigint | number | string,
+  param: string = name,
 ): bigint {
   if (typeof value === 'bigint') return value
   if (typeof value === 'number') {
     if (!Number.isSafeInteger(value))
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid ${name}: ${value} is not a safe integer. Pass a bigint (or decimal string) for values past 2^53.`,
+        { param, reason: 'range' },
       )
     return BigInt(value)
   }
   if (typeof value !== 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid ${name}: expected a bigint, number or decimal string, got ${
         value === null ? 'null' : typeof value
       }. Convert BigNumber-style objects explicitly (e.g. \`BigInt(value.toString())\`).`,
+      { param, reason: 'type' },
     )
   if (!/^-?\d+$/.test(value))
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid ${name}: "${value}" is not a decimal integer string.`,
+      { param, reason: 'format' },
     )
   return BigInt(value)
 }

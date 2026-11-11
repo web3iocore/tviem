@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { version } from '../../../src/errors/version.js'
 
 import {
@@ -1008,7 +1009,9 @@ Version: @tronweb3/tviem@${version}`,
   test('error: invalid hex', () => {
     expect(() => hexToBytes('0xabcdefgh')).toThrowError(
       expect.objectContaining({
-        name: 'BaseError',
+        name: 'InvalidParameterError',
+        param: 'hex',
+        reason: 'format',
         message: `Invalid byte sequence ("gh" in "abcdefgh").
 
 Version: @tronweb3/tviem@${version}`,
@@ -1374,4 +1377,19 @@ test('@tronweb3/tviem: odd-length hex', () => {
       188,
     ]
   `)
+})
+
+test('error: invalid hex throws an InvalidParameterError', () => {
+  let error: unknown
+  try {
+    hexToBytes('0xabcdefgh')
+  } catch (error_) {
+    error = error_
+  }
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'hex',
+    reason: 'format',
+  })
 })

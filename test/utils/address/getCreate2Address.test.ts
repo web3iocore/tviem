@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest'
 import { BaseError } from '../../../src/errors/base.js'
 import { SizeExceedsPaddingSizeError } from '../../../src/errors/data.js'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../../src/errors/parameter.js'
 import type { Hex } from '../../../src/types/misc.js'
 import { getCreate2Address } from '../../../src/utils/address/getCreate2Address.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
@@ -271,4 +275,55 @@ test('bytecode must be whole-byte hex', () => {
       bytecode: '0x0',
     }),
   ).toThrow('odd length')
+})
+
+test('error classes: bytecode / bytecodeHash checks throw an InvalidParameterError', () => {
+  const errorOf = (fn: () => unknown): unknown => {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+  const base = {
+    creatorAddress: '41a7d8a35b260395c14aa456297662092ba3b76f08',
+    salt: '0x01',
+  } as const
+
+  const both = errorOf(() =>
+    getCreate2Address({
+      ...base,
+      bytecode: '0x00',
+      bytecodeHash: `0x${'11'.repeat(32)}`,
+    } as never),
+  )
+  expect(both).toBeInstanceOf(InvalidParameterError)
+  expect(both).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'bytecode',
+    reason: 'conflict',
+  })
+
+  // Neither option: nothing was passed, so the field is missing rather than
+  // in conflict. The message is the same either way.
+  const neither = errorOf(() => getCreate2Address({ ...base } as never))
+  expect(neither).toBeInstanceOf(MissingFieldError)
+  expect(neither).toMatchObject({
+    name: 'MissingFieldError',
+    field: 'bytecode',
+  })
+  expect((neither as MissingFieldError).shortMessage).toBe(
+    (both as InvalidParameterError).shortMessage,
+  )
+
+  const shortHash = errorOf(() =>
+    getCreate2Address({ ...base, bytecodeHash: '0x1234' }),
+  )
+  expect(shortHash).toBeInstanceOf(InvalidParameterError)
+  expect(shortHash).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'bytecodeHash',
+    reason: 'format',
+  })
 })

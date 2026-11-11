@@ -24,6 +24,12 @@ type BaseErrorParameters = {
   name?: string | undefined
 }
 
+/** The `BaseError` options a named error accepts alongside its own fields. */
+export type BaseErrorOptions = Pick<
+  BaseErrorParameters,
+  'cause' | 'details' | 'metaMessages'
+>
+
 export type BaseErrorType = BaseError & { name: 'BaseError' }
 export class BaseError extends Error {
   details: string

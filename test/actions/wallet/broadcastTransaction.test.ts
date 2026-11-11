@@ -3,6 +3,7 @@ import { broadcastTransaction } from '../../../src/actions/wallet/broadcastTrans
 import { createClient } from '../../../src/clients/createClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { TronBroadcastError } from '../../../src/errors/node.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   TransactionExpiredError,
   TronRpcError,
@@ -374,4 +375,27 @@ test('defuses a nested getter that swaps the body after the integrity check', as
     honest.contract[0]!.parameter.value,
   )
   expect(response.txid).toBe(TX_ID)
+})
+
+test('a non-data value in the signed transaction is reported under `signedTransaction`', async () => {
+  const { transport, calls } = createMockTransport({ responses: {} })
+  const client = createClient({ transport })
+
+  const error = await broadcastTransaction(client, {
+    signedTransaction: {
+      ...signedTransaction,
+      raw_data: { ...signedTransaction.raw_data, data: (() => 'aa') as never },
+    },
+  }).catch((e) => e)
+  expect(error).toBeInstanceOf(InvalidParameterError)
+  expect(error).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'signedTransaction.raw_data.data',
+    reason: 'type',
+  })
+  // The message keeps its own root label.
+  expect(error.shortMessage).toBe(
+    'Cannot clone the transaction: `transaction.raw_data.data` is a function, but a signable transaction must be plain data.',
+  )
+  expect(calls).toHaveLength(0)
 })

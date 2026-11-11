@@ -3,11 +3,18 @@ import {
   type ParsePrivateKeyErrorType,
   parsePrivateKey,
 } from '../../accounts/utils/parsePrivateKey.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import {
   InvalidHashError,
   type InvalidHashErrorType,
 } from '../../errors/data.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
+import {
+  InvalidSignatureError,
+  type InvalidSignatureErrorType,
+} from '../../errors/signature.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
 import { type HexToBytesErrorType, hexToBytes } from '../encoding/toBytes.js'
@@ -24,13 +31,13 @@ export type Signature = {
   yParity: number
 }
 
-export type SerializeSignatureErrorType = BaseErrorType | ErrorType
+export type SerializeSignatureErrorType = InvalidSignatureErrorType | ErrorType
 
 /** Exactly 32 bytes of hex, or a structured error naming the component. */
 function componentHex(name: 'r' | 's', value: Hex): string {
   const clean = value.startsWith('0x') ? value.slice(2) : value
   if (!/^[0-9a-fA-F]{64}$/.test(clean))
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid signature ${name}: expected 32 bytes of hex, got "${value}".`,
     )
   return clean
@@ -69,18 +76,18 @@ export function serializeSignature({
     if (v !== undefined) {
       const n = Number(v)
       if (n !== 27 && n !== 28)
-        throw new BaseError(`Invalid v: ${v}. Expected 27 or 28.`)
+        throw new InvalidSignatureError(`Invalid v: ${v}. Expected 27 or 28.`)
       return n
     }
     if (yParity === 0 || yParity === 1) return yParity + 27
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid yParity: ${yParity}. Expected 0 or 1 (or a v of 27 or 28).`,
     )
   })()
   return `0x${componentHex('r', r)}${componentHex('s', s)}${vByte.toString(16)}` as Hex
 }
 
-export type ParseSignatureErrorType = BaseErrorType | ErrorType
+export type ParseSignatureErrorType = InvalidSignatureErrorType | ErrorType
 
 /**
  * Splits a 65-byte `r(32) ++ s(32) ++ v(1)` signature into its components. The
@@ -94,7 +101,7 @@ export type ParseSignatureErrorType = BaseErrorType | ErrorType
 export function parseSignature(signature: Hex | string): Signature {
   const clean = signature.startsWith('0x') ? signature.slice(2) : signature
   if (!/^[0-9a-fA-F]{130}$/.test(clean))
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid signature hex: expected 130 hex characters (r ++ s ++ v), got ${clean.length}.`,
     )
   const r = `0x${clean.slice(0, 64).toLowerCase()}` as Hex
@@ -103,7 +110,7 @@ export function parseSignature(signature: Hex | string): Signature {
   const yParity = (() => {
     if (vByte === 0 || vByte === 1) return vByte
     if (vByte === 27 || vByte === 28) return vByte - 27
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid recovery value: ${vByte}. Expected 0, 1, 27 or 28.`,
     )
   })()
@@ -142,10 +149,11 @@ export type SignReturnType<to extends SignTo = 'object'> =
   | (to extends 'bytes' ? ByteArray : never)
 
 export type SignErrorType =
-  | BaseErrorType
   | HexToBytesErrorType
   | InvalidHashErrorType
+  | InvalidParameterErrorType
   | ParsePrivateKeyErrorType
+  | SerializeSignatureErrorType
   | ErrorType
 
 /**
@@ -188,8 +196,9 @@ export function sign<to extends SignTo = 'object'>({
   const entropy = (() => {
     if (typeof extraEntropy !== 'string') return extraEntropy
     if (!/^0x([0-9a-fA-F]{2})+$/.test(extraEntropy))
-      throw new BaseError(
+      throw new InvalidParameterError(
         'Invalid extraEntropy: expected 0x-prefixed hex of one or more whole bytes.',
+        { param: 'extraEntropy', reason: 'format' },
       )
     return hexToBytes(extraEntropy)
   })()

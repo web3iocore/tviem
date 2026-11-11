@@ -1,5 +1,6 @@
-import { BaseError } from '../../errors/base.js'
 import {
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
   UnknownContractTypeError,
   type UnknownContractTypeErrorType,
 } from '../../errors/transaction.js'
@@ -92,8 +93,9 @@ function decodeContract(bytes: ByteArray): RawContract {
     // just uninterpreted. Such a contract can be read; it never re-serializes
     // (no codec means no byte verification), so it cannot be signed.
     if (typeUrl !== `${contractTypeUrlPrefix}${typeName}`)
-      throw new BaseError(
+      throw new TransactionIntegrityError(
         `Contract type "${typeName}" does not match its parameter type URL "${typeUrl}".`,
+        { field: 'contract.parameter.type_url' },
       )
     const contract = {
       type: typeName,
@@ -109,8 +111,9 @@ function decodeContract(bytes: ByteArray): RawContract {
   // The type integer and the Any type URL must denote the same contract — a
   // model whose label misrepresents its payload must never decode.
   if (getContractCodecByTypeUrl(typeUrl)?.type !== type)
-    throw new BaseError(
+    throw new TransactionIntegrityError(
       `Contract type "${typeName}" does not match its parameter type URL "${typeUrl}".`,
+      { field: 'contract.parameter.type_url' },
     )
   // `type` and `value` are correlated by the codec lookup above; the union
   // member is asserted rather than re-derived per type.
@@ -128,8 +131,10 @@ function decodeContract(bytes: ByteArray): RawContract {
 export type DecodeRawDataErrorType =
   | ReadFieldsErrorType
   | UnknownContractTypeErrorType
-  // Contract-body decode errors (unknown wire field, type/type-URL
-  // mismatch): `BaseErrorType` via the codec decode surface.
+  // Contract type / type-URL mismatch.
+  | TransactionIntegrityErrorType
+  // Contract-body decode errors (unknown wire field) via the codec decode
+  // surface.
   | DecodeMessageErrorType
   | ErrorType
 

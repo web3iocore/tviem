@@ -1,4 +1,8 @@
 import { expect, test } from 'vitest'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../../../src/errors/parameter.js'
 import { bareHex } from '../../../../src/utils/encoding/bareHex.js'
 import { hexToBytes } from '../../../../src/utils/encoding/toBytes.js'
 import { bytesToHex } from '../../../../src/utils/encoding/toHex.js'
@@ -162,4 +166,76 @@ test('rejects a hex-string / unsafe-number key or value', () => {
       parameters: [{ key: 1n, value: Number.MAX_SAFE_INTEGER + 2 }],
     }),
   ).toThrow(/proposal parameter value/)
+})
+
+test.each([
+  [
+    'an unknown top-level field',
+    { owner_address: owner, extra: 1 },
+    'extra',
+    'unknown-field',
+  ],
+  [
+    'an unknown map-entry field',
+    { owner_address: owner, parameters: [{ key: 1n, value: 1n, note: 1 }] },
+    'note',
+    'unknown-field',
+  ],
+  [
+    'a non-array parameters',
+    { owner_address: owner, parameters: {} },
+    'parameters',
+    'type',
+  ],
+  [
+    'a duplicate key',
+    {
+      owner_address: owner,
+      parameters: [
+        { key: 1n, value: 1n },
+        { key: 1, value: 2n },
+      ],
+    },
+    'parameters',
+    'conflict',
+  ],
+])('%s throws an InvalidParameterError', (_, message, param, reason) => {
+  const encode = () => encodeProposalCreateContract(message as never)
+  expect(encode).toThrow(InvalidParameterError)
+  expect(encode).toThrow(
+    expect.objectContaining({ name: 'InvalidParameterError', param, reason }),
+  )
+})
+
+test('a missing owner_address throws a MissingFieldError', () => {
+  const encode = () => encodeProposalCreateContract({ parameters: [] } as never)
+  expect(encode).toThrow(MissingFieldError)
+  expect(encode).toThrow(
+    expect.objectContaining({
+      name: 'MissingFieldError',
+      field: 'owner_address',
+    }),
+  )
+})
+
+test.each([
+  ['a fractional key', [{ key: 1.5, value: 1 }], 'key', 'range'],
+  ['a hex-string key', [{ key: '0x10', value: 1n }], 'key', 'format'],
+  ['an object value', [{ key: 1n, value: {} }], 'value', 'type'],
+  ['an unsafe-number value', [{ key: 1n, value: 2 ** 53 }], 'value', 'range'],
+])('%s reports `parameters` as the param', (_, parameters, part, reason) => {
+  const encode = () =>
+    encodeProposalCreateContract({
+      owner_address: owner,
+      parameters,
+    } as never)
+  expect(encode).toThrow(InvalidParameterError)
+  expect(encode).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'parameters',
+      reason,
+    }),
+  )
+  expect(encode).toThrow(`Invalid proposal parameter ${part}: `)
 })

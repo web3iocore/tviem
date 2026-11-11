@@ -1,9 +1,12 @@
-import { BaseError } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 
 type NormalizeSignatureParameters = string
 type NormalizeSignatureReturnType = string
-export type NormalizeSignatureErrorType = ErrorType
+export type NormalizeSignatureErrorType = InvalidParameterErrorType | ErrorType
 
 export function normalizeSignature(
   signature: NormalizeSignatureParameters,
@@ -58,7 +61,11 @@ export function normalizeSignature(
     current += char
   }
 
-  if (!valid) throw new BaseError('Unable to normalize signature.')
+  if (!valid)
+    throw new InvalidParameterError('Unable to normalize signature.', {
+      param: 'signature',
+      reason: 'format',
+    })
 
   // Canonicalize bare integer aliases (`uint` → `uint256`, `int` → `int256`);
   // the ABI signature that gets hashed always uses the sized form. The

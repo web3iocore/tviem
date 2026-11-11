@@ -4,7 +4,10 @@ import {
   multiSignTransaction,
 } from '../../accounts/utils/multiSignTransaction.js'
 import type { Client } from '../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -59,7 +62,7 @@ export type MultiSignErrorType =
   | AssertSigningAccountErrorType
   | MultiSignTransactionErrorType
   | ParseAccountErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 /**
@@ -92,8 +95,9 @@ export async function multiSign(
   if (privateKey !== undefined) {
     // Two named signers: signing with either would silently ignore the other.
     if (parameters.account !== undefined)
-      throw new BaseError(
+      throw new InvalidParameterError(
         'multiSign takes either `account` or `privateKey`, not both.',
+        { param: 'account', reason: 'conflict' },
       )
     return multiSignTransaction({ transaction, privateKey, permissionId })
   }
@@ -105,8 +109,9 @@ export async function multiSign(
   // Optional on a custom account: a caller-supplied signer may not co-sign.
   const coSign = account.multiSign?.bind(account)
   if (typeof coSign !== 'function')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `The account (${account.address}) does not implement \`multiSign\`.`,
+      { param: 'account.multiSign', reason: 'type' },
     )
   return signWithCheck(transaction, (unsigned) =>
     coSign(unsigned, { permissionId }),

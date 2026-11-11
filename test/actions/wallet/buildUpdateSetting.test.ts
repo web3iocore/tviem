@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
-
 import { buildUpdateSetting } from '../../../src/actions/wallet/updateSetting.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
@@ -65,4 +65,22 @@ test('throws on a consumeUserResourcePercent outside [0, 100]', async () => {
       }),
     ).rejects.toThrow(/Invalid consumeUserResourcePercent/)
   }
+})
+
+test('an out-of-range consumeUserResourcePercent is an InvalidParameterError', async () => {
+  const client = makeTviemClient()
+
+  const err = await client
+    .buildUpdateSetting({
+      contractAddress,
+      consumeUserResourcePercent: 101n,
+      blockHeader: tviemHeader,
+    })
+    .catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'consumeUserResourcePercent',
+    reason: 'range',
+  })
 })

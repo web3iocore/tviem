@@ -1,6 +1,9 @@
 import type { TronAccount } from '../../accounts/types.js'
 import type { Client } from '../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   AccountNotFoundError,
   type AccountNotFoundErrorType,
@@ -15,7 +18,10 @@ import {
   type AddressToHexErrorType,
   addressToHex,
 } from '../../utils/address/addressToHex.js'
-import { int64InputToBigInt } from '../../utils/transaction/int64.js'
+import {
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../../utils/transaction/int64.js'
 import {
   ContractType,
   contractTypeUrlPrefix,
@@ -83,8 +89,9 @@ export type CreateProposalReturnType = BuildAndBroadcastReturnType
 
 export type CreateProposalErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildAndBroadcastErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
   | ErrorType
@@ -97,8 +104,9 @@ export type BuildCreateProposalReturnType = BuildTransactionReturnType
 
 export type BuildCreateProposalErrorType =
   | AccountNotFoundErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | BuildTransactionErrorType
+  | Int64InputToBigIntErrorType
   | ParseAccountErrorType
   | AddressToHexErrorType
   | ErrorType
@@ -116,14 +124,23 @@ function normalizeParameters(
 ): { key: bigint; value: bigint }[] {
   const entries = Array.isArray(input)
     ? input.map((entry) => ({
-        key: int64InputToBigInt('proposal parameter key', entry.key),
-        value: int64InputToBigInt('proposal parameter value', entry.value),
+        key: int64InputToBigInt(
+          'proposal parameter key',
+          entry.key,
+          'parameters',
+        ),
+        value: int64InputToBigInt(
+          'proposal parameter value',
+          entry.value,
+          'parameters',
+        ),
       }))
     : Object.keys(input).map((key) => ({
-        key: int64InputToBigInt('proposal parameter key', key),
+        key: int64InputToBigInt('proposal parameter key', key, 'parameters'),
         value: int64InputToBigInt(
           'proposal parameter value',
           input[key as unknown as number] as number | bigint,
+          'parameters',
         ),
       }))
   // `parameters` is a proto3 `map<int64,int64>`: a parser keeps only the LAST
@@ -132,8 +149,9 @@ function normalizeParameters(
   const seen = new Set<bigint>()
   for (const { key } of entries) {
     if (seen.has(key))
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Duplicate proposal parameter key: ${key}. Each chain-parameter id may appear at most once.`,
+        { param: 'parameters', reason: 'conflict' },
       )
     seen.add(key)
   }

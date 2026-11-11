@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
+} from '../../errors/transaction.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
 import type { Hex } from '../../types/misc.js'
@@ -58,7 +61,7 @@ export type SignTransactionErrorType =
   | IsAddressEqualErrorType
   | AddressToHexErrorType
   | SignErrorType
-  | BaseErrorType
+  | TransactionIntegrityErrorType
   | ErrorType
 
 /**
@@ -128,7 +131,9 @@ export function signTransactionAs(
   const transaction = cloneTransaction(parameters.transaction)
 
   if (!txCheck(transaction))
-    throw new BaseError('The transaction failed its integrity check (txCheck).')
+    throw new TransactionIntegrityError(
+      'The transaction failed its integrity check (txCheck).',
+    )
 
   const { raw_data, txID } = transaction
   const value = raw_data.contract[0]?.parameter.value
@@ -137,8 +142,9 @@ export function signTransactionAs(
     owner === undefined ||
     !isAddressEqual(addressToHex(owner as AddressInput), address)
   )
-    throw new BaseError(
+    throw new TransactionIntegrityError(
       `The transaction's owner_address does not match the signing account (${address}).`,
+      { field: 'owner_address' },
     )
 
   const sig = bareHex(

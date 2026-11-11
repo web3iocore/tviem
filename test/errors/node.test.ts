@@ -2,12 +2,14 @@ import { expect, test } from 'vitest'
 
 import { BaseError } from '../../src/errors/base.js'
 import {
+  NodeResponseMalformedError,
   TronBroadcastError,
   TronContractValidateError,
   TronNodeError,
   TronValidationError,
   UnknownNodeError,
 } from '../../src/errors/node.js'
+import { version } from '../../src/errors/version.js'
 
 test('TronNodeError carries code / node / path / response', () => {
   const err = new TronNodeError('boom', {
@@ -92,4 +94,29 @@ test('UnknownNodeError wraps an unexpected cause and is not a TronNodeError', ()
   expect(err).not.toBeInstanceOf(TronNodeError)
   expect(err.name).toBe('UnknownNodeError')
   expect(err.details).toBe('weird')
+})
+
+test('NodeResponseMalformedError', () => {
+  const err = new NodeResponseMalformedError(
+    'Unknown wire field 9 (wire type 0) in contract message.',
+  )
+  expect(err).toBeInstanceOf(BaseError)
+  expect(err).not.toBeInstanceOf(TronNodeError)
+  expect(err.name).toBe('NodeResponseMalformedError')
+  expect(
+    err.message,
+  ).toBe(`Unknown wire field 9 (wire type 0) in contract message.
+
+Version: @tronweb3/tviem@${version}`)
+})
+
+test('NodeResponseMalformedError passes cause and metaMessages through', () => {
+  const cause = new Error('boom')
+  const err = new NodeResponseMalformedError('Malformed payload.', {
+    cause,
+    metaMessages: ['meta'],
+  })
+  expect(err.cause).toBe(cause)
+  expect(err.details).toBe('boom')
+  expect(err.metaMessages).toEqual(['meta'])
 })

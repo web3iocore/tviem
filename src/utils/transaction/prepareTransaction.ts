@@ -1,4 +1,11 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
+import {
+  InvalidBlockHeaderError,
+  type InvalidBlockHeaderErrorType,
+} from '../../errors/transaction.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { RawDataInput } from './serializeRawData.js'
 
@@ -37,7 +44,9 @@ export type RefBlockParams = {
   ref_block_hash: string
 }
 
-export type DeriveRefBlockParamsErrorType = BaseErrorType | ErrorType
+export type DeriveRefBlockParamsErrorType =
+  | InvalidParameterErrorType
+  | ErrorType
 
 const blockIdRegex = /^[0-9a-fA-F]{64}$/
 
@@ -56,7 +65,7 @@ const blockIdRegex = /^[0-9a-fA-F]{64}$/
  *   safe-integer `number`.
  * @param blockID Block id: a 32-byte hash hex (bare or `0x`-prefixed).
  * @returns Reference block parameters.
- * @throws {BaseError} If `blockNumber` or `blockID` is invalid.
+ * @throws {InvalidParameterError} If `blockNumber` or `blockID` is invalid.
  */
 export function deriveRefBlockParams(
   blockNumber: bigint | number,
@@ -67,16 +76,18 @@ export function deriveRefBlockParams(
   // with its own conversions — one rendering vetted, another sliced into the
   // wire. A primitive cannot change between the check and the use.
   if (typeof blockNumber !== 'number' && typeof blockNumber !== 'bigint')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockNumber: expected a number or bigint block height, got ${
         blockNumber === null ? 'null' : typeof blockNumber
       }.`,
+      { param: 'blockNumber', reason: 'type' },
     )
   if (typeof blockID !== 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockID: expected a block hash hex string, got ${
         blockID === null ? 'null' : typeof blockID
       }.`,
+      { param: 'blockID', reason: 'type' },
     )
   // Only the low 2 bytes are read, so a bigint needs no upper bound — but a
   // `number` past 2^53 - 1 no longer holds every integer, and a fractional or
@@ -85,24 +96,28 @@ export function deriveRefBlockParams(
     typeof blockNumber === 'number' &&
     (!Number.isSafeInteger(blockNumber) || blockNumber < 0)
   )
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockNumber: ${blockNumber}. Expected a non-negative safe-integer block height.`,
+      { param: 'blockNumber', reason: 'range' },
     )
   if (typeof blockNumber === 'bigint' && blockNumber < 0n)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockNumber: ${blockNumber}. Expected a non-negative block height.`,
+      { param: 'blockNumber', reason: 'range' },
     )
   const id = blockID.startsWith('0x') ? blockID.slice(2) : blockID
   if (!blockIdRegex.test(id))
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockID: ${blockID}. Expected a 32-byte block hash (64 hex characters, with an optional 0x prefix).`,
+      { param: 'blockID', reason: 'format' },
     )
   const refBlockBytes = blockNumber.toString(16).slice(-4).padStart(4, '0')
   return { ref_block_bytes: refBlockBytes, ref_block_hash: id.slice(16, 32) }
 }
 
 export type FillBlockHeaderErrorType =
-  | BaseErrorType
+  | InvalidParameterErrorType
+  | InvalidBlockHeaderErrorType
   | DeriveRefBlockParamsErrorType
   | ErrorType
 
@@ -140,13 +155,15 @@ export function fillBlockHeader(
       typeof options.expirationMs === 'number' &&
       !Number.isInteger(options.expirationMs)
     )
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid expirationMs: ${options.expirationMs}. Expected an integer number of milliseconds.`,
+        { param: 'expirationMs', reason: 'range' },
       )
     lifetimeMs = BigInt(options.expirationMs)
     if (lifetimeMs <= 0n || lifetimeMs > maxExpirationMs)
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid expirationMs: ${lifetimeMs}. Expected a lifetime in (0, ${maxExpirationMs}] ms — java-tron caps expiration at 24 hours past the reference block.`,
+        { param: 'expirationMs', reason: 'range' },
       )
   }
   // A usable TaPoS reference needs all three fields to be real. `formatBlock`
@@ -160,7 +177,7 @@ export function fillBlockHeader(
     ? block.blockID.slice(2)
     : block.blockID
   if (BigInt(block.number) <= 0n || timestamp <= 0n || !blockIdRegex.test(id))
-    throw new BaseError(
+    throw new InvalidBlockHeaderError(
       'Cannot derive TaPoS reference fields from an incomplete block: a positive number, a positive timestamp and a 32-byte blockID are required.',
     )
   return {

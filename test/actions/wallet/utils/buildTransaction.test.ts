@@ -1,10 +1,16 @@
 import { expect, expectTypeOf, test } from 'vitest'
 import type { SignableTransaction } from '../../../../src/accounts/types.js'
 import {
+  type BuildTransactionErrorType,
   buildTransaction,
   type TransactionHeader,
 } from '../../../../src/actions/wallet/utils/buildTransaction.js'
 import { createPublicClient } from '../../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../../src/errors/parameter.js'
+import {
+  InvalidBlockHeaderError,
+  PermissionError,
+} from '../../../../src/errors/transaction.js'
 import { addressToHex } from '../../../../src/utils/address/addressToHex.js'
 import {
   ContractType,
@@ -280,5 +286,92 @@ test('the built raw_data is the decoded model: its contract narrows by `type`', 
   expect(amount).toBe(1000000)
   expectTypeOf(tx.raw_data.expiration).toEqualTypeOf<
     number | string | undefined
+  >()
+})
+
+test('validation errors carry their class and the parameter they refer to', async () => {
+  const { transport } = buildMock()
+  const client = createPublicClient({ transport })
+  const failure = (
+    parameters: Partial<Parameters<typeof buildTransaction>[1]>,
+  ) =>
+    buildTransaction(client, {
+      contract: freezeContract(),
+      blockHeader: goodHeader,
+      ...parameters,
+    }).catch((e) => e)
+
+  for (const [parameters, param, reason] of [
+    [{ memo: 5 as never }, 'memo', 'type'],
+    [{ memo: '0x' }, 'memo', 'range'],
+    [{ memo: '0xabc' }, 'memo', 'format'],
+    [
+      { blockHeader: { ...goodHeader, ref_block_bytes: '123' } },
+      'blockHeader.ref_block_bytes',
+      'format',
+    ],
+    [
+      { blockHeader: { ...goodHeader, ref_block_bytes: 5 as never } },
+      'blockHeader.ref_block_bytes',
+      'type',
+    ],
+    [
+      { blockHeader: { ...goodHeader, ref_block_hash: '01020304' } },
+      'blockHeader.ref_block_hash',
+      'format',
+    ],
+    [
+      { blockHeader: { ...goodHeader, ref_block_hash: 5 as never } },
+      'blockHeader.ref_block_hash',
+      'type',
+    ],
+    [
+      { blockHeader: { ...goodHeader, timestamp: 0 } },
+      'blockHeader.timestamp',
+      'range',
+    ],
+    [
+      { blockHeader: { ...goodHeader, expiration: 0 } },
+      'blockHeader.expiration',
+      'range',
+    ],
+  ] as const) {
+    const err = await failure(parameters)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({ name: 'InvalidParameterError', param, reason })
+  }
+
+  const badPermissionId = await failure({ permissionId: -1 })
+  expect(badPermissionId).toBeInstanceOf(PermissionError)
+  expect(badPermissionId).toMatchObject({
+    name: 'PermissionError',
+    permissionId: -1,
+  })
+})
+
+test('an incomplete reference block is an InvalidBlockHeaderError, named by the error union', async () => {
+  // A block whose header omits the timestamp (decoded as 0) cannot supply
+  // the TaPoS and timing fields.
+  const block = rpc<{ block_header: { raw_data: { timestamp?: number } } }>(
+    'getnowblock.fixed',
+  )
+  const { timestamp: _, ...rawData } = block.block_header.raw_data
+  const { transport } = createMockTransport({
+    responses: {
+      getnowblock: {
+        response: { ...block, block_header: { raw_data: rawData } },
+      },
+    },
+  })
+  const client = createPublicClient({ transport })
+
+  const error = await buildTransaction(client, {
+    contract: freezeContract(),
+  }).catch((e) => e)
+  expect(error).toBeInstanceOf(InvalidBlockHeaderError)
+  expect(error.name).toBe('InvalidBlockHeaderError')
+
+  expectTypeOf<'InvalidBlockHeaderError'>().toExtend<
+    BuildTransactionErrorType['name']
   >()
 })

@@ -1,4 +1,9 @@
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { AddressInput } from '../../types/address.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
@@ -41,7 +46,8 @@ export type GetCreate2AddressParameters = {
 
 export type GetCreate2AddressErrorType =
   | AssertHexBytesErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
+  | MissingFieldErrorType
   | BytesToHexErrorType
   | NormalizeAddressErrorType
   | Keccak256ErrorType
@@ -65,18 +71,25 @@ export function getCreate2Address(
   parameters: GetCreate2AddressParameters,
 ): string {
   const { creatorAddress, salt, bytecode, bytecodeHash } = parameters
-  if ((bytecode === undefined) === (bytecodeHash === undefined))
-    throw new BaseError(
-      'Cannot derive a CREATE2 address: pass exactly one of bytecode or bytecodeHash.',
-    )
+  if ((bytecode === undefined) === (bytecodeHash === undefined)) {
+    const message =
+      'Cannot derive a CREATE2 address: pass exactly one of bytecode or bytecodeHash.'
+    if (bytecode === undefined)
+      throw new MissingFieldError(message, { field: 'bytecode' })
+    throw new InvalidParameterError(message, {
+      param: 'bytecode',
+      reason: 'conflict',
+    })
+  }
   let initCodeHash: string
   if (bytecodeHash !== undefined) {
     initCodeHash = toBareHex(bytecodeHash)
     // A wrong-size digest would shift every byte after it in the 85-byte
     // preimage and still hash to a plausible-looking address.
     if (initCodeHash.length !== 64)
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid bytecodeHash: ${initCodeHash.length} hex chars. Expected a 32-byte (64 hex char) keccak256 digest of the init code.`,
+        { param: 'bytecodeHash', reason: 'format' },
       )
   } else {
     const bytecodeHex = `0x${toBareHex(bytecode!)}` as Hex

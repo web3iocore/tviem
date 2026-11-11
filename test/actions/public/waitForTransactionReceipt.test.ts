@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { waitForTransactionReceipt } from '../../../src/actions/public/waitForTransactionReceipt.js'
 import type { Client } from '../../../src/clients/createClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   TransactionRevertedError,
   TronRpcError,
@@ -405,6 +406,23 @@ test('rejects invalid caller parameters up front', async () => {
   await expect(
     waitForTransactionReceipt(client, { hash: 'dead', confirmations: 1.5 }),
   ).rejects.toThrow('Invalid confirmations')
+})
+
+test.each([
+  ['timeout', { timeout: -1 }],
+  ['pollingInterval', { pollingInterval: -1 }],
+  ['confirmations', { confirmations: 0 }],
+])('reports an invalid `%s` as an InvalidParameterError', async (param, options) => {
+  const client = makeClient({})
+
+  const err = (await waitForTransactionReceipt(client, {
+    hash: 'dead',
+    ...options,
+  }).catch((e) => e)) as InvalidParameterError
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.name).toBe('InvalidParameterError')
+  expect(err.param).toBe(param)
+  expect(err.reason).toBe('range')
 })
 
 // The deadline is wall-clock, not a between-sleeps check: it fires even while

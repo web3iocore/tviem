@@ -1,6 +1,9 @@
 import type { HDKey } from '@scure/bip32'
 
-import { BaseError, type BaseErrorType } from '../errors/base.js'
+import {
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from '../errors/parameter.js'
 import type { ErrorType } from '../errors/utils.js'
 import {
   type BytesToHexErrorType,
@@ -38,7 +41,7 @@ export type HDOptions =
 export type HdKeyToAccountErrorType =
   | PrivateKeyToAccountErrorType
   | BytesToHexErrorType
-  | BaseErrorType
+  | MissingFieldErrorType
   | ErrorType
 
 /**
@@ -59,8 +62,9 @@ export function hdKeyToAccount(
     path ?? `m/44'/195'/${accountIndex}'/${changeIndex}/${addressIndex}`,
   )
   if (!derived.privateKey)
-    throw new BaseError(
+    throw new MissingFieldError(
       'The derived HD node has no private key (a public-only node cannot sign).',
+      { field: 'privateKey' },
     )
 
   const account = privateKeyToAccount(bytesToHex(derived.privateKey))

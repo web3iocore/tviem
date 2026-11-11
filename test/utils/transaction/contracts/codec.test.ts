@@ -1,4 +1,9 @@
 import { expect, test } from 'vitest'
+import { NodeResponseMalformedError } from '../../../../src/errors/node.js'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../../../src/errors/parameter.js'
 
 import { concatBytes } from '../../../../src/utils/data/concat.js'
 import { hexToBytes } from '../../../../src/utils/encoding/toBytes.js'
@@ -210,4 +215,60 @@ test("negative int64 round-trips through two's-complement encoding", () => {
   const encoded = encodeMessage(spec, { amount: -3n })
   expect(bytesToHex(encoded)).toBe('0x18fdffffffffffffffff01')
   expect(decodeMessage(spec, encoded).amount).toBe(-3)
+})
+
+test.each([
+  [
+    'a field outside the schema',
+    { amount: 1n, memo: 'claim' },
+    'memo',
+    'unknown-field',
+  ],
+  ['an unknown enum name', { mode: 'TURBO' }, 'mode', 'range'],
+  ['a non-boolean bool field', { flag: 'false' }, 'flag', 'type'],
+])('encodeMessage: %s throws an InvalidParameterError', (_, message, param, reason) => {
+  expect(() => encodeMessage(spec, message)).toThrow(InvalidParameterError)
+  expect(() => encodeMessage(spec, message)).toThrow(
+    expect.objectContaining({ name: 'InvalidParameterError', param, reason }),
+  )
+})
+
+test.each([
+  ['absent', { ...requiredOk, amount: undefined }, 'amount'],
+  ['null', { ...requiredOk, amount: null }, 'amount'],
+])('encodeMessage: a required field %s throws a MissingFieldError', (_, message, field) => {
+  const encode = () => encodeMessage(requiredSpec, message)
+  expect(encode).toThrow(MissingFieldError)
+  expect(encode).toThrow(
+    expect.objectContaining({ name: 'MissingFieldError', field }),
+  )
+})
+
+// A supplied value that encodes to nothing is present, so it is reported as
+// an out-of-range value rather than a missing field. The message is shared.
+test.each([
+  ['zero (the proto3 default)', { ...requiredOk, amount: 0n }, 'amount'],
+  ['empty bytes', { ...requiredOk, payload: '0x' }, 'payload'],
+  ['an empty repeated list', { ...requiredOk, items: [] }, 'items'],
+])('encodeMessage: a required field set to %s throws an InvalidParameterError', (_, message, param) => {
+  const encode = () => encodeMessage(requiredSpec, message)
+  expect(encode).toThrow(InvalidParameterError)
+  expect(encode).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param,
+      reason: 'range',
+    }),
+  )
+  expect(encode).toThrow(
+    `Missing required field "${param}" (unset, or set to its proto3 default).`,
+  )
+})
+
+test('decodeMessage: a wire field outside the schema throws a NodeResponseMalformedError', () => {
+  const decode = () => decodeMessage(spec, hexToBytes('0x1a020102'))
+  expect(decode).toThrow(NodeResponseMalformedError)
+  expect(decode).toThrow(
+    expect.objectContaining({ name: 'NodeResponseMalformedError' }),
+  )
 })

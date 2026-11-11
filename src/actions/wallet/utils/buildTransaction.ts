@@ -1,6 +1,13 @@
 import type { SignableTransaction } from '../../../accounts/types.js'
 import type { Client } from '../../../clients/createClient.js'
-import { BaseError, type BaseErrorType } from '../../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../../errors/parameter.js'
+import {
+  PermissionError,
+  type PermissionErrorType,
+} from '../../../errors/transaction.js'
 import type { ErrorType } from '../../../errors/utils.js'
 import type { ByteArray, Hex } from '../../../types/misc.js'
 import {
@@ -13,9 +20,12 @@ import {
   type DecodeRawDataErrorType,
   decodeRawData,
 } from '../../../utils/transaction/decodeRawData.js'
-import { int64InputToBigInt } from '../../../utils/transaction/int64.js'
 import {
-  type DeriveRefBlockParamsErrorType,
+  type Int64InputToBigIntErrorType,
+  int64InputToBigInt,
+} from '../../../utils/transaction/int64.js'
+import {
+  type FillBlockHeaderErrorType,
   fillBlockHeader,
 } from '../../../utils/transaction/prepareTransaction.js'
 import {
@@ -103,10 +113,12 @@ export type BuildTransactionReturnType = SignableTransaction & {
 
 export type BuildTransactionErrorType =
   | BareHexErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
+  | PermissionErrorType
   | DecodeRawDataErrorType
-  | DeriveRefBlockParamsErrorType
+  | FillBlockHeaderErrorType
   | GetNowBlockErrorType
+  | Int64InputToBigIntErrorType
   | SerializeRawDataErrorType
   | Sha256ErrorType
   | ErrorType
@@ -145,17 +157,20 @@ export async function buildTransaction(
   let data: string | undefined
   if (memo !== undefined) {
     if (typeof memo !== 'string' && !(memo instanceof Uint8Array))
-      throw new BaseError(
+      throw new InvalidParameterError(
         'Invalid memo: expected `0x`-prefixed hex or raw bytes (Uint8Array).',
+        { param: 'memo', reason: 'type' },
       )
     data = bareHex(memo)
     if (data === '')
-      throw new BaseError(
+      throw new InvalidParameterError(
         'Empty memo: `memo` must carry at least one byte (omit it for no memo).',
+        { param: 'memo', reason: 'range' },
       )
     if (!/^(?:[0-9a-f]{2})+$/.test(data))
-      throw new BaseError(
+      throw new InvalidParameterError(
         'Invalid memo: not whole-byte hex (odd length or non-hex characters). Encode text memos to hex first (e.g. via `toHex`).',
+        { param: 'memo', reason: 'format' },
       )
   }
 
@@ -172,8 +187,9 @@ export async function buildTransaction(
     permissionId !== undefined &&
     (!Number.isInteger(permissionId) || permissionId < 0)
   )
-    throw new BaseError(
+    throw new PermissionError(
       `Invalid multi-sig permission id: ${permissionId}. Expected a non-negative integer (an active permission's id is >= 2).`,
+      { permissionId },
     )
 
   // Bake the permission id into the contract before the id is derived, so the
@@ -207,23 +223,31 @@ export async function buildTransaction(
       typeof ref_block_bytes !== 'string' ||
       !/^[0-9a-fA-F]{4}$/.test(ref_block_bytes)
     )
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid blockHeader.ref_block_bytes: expected 2 bytes of bare hex, got ${
           typeof ref_block_bytes === 'string'
             ? `"${ref_block_bytes}"`
             : typeof ref_block_bytes
         }.`,
+        {
+          param: 'blockHeader.ref_block_bytes',
+          reason: typeof ref_block_bytes === 'string' ? 'format' : 'type',
+        },
       )
     if (
       typeof ref_block_hash !== 'string' ||
       !/^[0-9a-fA-F]{16}$/.test(ref_block_hash)
     )
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid blockHeader.ref_block_hash: expected 8 bytes of bare hex, got ${
           typeof ref_block_hash === 'string'
             ? `"${ref_block_hash}"`
             : typeof ref_block_hash
         }.`,
+        {
+          param: 'blockHeader.ref_block_hash',
+          reason: typeof ref_block_hash === 'string' ? 'format' : 'type',
+        },
       )
     for (const [name, value] of [
       ['timestamp', timestamp],
@@ -233,8 +257,9 @@ export async function buildTransaction(
       // a field-named error instead of surfacing one from deep inside the
       // serializer.
       if (int64InputToBigInt(`blockHeader.${name}`, value) <= 0n)
-        throw new BaseError(
+        throw new InvalidParameterError(
           `Invalid blockHeader.${name}: ${value}. Expected a positive timestamp in ms.`,
+          { param: `blockHeader.${name}`, reason: 'range' },
         )
     }
     // Exactly the four declared fields, from the vetted locals. Spreading the

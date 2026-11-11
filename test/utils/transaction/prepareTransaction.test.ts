@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
-
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import { InvalidBlockHeaderError } from '../../../src/errors/transaction.js'
 import {
   deriveRefBlockParams,
   fillBlockHeader,
@@ -165,5 +166,51 @@ test.each([
 ])('fillBlockHeader: rejects an incomplete block (%s)', (_, block) => {
   expect(() => fillBlockHeader({ contract: [] }, block)).toThrow(
     /incomplete block/,
+  )
+})
+
+test.each([
+  ['a non-numeric blockNumber', '1', blockID, 'blockNumber', 'type'],
+  ['a non-string blockID', 1n, null, 'blockID', 'type'],
+  ['a negative number', -1, blockID, 'blockNumber', 'range'],
+  ['a negative bigint', -1n, blockID, 'blockNumber', 'range'],
+  ['a malformed blockID', 1n, 'zz', 'blockID', 'format'],
+])('deriveRefBlockParams: %s throws an InvalidParameterError', (_, number, id, param, reason) => {
+  const derive = () => deriveRefBlockParams(number as never, id as never)
+  expect(derive).toThrow(InvalidParameterError)
+  expect(derive).toThrow(
+    expect.objectContaining({ name: 'InvalidParameterError', param, reason }),
+  )
+})
+
+test.each([
+  ['fractional', 1.5],
+  ['zero', 0],
+])('fillBlockHeader: a %s expirationMs throws an InvalidParameterError', (_, expirationMs) => {
+  const fill = () =>
+    fillBlockHeader(
+      { contract: [] },
+      { number: 1, blockID, timestamp: 1700000000000n },
+      { expirationMs },
+    )
+  expect(fill).toThrow(InvalidParameterError)
+  expect(fill).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'expirationMs',
+      reason: 'range',
+    }),
+  )
+})
+
+test('fillBlockHeader: an incomplete block throws an InvalidBlockHeaderError', () => {
+  const fill = () =>
+    fillBlockHeader(
+      { contract: [] },
+      { number: 0, blockID, timestamp: 1700000000000n },
+    )
+  expect(fill).toThrow(InvalidBlockHeaderError)
+  expect(fill).toThrow(
+    expect.objectContaining({ name: 'InvalidBlockHeaderError' }),
   )
 })

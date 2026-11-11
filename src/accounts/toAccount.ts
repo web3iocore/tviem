@@ -1,4 +1,7 @@
-import { BaseError, type BaseErrorType } from '../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../errors/parameter.js'
 import type { ErrorType } from '../errors/utils.js'
 import { type ParseAccountErrorType, parseAccount } from '../types/account.js'
 import type { Address } from '../types/address.js'
@@ -10,7 +13,7 @@ import type {
 
 export type ToAccountErrorType =
   | ParseAccountErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 /**
@@ -53,8 +56,9 @@ export function toAccount(
   // can never carry an address the type check did not see.
   const address = source?.address
   if (!source || typeof address !== 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       'Invalid account source: expected a Base58Check address or a custom source with an `address`.',
+      { param: 'source', reason: 'type' },
     )
   // A custom source provides all three signing methods; an address-only
   // account is created from the address string instead.
@@ -64,8 +68,9 @@ export function toAccount(
     'signTransaction',
   ] as const)
     if (typeof source[method] !== 'function')
-      throw new BaseError(
+      throw new InvalidParameterError(
         `Invalid account source: \`${method}\` must be a function. For an address-only account, pass the address string instead.`,
+        { param: `source.${method}`, reason: 'type' },
       )
 
   // The account surface is listed member by member rather than spread from

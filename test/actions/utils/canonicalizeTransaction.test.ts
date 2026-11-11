@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import type { SignableTransaction } from '../../../src/accounts/types.js'
 import { canonicalizeTransaction } from '../../../src/actions/utils/canonicalizeTransaction.js'
 import { BaseError } from '../../../src/errors/base.js'
+import { TransactionIntegrityError } from '../../../src/errors/transaction.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -75,4 +76,21 @@ test('throws when the triple fails txCheck', () => {
   expect(() =>
     canonicalizeTransaction({ ...canonical, txID: 'ab'.repeat(32) }),
   ).toThrow('integrity check (txCheck)')
+})
+
+test('reports a failed txCheck as a TransactionIntegrityError without a field', () => {
+  let err: unknown
+  try {
+    canonicalizeTransaction({ ...canonical, txID: 'ab'.repeat(32) })
+  } catch (e) {
+    err = e
+  }
+  expect(err).toBeInstanceOf(TransactionIntegrityError)
+  expect((err as TransactionIntegrityError).name).toBe(
+    'TransactionIntegrityError',
+  )
+  expect((err as TransactionIntegrityError).field).toBeUndefined()
+  expect((err as TransactionIntegrityError).shortMessage).toBe(
+    'The transaction failed its integrity check (txCheck).',
+  )
 })

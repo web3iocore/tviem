@@ -5,7 +5,9 @@ import { getSignWeight } from '../../../src/actions/public/getSignWeight.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { BaseError } from '../../../src/errors/base.js'
 import { TronContractValidateError } from '../../../src/errors/node.js'
+import { MissingFieldError } from '../../../src/errors/parameter.js'
 import { TransactionMismatchError } from '../../../src/errors/rpc.js'
+import { TransactionIntegrityError } from '../../../src/errors/transaction.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -336,7 +338,29 @@ test('refuses a raw_data model that does not serialize to raw_data_hex, before a
     },
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)
+  expect(err).toBeInstanceOf(TransactionIntegrityError)
+  expect(err.name).toBe('TransactionIntegrityError')
   expect(err.message).toContain('integrity check (txCheck)')
+  expect(calls).toHaveLength(0)
+})
+
+test.each([
+  ['raw_data_hex', { raw_data_hex: '' }],
+  ['txID', { txID: '' }],
+  ['raw_data_hex', { raw_data_hex: '', txID: '' }],
+])('names the absent `%s` on a MissingFieldError, before any request', async (field, absent) => {
+  const { transport, calls } = createMockTransport({ responses: {} })
+  const client = createPublicClient({ transport })
+
+  const err = (await getSignWeight(client, {
+    transaction: { ...tx, ...absent },
+  }).catch((e) => e)) as MissingFieldError
+  expect(err).toBeInstanceOf(MissingFieldError)
+  expect(err.name).toBe('MissingFieldError')
+  expect(err.field).toBe(field)
+  expect(err.shortMessage).toBe(
+    'getSignWeight requires a built transaction carrying `raw_data_hex` and `txID` (sign or multiSign it first).',
+  )
   expect(calls).toHaveLength(0)
 })
 

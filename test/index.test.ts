@@ -33,6 +33,30 @@ test('root barrel exposes error classes', () => {
   expect(mod.BaseError.name).toBe('BaseError')
 })
 
+test('root barrel exposes the named validation error classes', () => {
+  const errors = [
+    new mod.InvalidParameterError('x', { param: 'p', reason: 'type' }),
+    new mod.MissingFieldError('x', { field: 'f' }),
+    new mod.InvalidBlockHeaderError('x'),
+    new mod.InvalidSignatureError('x'),
+    new mod.TypedDataError('x'),
+    new mod.PermissionError('x'),
+    new mod.TransactionIntegrityError('x'),
+    new mod.NodeResponseMalformedError('x'),
+  ]
+  for (const error of errors) expect(error).toBeInstanceOf(mod.BaseError)
+  expect(errors.map((error) => error.name)).toEqual([
+    'InvalidParameterError',
+    'MissingFieldError',
+    'InvalidBlockHeaderError',
+    'InvalidSignatureError',
+    'TypedDataError',
+    'PermissionError',
+    'TransactionIntegrityError',
+    'NodeResponseMalformedError',
+  ])
+})
+
 test('utils barrel exposes public utils', () => {
   expect(utils.parseTrx('0.000001')).toBe(1n)
   expect(utils.toBase58('0x2b5ad5c4795c026514f8317c7a215e218dccd6cf')).toBe(

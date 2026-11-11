@@ -1,6 +1,9 @@
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import {
   BlockMismatchError,
   type BlockMismatchErrorType,
@@ -31,9 +34,9 @@ export type GetBlockParameters = {
 export type GetBlockReturnType = Block
 
 export type GetBlockErrorType =
-  | BaseErrorType
   | BlockNotFoundErrorType
   | BlockMismatchErrorType
+  | InvalidParameterErrorType
   | RequestErrorType
   | ToBase58ErrorType
   | TronRpcErrorType
@@ -61,8 +64,9 @@ export async function getBlock(
   // so the node can never be asked for a different height than the caller gave.
   const num = Number(blockNumber)
   if (!Number.isSafeInteger(num) || num < 0)
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid blockNumber: ${blockNumber}. Expected a non-negative safe-integer block height.`,
+      { param: 'blockNumber', reason: 'range' },
     )
   const response = await client.request<RawBlock>({
     node: confirmed ? 'solidity' : 'full',

@@ -2,7 +2,10 @@ import { HDKey } from '@scure/bip32'
 import { mnemonicToSeedSync, validateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english'
 
-import { BaseError, type BaseErrorType } from '../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../errors/parameter.js'
 import type { ErrorType } from '../errors/utils.js'
 import {
   type HDOptions,
@@ -29,7 +32,7 @@ export type MnemonicToAccountOptions = HDOptions & {
 
 export type MnemonicToAccountErrorType =
   | HdKeyToAccountErrorType
-  | BaseErrorType
+  | InvalidParameterErrorType
   | ErrorType
 
 /**
@@ -60,17 +63,20 @@ export function mnemonicToAccount(
   // The passphrase enters the seed as-is (every string is a distinct wallet),
   // so only a string — or no passphrase at all — is accepted.
   if (passphrase !== undefined && typeof passphrase !== 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid passphrase: expected a string or undefined, got ${passphrase === null ? 'null' : typeof passphrase}.`,
+      { param: 'passphrase', reason: 'type' },
     )
   if (typeof mnemonic !== 'string')
-    throw new BaseError(
+    throw new InvalidParameterError(
       `Invalid mnemonic: expected a string, got ${mnemonic === null ? 'null' : typeof mnemonic}.`,
+      { param: 'mnemonic', reason: 'type' },
     )
   const phrase = mnemonic.trim().toLowerCase().split(/\s+/).join(' ')
   if (!validateMnemonic(phrase, wordlist))
-    throw new BaseError(
+    throw new InvalidParameterError(
       'Invalid mnemonic: the phrase is not a valid BIP-39 English mnemonic.',
+      { param: 'mnemonic', reason: 'format' },
     )
   const seed = mnemonicToSeedSync(phrase, passphrase)
   return hdKeyToAccount(HDKey.fromMasterSeed(seed), hdOptions)

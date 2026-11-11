@@ -1,7 +1,10 @@
 import type { AbiEvent } from 'abitype'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import { TronRpcError, type TronRpcErrorType } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
@@ -195,7 +198,7 @@ export type GetLogsReturnType<
 > = Log<abiEvent, strict, abiEvents>[]
 
 export type GetLogsErrorType =
-  | BaseErrorType
+  | InvalidParameterErrorType
   | TronRpcErrorType
   | RequestErrorType
   | EncodeEventTopicsErrorType
@@ -340,8 +343,9 @@ export async function getLogs(
   } = parameters as FlatParameters
 
   if (blockHash && (fromBlock !== undefined || toBlock !== undefined))
-    throw new BaseError(
+    throw new InvalidParameterError(
       '`blockHash` cannot be used together with `fromBlock` / `toBlock`.',
+      { param: 'blockHash', reason: 'conflict' },
     )
 
   const events = events_ ?? (event ? [event] : undefined)

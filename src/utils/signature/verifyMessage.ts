@@ -1,6 +1,9 @@
 import { secp256k1 } from '@noble/curves/secp256k1'
 
-import { BaseError, type BaseErrorType } from '../../errors/base.js'
+import {
+  InvalidSignatureError,
+  type InvalidSignatureErrorType,
+} from '../../errors/signature.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
 import type { ByteArray, Hex, SignableMessage } from '../../types/misc.js'
@@ -44,7 +47,7 @@ function toComponents(signature: SignatureInput): {
       ? hexToWireBytes(signature)
       : (signature as ByteArray)
   if (bytes.length !== 65)
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid signature length: ${bytes.length} bytes. Expected 65 bytes (r ++ s ++ v).`,
     )
   const r = bytesToBigInt(bytes.subarray(0, 32))
@@ -59,7 +62,9 @@ function toComponents(signature: SignatureInput): {
 function toRecovery(v: number | undefined): number {
   if (v === 0 || v === 1) return v
   if (v === 27 || v === 28) return v - 27
-  throw new BaseError(`Invalid recovery value: ${v}. Expected 0, 1, 27 or 28.`)
+  throw new InvalidSignatureError(
+    `Invalid recovery value: ${v}. Expected 0, 1, 27 or 28.`,
+  )
 }
 
 const wireHex = /^[0-9a-fA-F]{130}$/
@@ -71,7 +76,7 @@ function hexToWireBytes(hex: string): ByteArray {
   // `Number.parseInt('zz', 16)` is NaN, which a typed array stores as 0 — both
   // would turn a malformed string into a "valid" 65-byte signature.
   if (!wireHex.test(clean))
-    throw new BaseError(
+    throw new InvalidSignatureError(
       `Invalid signature hex: expected 130 hex characters (r ++ s ++ v), got ${clean.length}.`,
     )
   const out = new Uint8Array(65)
@@ -95,7 +100,7 @@ export type RecoverPublicKeyParameters = {
 
 export type RecoverPublicKeyReturnType = Hex
 
-export type RecoverPublicKeyErrorType = BaseErrorType | ErrorType
+export type RecoverPublicKeyErrorType = InvalidSignatureErrorType | ErrorType
 
 /**
  * Recovers the uncompressed (65-byte, `0x04`-prefixed) secp256k1 public key

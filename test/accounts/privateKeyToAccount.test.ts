@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import type { SignableTransaction } from '../../src/accounts/types.js'
 import { InvalidPrivateKeyError } from '../../src/errors/account.js'
+import { TransactionIntegrityError } from '../../src/errors/transaction.js'
 import { hashMessage } from '../../src/utils/signature/hashMessage.js'
 import {
   parseSignature,
@@ -189,6 +190,24 @@ describe('privateKeyToAccount', () => {
     ).toThrow(
       'The transaction is already signed (1 signature(s)) — co-signing a multi-signature transaction goes through multiSign.',
     )
+  })
+
+  test('the already-signed refusal is a TransactionIntegrityError on `signature`', () => {
+    const account = privateKeyToAccount(pk1)
+    let caught: unknown
+    try {
+      account.signTransaction({
+        ...canonicalTransaction(),
+        signature: ['deadbeef'],
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(TransactionIntegrityError)
+    expect(caught).toMatchObject({
+      name: 'TransactionIntegrityError',
+      field: 'signature',
+    })
   })
 
   test('signTransaction refuses a signature getter that hides itself from the guard', async () => {

@@ -7,7 +7,12 @@ import {
 } from '../../../src/actions/wallet/accountPermissionUpdate.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../../src/errors/parameter.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
+import { PermissionError } from '../../../src/errors/transaction.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
 import { loadTxFixtureFile } from '../../fixtures/tx/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
@@ -252,4 +257,107 @@ test('rejects an operations bitmap passed as a wrong-size Uint8Array', async () 
   ).rejects.toThrow(
     'Invalid actives[0] permission: `operations` must be a 32-byte bitmap',
   )
+})
+
+test('validation errors carry their class and the field they refer to', async () => {
+  const failure = (parameters: Record<string, unknown>) =>
+    offlineBuild(parameters).catch((e) => e)
+
+  const noOwner = await failure({ actives: [validActive()] })
+  expect(noOwner).toBeInstanceOf(MissingFieldError)
+  expect(noOwner).toMatchObject({ name: 'MissingFieldError', field: 'owner' })
+
+  const noActives = await failure({ owner: validOwner() })
+  expect(noActives).toBeInstanceOf(MissingFieldError)
+  expect(noActives).toMatchObject({
+    name: 'MissingFieldError',
+    field: 'actives',
+  })
+
+  // `actives`: like `keys`, an empty array is out of range and a non-array
+  // is the wrong type; only an absent value is a missing field.
+  const emptyActives = await failure({ owner: validOwner(), actives: [] })
+  expect(emptyActives).toBeInstanceOf(InvalidParameterError)
+  expect(emptyActives).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'actives',
+    reason: 'range',
+  })
+  expect(emptyActives.shortMessage).toBe(noActives.shortMessage)
+  const activesNotArray = await failure({ owner: validOwner(), actives: 7 })
+  expect(activesNotArray).toBeInstanceOf(InvalidParameterError)
+  expect(activesNotArray).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'actives',
+    reason: 'type',
+  })
+
+  const noThreshold = await failure({
+    owner: { keys: [{ ...key }] },
+    actives: [validActive()],
+  })
+  expect(noThreshold).toBeInstanceOf(MissingFieldError)
+  expect(noThreshold).toMatchObject({
+    name: 'MissingFieldError',
+    field: 'owner.threshold',
+  })
+
+  const noOperations = await failure({
+    owner: validOwner(),
+    actives: [{ threshold: 1n, keys: [{ ...key }] }],
+  })
+  expect(noOperations).toBeInstanceOf(MissingFieldError)
+  expect(noOperations).toMatchObject({
+    name: 'MissingFieldError',
+    field: 'actives[0].operations',
+  })
+
+  // `keys`: an empty array is out of range, a non-array is the wrong type.
+  const emptyKeys = await failure({
+    owner: validOwner(),
+    witness: { threshold: 1n, keys: [] },
+    actives: [validActive()],
+  })
+  expect(emptyKeys).toBeInstanceOf(InvalidParameterError)
+  expect(emptyKeys).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'witness.keys',
+    reason: 'range',
+  })
+  const keysNotArray = await failure({
+    owner: { threshold: 1n, keys: 'none' },
+    actives: [validActive()],
+  })
+  expect(keysNotArray).toBeInstanceOf(InvalidParameterError)
+  expect(keysNotArray).toMatchObject({
+    name: 'InvalidParameterError',
+    param: 'owner.keys',
+    reason: 'type',
+  })
+
+  // `operations`: a wrong-size string or byte array is malformed, anything
+  // else is the wrong type.
+  for (const [operations, reason] of [
+    ['0xdeadbeef', 'format'],
+    [new Uint8Array(31), 'format'],
+    [7, 'type'],
+  ] as const) {
+    const err = await failure({
+      owner: validOwner(),
+      actives: [{ ...validActive(), operations }],
+    })
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      param: 'actives[0].operations',
+      reason,
+    })
+  }
+
+  const wrongId = await failure({
+    owner: validOwner(),
+    actives: [{ ...validActive(), id: 5 }],
+  })
+  expect(wrongId).toBeInstanceOf(PermissionError)
+  expect(wrongId).toMatchObject({ name: 'PermissionError', permissionId: 5 })
 })

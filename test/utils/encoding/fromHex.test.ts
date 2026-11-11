@@ -420,7 +420,9 @@ Version: @tronweb3/tviem@${version}`,
   test('error: invalid bytes', () => {
     expect(() => fromHex('0x420fggf11a', 'bytes')).toThrowError(
       expect.objectContaining({
-        name: 'BaseError',
+        name: 'InvalidParameterError',
+        param: 'hex',
+        reason: 'format',
         message: `Invalid byte sequence ("gg" in "420fggf11a").
 
 Version: @tronweb3/tviem@${version}`,

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   BlockMismatchError,
   BlockNotFoundError,
@@ -100,6 +101,22 @@ test('getBlock rejects negative, fractional, NaN and infinite block numbers', as
   }
   // Nothing ever reached the node.
   expect(calls).toEqual([])
+})
+
+test('getBlock reports an invalid block number as an InvalidParameterError', async () => {
+  const { transport } = createMockTransport({ responses: {} })
+  const client = createPublicClient({ transport })
+
+  const err = (await client
+    .getBlock({ blockNumber: -1 })
+    .catch((e) => e)) as InvalidParameterError
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.name).toBe('InvalidParameterError')
+  expect(err.param).toBe('blockNumber')
+  expect(err.reason).toBe('range')
+  expect(err.shortMessage).toBe(
+    'Invalid blockNumber: -1. Expected a non-negative safe-integer block height.',
+  )
 })
 
 test('getBlock rejects block numbers above MAX_SAFE_INTEGER without calling the node', async () => {

@@ -1,6 +1,9 @@
 import { secp256k1 } from '@noble/curves/secp256k1'
 
-import { BaseError, type BaseErrorType } from '../errors/base.js'
+import {
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
+} from '../errors/transaction.js'
 import type { ErrorType } from '../errors/utils.js'
 import type { Hex } from '../types/misc.js'
 import {
@@ -50,7 +53,7 @@ export type PrivateKeyToAccountErrorType =
   | SignTypedDataErrorType
   | SignTransactionErrorType
   | MultiSignTransactionErrorType
-  | BaseErrorType
+  | TransactionIntegrityErrorType
   | ErrorType
 
 /**
@@ -108,8 +111,9 @@ export function privateKeyToAccount(
       // foreign one — means the caller double-signed by mistake; collecting
       // signatures is multiSign's business.
       if (snapshot.signature?.length)
-        throw new BaseError(
+        throw new TransactionIntegrityError(
           `The transaction is already signed (${snapshot.signature.length} signature(s)) — co-signing a multi-signature transaction goes through multiSign.`,
+          { field: 'signature' },
         )
       return signTransactionAs({
         transaction: snapshot,

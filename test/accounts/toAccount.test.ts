@@ -4,6 +4,7 @@ import { privateKeyToAccount } from '../../src/accounts/privateKeyToAccount.js'
 import { toAccount } from '../../src/accounts/toAccount.js'
 import type { TronCustomSource } from '../../src/accounts/types.js'
 import { InvalidAddressError } from '../../src/errors/address.js'
+import { InvalidParameterError } from '../../src/errors/parameter.js'
 import { decodeRawData } from '../../src/utils/transaction/decodeRawData.js'
 import { loadTxFixtures } from '../fixtures/tx/loader.js'
 
@@ -166,6 +167,25 @@ describe('toAccount', () => {
     expect(() => toAccount({} as never)).toThrow()
   })
 
+  test('an invalid source throws an InvalidParameterError for `source`', () => {
+    for (const source of [{}, null, { address: 42 }]) {
+      let caught: unknown
+      try {
+        toAccount(source as never)
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(InvalidParameterError)
+      expect(caught).toMatchObject({
+        name: 'InvalidParameterError',
+        param: 'source',
+        reason: 'type',
+        shortMessage:
+          'Invalid account source: expected a Base58Check address or a custom source with an `address`.',
+      })
+    }
+  })
+
   describe('a custom source must be able to sign', () => {
     const fullSource = (): TronCustomSource => {
       const base = privateKeyToAccount(pk1)
@@ -195,6 +215,22 @@ describe('toAccount', () => {
         expect(() => toAccount(source as unknown as TronCustomSource)).toThrow(
           `Invalid account source: \`${method}\` must be a function`,
         )
+      })
+
+      test(`a non-function \`${method}\` throws an InvalidParameterError for \`source.${method}\``, () => {
+        const source = { ...fullSource(), [method]: 'nope' }
+        let caught: unknown
+        try {
+          toAccount(source as unknown as TronCustomSource)
+        } catch (error) {
+          caught = error
+        }
+        expect(caught).toBeInstanceOf(InvalidParameterError)
+        expect(caught).toMatchObject({
+          name: 'InvalidParameterError',
+          param: `source.${method}`,
+          reason: 'type',
+        })
       })
     }
 

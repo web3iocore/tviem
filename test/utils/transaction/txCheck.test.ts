@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import type { RawData } from '../../../src/utils/transaction/serializeRawData.js'
 import { txCheck } from '../../../src/utils/transaction/txCheck.js'
 import { loadTxFixtures } from '../../fixtures/tx/loader.js'
@@ -138,4 +139,15 @@ test('txCheck returns false (does not throw) on structurally broken input', () =
   )
   // Invalid hex.
   expect(txCheck({ ...tx, raw_data_hex: 'zz' })).toBe(false)
+})
+
+test('txCheck throws an InvalidParameterError for a non-object argument', () => {
+  expect(() => txCheck(null as never)).toThrow(InvalidParameterError)
+  expect(() => txCheck(null as never)).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'transaction',
+      reason: 'type',
+    }),
+  )
 })

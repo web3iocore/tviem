@@ -708,6 +708,8 @@ export {
 } from './errors/log.js'
 // TRON node error family (transport-level, error normalization).
 export {
+  NodeResponseMalformedError,
+  type NodeResponseMalformedErrorType,
   TronBroadcastError,
   type TronBroadcastErrorType,
   TronContractValidateError,
@@ -720,6 +722,13 @@ export {
   UnknownNodeError,
   type UnknownNodeErrorType,
 } from './errors/node.js'
+export {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+  type InvalidParameterReason,
+  MissingFieldError,
+  type MissingFieldErrorType,
+} from './errors/parameter.js'
 export {
   HttpRequestError,
   type HttpRequestErrorType,
@@ -754,6 +763,16 @@ export {
   type WaitForTransactionReceiptTimeoutErrorType,
 } from './errors/rpc.js'
 export {
+  InvalidSignatureError,
+  type InvalidSignatureErrorType,
+} from './errors/signature.js'
+export {
+  InvalidBlockHeaderError,
+  type InvalidBlockHeaderErrorType,
+  PermissionError,
+  type PermissionErrorType,
+  TransactionIntegrityError,
+  type TransactionIntegrityErrorType,
   UnknownContractTypeError,
   type UnknownContractTypeErrorType,
 } from './errors/transaction.js'
@@ -768,6 +787,8 @@ export {
   type InvalidPrimaryTypeErrorType,
   InvalidStructTypeError,
   type InvalidStructTypeErrorType,
+  TypedDataError,
+  type TypedDataErrorType,
 } from './errors/typedData.js'
 export {
   InvalidDecimalNumberError,

@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest'
 import { IntegerOutOfRangeError } from '../../../src/errors/encoding.js'
-import { UnknownContractTypeError } from '../../../src/errors/transaction.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import {
+  TransactionIntegrityError,
+  UnknownContractTypeError,
+} from '../../../src/errors/transaction.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { bareHex } from '../../../src/utils/encoding/bareHex.js'
 import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
@@ -524,4 +528,111 @@ test('int64 inputs reject what cannot round-trip', () => {
   expect(() => toRawDataHex({ ...transfer(1n), expiration: '1e10' })).toThrow(
     'Invalid expiration',
   )
+})
+
+const transferUrl = 'type.googleapis.com/protocol.TransferContract'
+const transferValue = { owner_address: owner, to_address: to, amount: 1n }
+
+test.each([
+  [
+    'an unknown raw_data key',
+    { contract: [], memo: 1 },
+    'memo',
+    'unknown-field',
+  ],
+  [
+    'an unknown contract key',
+    {
+      contract: [
+        {
+          type: 'TransferContract',
+          parameter: { type_url: transferUrl, value: transferValue },
+          note: 1,
+        },
+      ],
+    },
+    'note',
+    'unknown-field',
+  ],
+  [
+    'an undecoded body under a registered type',
+    {
+      contract: [
+        {
+          type: 'TransferContract',
+          parameter: { type_url: transferUrl, value: `0a15${owner}` },
+        },
+      ],
+    },
+    'contract.parameter.value',
+    'type',
+  ],
+  [
+    'an unregistered type_url',
+    {
+      contract: [
+        {
+          type: 'TransferContract',
+          parameter: {
+            type_url: 'type.googleapis.com/protocol.FooContract',
+            value: transferValue,
+          },
+        },
+      ],
+    },
+    'contract.parameter.type_url',
+    'range',
+  ],
+])('%s throws an InvalidParameterError', (_, rawData, param, reason) => {
+  const serialize = () => toRawDataHex(rawData as never)
+  expect(serialize).toThrow(InvalidParameterError)
+  expect(serialize).toThrow(
+    expect.objectContaining({ name: 'InvalidParameterError', param, reason }),
+  )
+})
+
+test('a contract type / type URL mismatch throws a TransactionIntegrityError', () => {
+  const serialize = () =>
+    toRawDataHex({
+      contract: [
+        {
+          type: 'TriggerSmartContract',
+          parameter: { type_url: transferUrl, value: transferValue },
+        },
+      ],
+    } as never)
+  expect(serialize).toThrow(TransactionIntegrityError)
+  expect(serialize).toThrow(
+    expect.objectContaining({
+      name: 'TransactionIntegrityError',
+      field: 'contract.parameter.type_url',
+    }),
+  )
+})
+
+test.each([
+  ['a fractional number', 1.5, 'range'],
+  ['a non-primitive', [2], 'type'],
+  ['a non-decimal string', '0x02', 'format'],
+])('a Permission_id that is %s reports `contract.Permission_id`', (_, id, reason) => {
+  const serialize = () =>
+    toRawDataHex({
+      contract: [
+        {
+          type: 'TransferContract',
+          parameter: { type_url: transferUrl, value: transferValue },
+          Permission_id: id,
+        },
+      ],
+    } as never)
+  expect(serialize).toThrow(InvalidParameterError)
+  expect(serialize).toThrow(
+    expect.objectContaining({
+      name: 'InvalidParameterError',
+      param: 'contract.Permission_id',
+      reason,
+    }),
+  )
+  // The message keeps the bare field label.
+  expect(serialize).toThrow('Invalid Permission_id: ')
 })
