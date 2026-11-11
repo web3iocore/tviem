@@ -138,7 +138,7 @@ export class TronRpcError extends BaseError {
  * A contract read (`triggerconstantcontract`) that reverted on-chain. RD-5
  * decodes the revert payload: `Error(string)` (selector `0x08c379a0`) yields a
  * human-readable `reason`; `Panic(uint256)` (selector `0x4e487b71`) yields a
- * numeric panic `code`; any other payload is surfaced as raw `data`.
+ * numeric `panicCode`; any other payload is surfaced as raw `data`.
  */
 export type ContractFunctionRevertedErrorType =
   ContractFunctionRevertedError & {
@@ -148,28 +148,28 @@ export class ContractFunctionRevertedError extends BaseError {
   /** The decoded `Error(string)` revert reason, if present. */
   reason?: string | undefined
   /** The decoded `Panic(uint256)` code, if the revert was a panic. */
-  code?: bigint | undefined
+  panicCode?: bigint | undefined
   /** The ABI signature of the decoded revert payload (e.g. `Error(string)`). */
   signature?: string | undefined
   /** The raw revert payload (`0x`-prefixed), if it could not be decoded. */
   data?: `0x${string}` | undefined
 
   constructor({
-    code,
     data,
     docsPath,
     functionName,
     message,
     metaMessages,
+    panicCode,
     reason,
     signature,
   }: {
-    code?: bigint | undefined
     data?: `0x${string}` | undefined
     docsPath?: string | undefined
     functionName?: string | undefined
     message?: string | undefined
     metaMessages?: string[] | undefined
+    panicCode?: bigint | undefined
     reason?: string | undefined
     signature?: string | undefined
   } = {}) {
@@ -179,8 +179,8 @@ export class ContractFunctionRevertedError extends BaseError {
     const shortMessage = (() => {
       if (message) return message
       if (reason) return `${target} with the following reason:\n${reason}`
-      if (code !== undefined)
-        return `${target} with the following panic code: ${code}`
+      if (panicCode !== undefined)
+        return `${target} with the following panic code: ${panicCode}`
       return `${target}.`
     })()
     super(shortMessage, {
@@ -188,8 +188,8 @@ export class ContractFunctionRevertedError extends BaseError {
       metaMessages,
       name: 'ContractFunctionRevertedError',
     })
-    this.code = code
     this.data = data
+    this.panicCode = panicCode
     this.reason = reason
     this.signature = signature
   }

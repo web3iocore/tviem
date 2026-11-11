@@ -636,9 +636,9 @@ export {
   type AbiItemAmbiguityErrorType,
   BytesSizeMismatchError,
   type BytesSizeMismatchErrorType,
-  DecodeLogDataMismatch,
+  DecodeLogDataMismatchError,
   type DecodeLogDataMismatchErrorType,
-  DecodeLogTopicsMismatch,
+  DecodeLogTopicsMismatchError,
   type DecodeLogTopicsMismatchErrorType,
   InvalidAbiDecodingTypeError,
   type InvalidAbiDecodingTypeErrorType,
@@ -650,7 +650,7 @@ export {
   type InvalidArrayErrorType,
   InvalidDefinitionTypeError,
   type InvalidDefinitionTypeErrorType,
-  UnsupportedPackedAbiType,
+  UnsupportedPackedAbiTypeError,
   type UnsupportedPackedAbiTypeErrorType,
 } from './errors/abi.js'
 export {

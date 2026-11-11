@@ -25,7 +25,7 @@ describe('decodeRevertData', () => {
 
   test('decodes Panic(uint256)', () => {
     expect(decodeRevertData(panic(0x11n))).toEqual({
-      code: 0x11n,
+      panicCode: 0x11n,
       signature: 'Panic(uint256)',
     })
   })

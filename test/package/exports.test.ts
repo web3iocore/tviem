@@ -110,6 +110,23 @@ describe('package exports surface (freeze guard)', () => {
     expect(accounts.signTransaction).toBe(signTransactionUtil.signTransaction)
   })
 
+  test('the ABI error classes are exported under their `Error`-suffixed names only', () => {
+    const entrypoints = { root, accounts, actions, chains, utils }
+    for (const name of [
+      'DecodeLogDataMismatch',
+      'DecodeLogTopicsMismatch',
+      'UnsupportedPackedAbiType',
+    ]) {
+      for (const [entrypoint, mod] of Object.entries(entrypoints))
+        expect(name in mod, `${entrypoint} exports ${name}`).toBe(false)
+      expect(`${name}Error` in root).toBe(true)
+      const ErrorClass = (root as Record<string, unknown>)[`${name}Error`] as {
+        name: string
+      }
+      expect(ErrorClass.name).toBe(`${name}Error`)
+    }
+  })
+
   test('root + subpath export names are frozen', () => {
     const names = (mod: object) => Object.keys(mod).sort()
     expect({

@@ -86,22 +86,24 @@ test('ContractFunctionRevertedError decodes the Error(string) revert-reason path
   expect(err.name).toBe('ContractFunctionRevertedError')
   expect(err.reason).toBe('insufficient balance')
   expect(err.signature).toBe('Error(string)')
-  expect(err.code).toBeUndefined()
+  expect(err.panicCode).toBeUndefined()
   expect(err.data).toBeUndefined()
   expect(err.shortMessage).toBe(
     'The contract function "transfer" reverted with the following reason:\ninsufficient balance',
   )
 })
 
-test('ContractFunctionRevertedError decodes the Panic(uint256) code path (bigint)', () => {
+test('ContractFunctionRevertedError carries the Panic(uint256) code as panicCode (bigint)', () => {
   const err = new ContractFunctionRevertedError({
     functionName: 'transfer',
-    code: 0x11n,
+    panicCode: 0x11n,
     signature: 'Panic(uint256)',
   })
   expect(err.name).toBe('ContractFunctionRevertedError')
-  expect(typeof err.code).toBe('bigint')
-  expect(err.code).toBe(0x11n)
+  expect(typeof err.panicCode).toBe('bigint')
+  expect(err.panicCode).toBe(0x11n)
+  // The panic code lives on `panicCode` only; the class has no `code` field.
+  expect('code' in err).toBe(false)
   expect(err.signature).toBe('Panic(uint256)')
   expect(err.reason).toBeUndefined()
   expect(err.shortMessage).toBe(
@@ -115,8 +117,8 @@ test('ContractFunctionRevertedError surfaces raw data when it cannot decode', ()
   })
   expect(err.data).toBe('0xdeadbeef')
   expect(err.reason).toBeUndefined()
-  expect(err.code).toBeUndefined()
-  // With no functionName / reason / code / message, the generic form is used.
+  expect(err.panicCode).toBeUndefined()
+  // With no functionName / reason / panicCode / message, the generic form is used.
   expect(err.shortMessage).toBe('The contract function reverted.')
 })
 

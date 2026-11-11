@@ -429,10 +429,10 @@ export class BytesSizeMismatchError extends BaseError {
   }
 }
 
-export type DecodeLogDataMismatchErrorType = DecodeLogDataMismatch & {
-  name: 'DecodeLogDataMismatch'
+export type DecodeLogDataMismatchErrorType = DecodeLogDataMismatchError & {
+  name: 'DecodeLogDataMismatchError'
 }
-export class DecodeLogDataMismatch extends BaseError {
+export class DecodeLogDataMismatchError extends BaseError {
   abiItem: AbiEvent
   data: Hex
   params: readonly AbiParameter[]
@@ -460,7 +460,7 @@ export class DecodeLogDataMismatch extends BaseError {
           `Params: (${formattedParams})`,
           `Data:   ${data} (${size} bytes)`,
         ],
-        name: 'DecodeLogDataMismatch',
+        name: 'DecodeLogDataMismatchError',
       },
     )
 
@@ -471,10 +471,10 @@ export class DecodeLogDataMismatch extends BaseError {
   }
 }
 
-export type DecodeLogTopicsMismatchErrorType = DecodeLogTopicsMismatch & {
-  name: 'DecodeLogTopicsMismatch'
+export type DecodeLogTopicsMismatchErrorType = DecodeLogTopicsMismatchError & {
+  name: 'DecodeLogTopicsMismatchError'
 }
-export class DecodeLogTopicsMismatch extends BaseError {
+export class DecodeLogTopicsMismatchError extends BaseError {
   abiItem: AbiEvent
 
   constructor(
@@ -489,7 +489,7 @@ export class DecodeLogTopicsMismatch extends BaseError {
             args.param.name ? ` "${args.param.name}"` : ''
           } on event "${args.formattedAbiItem}".`
         : `Expected ${args.expectedTopics} argument topics for event "${args.formattedAbiItem}", but got ${args.receivedTopics}.`,
-      { name: 'DecodeLogTopicsMismatch' },
+      { name: 'DecodeLogTopicsMismatchError' },
     )
 
     this.abiItem = args.abiItem
@@ -552,13 +552,14 @@ export class InvalidDefinitionTypeError extends BaseError {
   }
 }
 
-export type UnsupportedPackedAbiTypeErrorType = UnsupportedPackedAbiType & {
-  name: 'UnsupportedPackedAbiType'
-}
-export class UnsupportedPackedAbiType extends BaseError {
+export type UnsupportedPackedAbiTypeErrorType =
+  UnsupportedPackedAbiTypeError & {
+    name: 'UnsupportedPackedAbiTypeError'
+  }
+export class UnsupportedPackedAbiTypeError extends BaseError {
   constructor(type: unknown) {
     super(`Type "${type}" is not supported for packed encoding.`, {
-      name: 'UnsupportedPackedAbiType',
+      name: 'UnsupportedPackedAbiTypeError',
     })
   }
 }
@@ -570,8 +571,20 @@ export type InvalidAbiParameterValueErrorType =
 export class InvalidAbiParameterValueError extends BaseError {
   constructor({ type, value }: { type: string; value: unknown }) {
     super(
-      `Value "${String(value)}" is not a valid value for ABI type "${type}".`,
+      `Value "${formatValue(value)}" is not a valid value for ABI type "${type}".`,
       { name: 'InvalidAbiParameterValueError' },
     )
+  }
+}
+
+/**
+ * `String(value)`, or the value's `typeof` when the string conversion throws
+ * (an object without a prototype, an array holding a symbol).
+ */
+function formatValue(value: unknown): string {
+  try {
+    return String(value)
+  } catch {
+    return typeof value
   }
 }

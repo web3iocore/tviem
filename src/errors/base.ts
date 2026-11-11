@@ -32,7 +32,7 @@ export type BaseErrorOptions = Pick<
 
 export type BaseErrorType = BaseError & { name: 'BaseError' }
 export class BaseError extends Error {
-  details: string
+  details: string | undefined
   docsPath?: string | undefined
   metaMessages?: string[] | undefined
   shortMessage: string
@@ -44,7 +44,7 @@ export class BaseError extends Error {
     const details = (() => {
       if (args.cause instanceof BaseError) return args.cause.details
       if (args.cause?.message) return args.cause.message
-      return args.details!
+      return args.details
     })()
     const docsPath = (() => {
       if (args.cause instanceof BaseError)

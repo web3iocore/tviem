@@ -6,11 +6,13 @@ import {
   AbiEncodingArrayLengthMismatchError,
   AbiEncodingLengthMismatchError,
   AbiEventSignatureEmptyTopicsError,
-  DecodeLogDataMismatch,
-  DecodeLogTopicsMismatch,
+  DecodeLogDataMismatchError,
+  DecodeLogTopicsMismatchError,
   InvalidAbiDecodingTypeError,
   InvalidAbiEncodingTypeError,
+  InvalidAbiParameterValueError,
   InvalidArrayError,
+  UnsupportedPackedAbiTypeError,
 } from '../../src/errors/abi.js'
 import { version } from '../../src/errors/version.js'
 
@@ -117,9 +119,9 @@ Version: @tronweb3/tviem@${version}`,
   })
 })
 
-test('DecodeLogDataMismatch', () => {
+test('DecodeLogDataMismatchError', () => {
   expect(
-    new DecodeLogDataMismatch({
+    new DecodeLogDataMismatchError({
       abiItem: {
         name: 'Event',
         inputs: [
@@ -137,7 +139,7 @@ test('DecodeLogDataMismatch', () => {
       size: 2,
     }),
   ).toMatchObject({
-    name: 'DecodeLogDataMismatch',
+    name: 'DecodeLogDataMismatchError',
     message: `Data size of 2 bytes is too small for non-indexed event parameters.
 
 Params: (uint256 a, uint256 b)
@@ -147,10 +149,10 @@ Version: @tronweb3/tviem@${version}`,
   })
 })
 
-describe('DecodeLogTopicsMismatch', () => {
+describe('DecodeLogTopicsMismatchError', () => {
   test('default', () => {
     expect(
-      new DecodeLogTopicsMismatch({
+      new DecodeLogTopicsMismatchError({
         abiItem: {
           inputs: [
             {
@@ -180,7 +182,7 @@ describe('DecodeLogTopicsMismatch', () => {
         },
       }),
     ).toMatchObject({
-      name: 'DecodeLogTopicsMismatch',
+      name: 'DecodeLogTopicsMismatchError',
       message: `Expected a topic for indexed event parameter "id" on event "Transfer(address from, address to, uint256 id)".
 
 Version: @tronweb3/tviem@${version}`,
@@ -189,7 +191,7 @@ Version: @tronweb3/tviem@${version}`,
 
   test('unnamed', () => {
     expect(
-      new DecodeLogTopicsMismatch({
+      new DecodeLogTopicsMismatchError({
         abiItem: {
           inputs: [
             {
@@ -215,7 +217,7 @@ Version: @tronweb3/tviem@${version}`,
         },
       }),
     ).toMatchObject({
-      name: 'DecodeLogTopicsMismatch',
+      name: 'DecodeLogTopicsMismatchError',
       message: `Expected a topic for indexed event parameter on event "Transfer(address, address, uint256)".
 
 Version: @tronweb3/tviem@${version}`,
@@ -242,4 +244,80 @@ test('InvalidArrayError', () => {
 
 Version: @tronweb3/tviem@${version}`,
   })
+})
+
+test('UnsupportedPackedAbiTypeError', () => {
+  expect(new UnsupportedPackedAbiTypeError('tuple')).toMatchObject({
+    name: 'UnsupportedPackedAbiTypeError',
+    message: `Type "tuple" is not supported for packed encoding.
+
+Version: @tronweb3/tviem@${version}`,
+  })
+})
+
+test('InvalidAbiParameterValueError', () => {
+  expect(
+    new InvalidAbiParameterValueError({ type: 'bool', value: 'yes' }),
+  ).toMatchObject({
+    name: 'InvalidAbiParameterValueError',
+    message: `Value "yes" is not a valid value for ABI type "bool".
+
+Version: @tronweb3/tviem@${version}`,
+  })
+})
+
+test('InvalidAbiParameterValueError: a value whose string conversion throws is reported by its `typeof`', () => {
+  expect(
+    new InvalidAbiParameterValueError({
+      type: 'bool',
+      value: Object.create(null),
+    }).shortMessage,
+  ).toBe('Value "object" is not a valid value for ABI type "bool".')
+  expect(
+    new InvalidAbiParameterValueError({
+      type: 'uint256',
+      value: [Symbol('s')],
+    }).shortMessage,
+  ).toBe('Value "object" is not a valid value for ABI type "uint256".')
+})
+
+const abiItem = {
+  inputs: [{ indexed: true, name: 'id', type: 'uint256' }],
+  name: 'Transfer',
+  type: 'event',
+} as const
+
+test.each([
+  [
+    'DecodeLogDataMismatchError',
+    DecodeLogDataMismatchError,
+    () =>
+      new DecodeLogDataMismatchError({
+        abiItem,
+        data: '0x',
+        formattedParams: 'uint256 id',
+        params: abiItem.inputs,
+        size: 0,
+      }),
+  ],
+  [
+    'DecodeLogTopicsMismatchError',
+    DecodeLogTopicsMismatchError,
+    () =>
+      new DecodeLogTopicsMismatchError({
+        abiItem,
+        formattedAbiItem: 'Transfer(uint256 id)',
+        param: abiItem.inputs[0],
+      }),
+  ],
+  [
+    'UnsupportedPackedAbiTypeError',
+    UnsupportedPackedAbiTypeError,
+    () => new UnsupportedPackedAbiTypeError('tuple'),
+  ],
+])('%s: the class identifier and the `name` property agree', (name, ErrorClass, create) => {
+  const error = create()
+  expect(error).toBeInstanceOf(ErrorClass)
+  expect(ErrorClass.name).toBe(name)
+  expect(error.name).toBe(name)
 })

@@ -7,9 +7,11 @@ import {
   type AbiEncodingBytesSizeMismatchErrorType,
   AbiEncodingLengthMismatchError,
   type AbiEncodingLengthMismatchErrorType,
+  InvalidAbiParameterValueError,
+  type InvalidAbiParameterValueErrorType,
   InvalidArrayError,
   type InvalidArrayErrorType,
-  UnsupportedPackedAbiType,
+  UnsupportedPackedAbiTypeError,
   type UnsupportedPackedAbiTypeErrorType,
 } from '../../errors/abi.js'
 import { IntegerOutOfRangeError } from '../../errors/encoding.js'
@@ -70,6 +72,7 @@ export type EncodePackedErrorType =
   | SizeErrorType
   | StringToHexErrorType
   | UnsupportedPackedAbiTypeErrorType
+  | InvalidAbiParameterValueErrorType
   | InvalidArrayErrorType
   | ErrorType
 
@@ -86,6 +89,11 @@ export type EncodePackedErrorType =
  * - dynamic `bytes` and `string` are emitted raw with no padding;
  * - array elements are each padded to a full 32-byte word;
  * - nested dynamic types, nested arrays, and tuples are not packable and throw.
+ *
+ * A type with no packed encoding throws `UnsupportedPackedAbiTypeError`; a
+ * `bytes` / `bytesN` value that is not hex, a `bool` value that is not a
+ * boolean, and an integer value that is neither a number nor a bigint throw
+ * `InvalidAbiParameterValueError`, as in `encodeAbiParameters`.
  *
  * @example
  * encodePacked(
@@ -115,27 +123,34 @@ export function encodePacked<
 /////////////////////////////////////////////////////////////////////////////
 // Internal
 
-function encode(type: string, value: unknown, isArray = false): Hex {
+function encode(
+  type: string,
+  value: unknown,
+  isArray = false,
+  // The type as written by the caller, named by the value error.
+  writtenType = type,
+): Hex {
   // `trcToken` packs exactly like `uint256` — delegate to the integer path.
-  if (type === 'trcToken') return encode('uint256', value, isArray)
+  if (type === 'trcToken') return encode('uint256', value, isArray, type)
   if (type === 'address') {
     const hex = toEvm(value as AddressInput)
     return isArray ? padHex(hex, { size: 32 }) : hex
   }
   if (type === 'string') {
-    if (isArray) throw new UnsupportedPackedAbiType(`${type}[]`)
+    if (isArray) throw new UnsupportedPackedAbiTypeError(`${type}[]`)
     return stringToHex(value as string)
   }
   if (type === 'bytes') {
-    if (isArray) throw new UnsupportedPackedAbiType(`${type}[]`)
-    if (!isHex(value)) throw new UnsupportedPackedAbiType(type)
+    if (isArray) throw new UnsupportedPackedAbiTypeError(`${type}[]`)
+    if (!isHex(value)) throw new InvalidAbiParameterValueError({ type, value })
     // Packed output is concatenated verbatim, so half a byte here shifts
     // every following field by four bits.
     assertHexBytes(value)
     return value
   }
   if (type === 'bool') {
-    if (typeof value !== 'boolean') throw new UnsupportedPackedAbiType(type)
+    if (typeof value !== 'boolean')
+      throw new InvalidAbiParameterValueError({ type, value })
     return padHex(boolToHex(value), { size: isArray ? 32 : 1 })
   }
 
@@ -144,7 +159,7 @@ function encode(type: string, value: unknown, isArray = false): Hex {
     const [, baseType, bits = '256'] = integerMatch
     const signed = baseType === 'int'
     if (typeof value !== 'number' && typeof value !== 'bigint')
-      throw new UnsupportedPackedAbiType(type)
+      throw new InvalidAbiParameterValueError({ type: writtenType, value })
     // A number past 2^53 has already been rounded by IEEE-754 before it got
     // here, so BigInt() would faithfully encode a value the caller never wrote;
     // a fraction/NaN would otherwise escape as a raw RangeError. Pass a bigint
@@ -174,7 +189,7 @@ function encode(type: string, value: unknown, isArray = false): Hex {
   const bytesMatch = type.match(bytesRegex)
   if (bytesMatch) {
     const byteSize = Number(bytesMatch[1])
-    if (!isHex(value)) throw new UnsupportedPackedAbiType(type)
+    if (!isHex(value)) throw new InvalidAbiParameterValueError({ type, value })
     // Before the width check: `size` rounds an odd nibble count up, so a
     // one-nibble-short value would pass it.
     assertHexBytes(value)
@@ -190,7 +205,7 @@ function encode(type: string, value: unknown, isArray = false): Hex {
   if (arrayComponents) {
     // Only arrays of static scalars are packable; a nested array while
     // already inside an array is not.
-    if (isArray) throw new UnsupportedPackedAbiType(type)
+    if (isArray) throw new UnsupportedPackedAbiTypeError(type)
     const [length, childType] = arrayComponents
     if (!Array.isArray(value)) throw new InvalidArrayError(value)
     // `T[k]` always emits k words: the declared length is part of the type,
@@ -206,5 +221,5 @@ function encode(type: string, value: unknown, isArray = false): Hex {
     return data.length > 0 ? concatHex(data) : '0x'
   }
 
-  throw new UnsupportedPackedAbiType(type)
+  throw new UnsupportedPackedAbiTypeError(type)
 }

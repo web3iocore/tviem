@@ -264,7 +264,7 @@ describe('readContract', () => {
       account: holder,
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
-    expect(err.code).toBe(17n)
+    expect(err.panicCode).toBe(17n)
     expect(err.signature).toBe('Panic(uint256)')
   })
 })

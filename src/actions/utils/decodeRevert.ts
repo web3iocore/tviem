@@ -12,14 +12,14 @@ export type RevertData = {
   /** The `Error(string)` text, when the payload is one. */
   reason?: string | undefined
   /** The `Panic(uint256)` code, when the payload is one. */
-  code?: bigint | undefined
+  panicCode?: bigint | undefined
   /** Which Solidity revert helper produced the payload. */
   signature?: 'Error(string)' | 'Panic(uint256)' | undefined
 }
 
 /**
  * Decodes an ABI-encoded revert payload (bare or `0x` hex): `Error(string)`
- * → `reason`, `Panic(uint256)` → `code`; anything else decodes to `{}`.
+ * → `reason`, `Panic(uint256)` → `panicCode`; anything else decodes to `{}`.
  */
 export function decodeRevertData(payload: string | undefined): RevertData {
   const hex = (payload ?? '').replace(/^0x/, '').toLowerCase()
@@ -34,11 +34,11 @@ export function decodeRevertData(payload: string | undefined): RevertData {
   }
   if (hex.startsWith(PANIC_SELECTOR) && hex.length > 8) {
     try {
-      const [code] = decodeAbiParameters(
+      const [panicCode] = decodeAbiParameters(
         [{ type: 'uint256' }],
         `0x${hex.slice(8)}`,
       )
-      return { code: code as bigint, signature: 'Panic(uint256)' }
+      return { panicCode: panicCode as bigint, signature: 'Panic(uint256)' }
     } catch {}
   }
   return {}
@@ -67,7 +67,7 @@ export function decodeRevert(
   if (decoded.signature === 'Panic(uint256)')
     return new ContractFunctionRevertedError({
       functionName,
-      code: decoded.code as bigint,
+      panicCode: decoded.panicCode as bigint,
       signature: decoded.signature,
       data: `0x${hex}`,
     })

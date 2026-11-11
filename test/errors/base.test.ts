@@ -29,6 +29,53 @@ Version: @tronweb3/tviem@${version}`,
   })
 })
 
+test('details: undefined when neither a cause nor details is given', () => {
+  const err = new BaseError('An error occurred.')
+  expect(err.details).toBeUndefined()
+  expect('details' in err).toBe(true)
+  expect(err.message).not.toContain('Details:')
+
+  // A BaseError cause that has no details of its own passes `undefined` on.
+  const wrapped = new BaseError('Outer.', { cause: err })
+  expect(wrapped.details).toBeUndefined()
+  expect(wrapped.message).not.toContain('Details:')
+})
+
+test('details: resolved from the cause first, then the explicit details', () => {
+  // A BaseError cause contributes its own details.
+  expect(
+    new BaseError('Outer.', {
+      cause: new BaseError('Inner.', { details: 'inner details' }),
+      details: 'outer details',
+    }).details,
+  ).toBe('inner details')
+  // A BaseError cause without details yields undefined; the explicit details
+  // is not consulted.
+  expect(
+    new BaseError('Outer.', {
+      cause: new BaseError('Inner.'),
+      details: 'outer details',
+    }).details,
+  ).toBeUndefined()
+  // A plain Error cause contributes its message.
+  expect(
+    new BaseError('Outer.', {
+      cause: new Error('cause message'),
+      details: 'outer details',
+    }).details,
+  ).toBe('cause message')
+  // A plain Error cause with an empty message falls through to the explicit
+  // details.
+  expect(
+    new BaseError('Outer.', { cause: new Error(''), details: 'outer details' })
+      .details,
+  ).toBe('outer details')
+  // No cause: the explicit details.
+  expect(new BaseError('Outer.', { details: 'outer details' }).details).toBe(
+    'outer details',
+  )
+})
+
 test('BaseError (w/ docsPath)', () => {
   expect(
     new BaseError('An error occurred.', {

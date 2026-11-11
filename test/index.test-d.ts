@@ -7,17 +7,29 @@ import {
 } from '../src/accounts/index.js'
 import type {
   Address,
+  BaseError,
   ByteArray,
   Chain,
   Client,
   ContractFunctionName,
+  ContractFunctionRevertedError,
+  DecodeEventLogErrorType,
+  DecodeLogDataMismatchError,
+  DecodeLogDataMismatchErrorType,
+  DecodeLogTopicsMismatchError,
+  DecodeLogTopicsMismatchErrorType,
+  EncodePackedErrorType,
   EvmAddress,
   Hex,
+  InvalidAbiParameterValueErrorType,
   PublicClient,
   RequestErrorType,
   Transport,
   TronHexAddress,
+  TronNodeError,
   TronRequestFn,
+  UnsupportedPackedAbiTypeError,
+  UnsupportedPackedAbiTypeErrorType,
 } from '../src/index.js'
 import {
   addressToHex,
@@ -113,6 +125,62 @@ test('RequestErrorType is importable from the root entrypoint', () => {
   // The error-union building block every action's *ErrorType references; it
   // must be nameable by consumers, not only resolvable structurally.
   expectTypeOf<RequestErrorType>().not.toBeNever()
+})
+
+test('the ABI error types carry the `Error`-suffixed class name', () => {
+  expectTypeOf<
+    DecodeLogDataMismatchErrorType['name']
+  >().toEqualTypeOf<'DecodeLogDataMismatchError'>()
+  expectTypeOf<
+    DecodeLogTopicsMismatchErrorType['name']
+  >().toEqualTypeOf<'DecodeLogTopicsMismatchError'>()
+  expectTypeOf<
+    UnsupportedPackedAbiTypeErrorType['name']
+  >().toEqualTypeOf<'UnsupportedPackedAbiTypeError'>()
+  expectTypeOf<DecodeLogDataMismatchErrorType>().toMatchTypeOf<DecodeLogDataMismatchError>()
+  expectTypeOf<DecodeLogTopicsMismatchErrorType>().toMatchTypeOf<DecodeLogTopicsMismatchError>()
+  expectTypeOf<UnsupportedPackedAbiTypeErrorType>().toMatchTypeOf<UnsupportedPackedAbiTypeError>()
+})
+
+test('the root entrypoint exports the ABI error classes under the suffixed names only', () => {
+  type Root = typeof import('../src/index.js')
+  expectTypeOf<Root>().toHaveProperty('DecodeLogDataMismatchError')
+  expectTypeOf<Root>().toHaveProperty('DecodeLogTopicsMismatchError')
+  expectTypeOf<Root>().toHaveProperty('UnsupportedPackedAbiTypeError')
+  expectTypeOf<Root>().not.toHaveProperty('DecodeLogDataMismatch')
+  expectTypeOf<Root>().not.toHaveProperty('DecodeLogTopicsMismatch')
+  expectTypeOf<Root>().not.toHaveProperty('UnsupportedPackedAbiType')
+})
+
+test('decodeEventLog / encodePacked error unions name the classes they throw', () => {
+  expectTypeOf<DecodeLogDataMismatchErrorType>().toMatchTypeOf<DecodeEventLogErrorType>()
+  expectTypeOf<DecodeLogTopicsMismatchErrorType>().toMatchTypeOf<DecodeEventLogErrorType>()
+  // `encodePacked` reports an unpackable type and an invalid value separately.
+  expectTypeOf<UnsupportedPackedAbiTypeErrorType>().toMatchTypeOf<EncodePackedErrorType>()
+  expectTypeOf<InvalidAbiParameterValueErrorType>().toMatchTypeOf<EncodePackedErrorType>()
+})
+
+test('BaseError.details is `string | undefined`', () => {
+  expectTypeOf<BaseError['details']>().toEqualTypeOf<string | undefined>()
+  // Subclasses inherit the declaration.
+  expectTypeOf<ContractFunctionRevertedError['details']>().toEqualTypeOf<
+    string | undefined
+  >()
+})
+
+test('ContractFunctionRevertedError carries the panic code as `panicCode`', () => {
+  expectTypeOf<ContractFunctionRevertedError['panicCode']>().toEqualTypeOf<
+    bigint | undefined
+  >()
+  expectTypeOf<ContractFunctionRevertedError>().not.toHaveProperty('code')
+  expectTypeOf<
+    NonNullable<ConstructorParameters<typeof ContractFunctionRevertedError>[0]>
+  >().toHaveProperty('panicCode')
+  expectTypeOf<
+    NonNullable<ConstructorParameters<typeof ContractFunctionRevertedError>[0]>
+  >().not.toHaveProperty('code')
+  // The node errors keep their string `code`.
+  expectTypeOf<TronNodeError['code']>().toEqualTypeOf<string | undefined>()
 })
 
 test('root sign* exports are the client actions; ./accounts holds the key utilities', () => {

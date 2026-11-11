@@ -8,9 +8,9 @@ import {
   type AbiEventSignatureEmptyTopicsErrorType,
   AbiEventSignatureNotFoundError,
   type AbiEventSignatureNotFoundErrorType,
-  DecodeLogDataMismatch,
+  DecodeLogDataMismatchError,
   type DecodeLogDataMismatchErrorType,
-  DecodeLogTopicsMismatch,
+  DecodeLogTopicsMismatchError,
   type DecodeLogTopicsMismatchErrorType,
 } from '../../errors/abi.js'
 import { PositionOutOfBoundsError } from '../../errors/cursor.js'
@@ -104,9 +104,9 @@ const docsPath = '/docs/abi/decodeEventLog'
  * topic, so they decode to that 32-byte hash hex (not the original value).
  *
  * By default a log that does not match the event exactly throws
- * ({@link DecodeLogTopicsMismatch} / {@link DecodeLogDataMismatch}) — a
- * missing topic for an indexed parameter and a log carrying more topics than
- * the event has indexed parameters both count as mismatches. With
+ * ({@link DecodeLogTopicsMismatchError} / {@link DecodeLogDataMismatchError})
+ * — a missing topic for an indexed parameter and a log carrying more topics
+ * than the event has indexed parameters both count as mismatches. With
  * `strict: false` the mismatch is tolerated instead: an indexed parameter with
  * no topic is recovered from `data`, extra topics are ignored, undecodable
  * `data` is skipped, and the decodable subset of `args` is returned.
@@ -143,7 +143,7 @@ export function decodeEventLog<
     (input) => 'indexed' in input && input.indexed,
   ).length
   if (strict && argTopics.length > indexedCount)
-    throw new DecodeLogTopicsMismatch({
+    throw new DecodeLogTopicsMismatchError({
       abiItem,
       expectedTopics: indexedCount,
       formattedAbiItem: formatAbiItem(abiItem, { includeName: true }),
@@ -167,7 +167,7 @@ export function decodeEventLog<
     topicIndex++
     if (topic === undefined) {
       if (strict)
-        throw new DecodeLogTopicsMismatch({
+        throw new DecodeLogTopicsMismatchError({
           abiItem,
           formattedAbiItem: formatAbiItem(abiItem, { includeName: true }),
           param: input as AbiParameter & { indexed: boolean },
@@ -212,7 +212,7 @@ export function decodeEventLog<
             err instanceof AbiDecodingDataSizeTooSmallError ||
             err instanceof PositionOutOfBoundsError
           )
-            throw new DecodeLogDataMismatch({
+            throw new DecodeLogDataMismatchError({
               abiItem,
               data,
               formattedParams: formatAbiParams(paramsToDecode, {
@@ -226,7 +226,7 @@ export function decodeEventLog<
         // Lenient mode keeps whatever the topics yielded.
       }
     } else if (strict) {
-      throw new DecodeLogDataMismatch({
+      throw new DecodeLogDataMismatchError({
         abiItem,
         data: data ?? '0x',
         formattedParams: formatAbiParams(paramsToDecode, {

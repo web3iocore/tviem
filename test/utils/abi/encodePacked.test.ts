@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import {
   AbiEncodingArrayLengthMismatchError,
-  UnsupportedPackedAbiType,
+  InvalidAbiParameterValueError,
+  UnsupportedPackedAbiTypeError,
 } from '../../../src/errors/abi.js'
 import { InvalidHexValueError } from '../../../src/errors/encoding.js'
 import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import { encodeAbiParameters } from '../../../src/utils/abi/encodeAbiParameters.js'
 import { encodePacked } from '../../../src/utils/abi/encodePacked.js'
 import {
   type FixtureParameter,
@@ -101,13 +103,13 @@ describe('encodePacked (units)', () => {
 
   test('rejects unpackable nested dynamic / tuple types', () => {
     expect(() => encodePacked(['tuple'], [[1n]] as never)).toThrow(
-      UnsupportedPackedAbiType,
+      UnsupportedPackedAbiTypeError,
     )
     expect(() => encodePacked(['string[]'], [['a']] as never)).toThrow(
-      UnsupportedPackedAbiType,
+      UnsupportedPackedAbiTypeError,
     )
     expect(() => encodePacked(['uint256[][]'], [[[1n]]] as never)).toThrow(
-      UnsupportedPackedAbiType,
+      UnsupportedPackedAbiTypeError,
     )
   })
 
@@ -228,5 +230,140 @@ test('an unsafe-integer number throws an InvalidParameterError', () => {
     name: 'InvalidParameterError',
     param: 'values',
     reason: 'range',
+  })
+})
+
+// A type that has no packed encoding and a value that does not fit a packable
+// type are reported by different classes: `UnsupportedPackedAbiTypeError`
+// names the type, `InvalidAbiParameterValueError` names the value — the class
+// `encodeAbiParameters` uses for the same value.
+describe('encodePacked (error classes)', () => {
+  test.each([
+    ['`string` inside an array', 'string[]', ['a'], 'string[]'],
+    ['`bytes` inside an array', 'bytes[]', ['0x01'], 'bytes[]'],
+    ['a nested array', 'uint256[][]', [[1n]], 'uint256[]'],
+    ['a tuple', 'tuple', [1n], 'tuple'],
+    ['a tuple inside an array', 'tuple[]', [[1n]], 'tuple'],
+    ['an unknown type', 'function', '0x01', 'function'],
+    ['an out-of-range bytesN', 'bytes33', '0x01', 'bytes33'],
+  ])('an unpackable type (%s) throws UnsupportedPackedAbiTypeError', (_, type, value, reported) => {
+    const error = caught(() => encodePacked([type], [value] as never))
+    expect(error).toBeInstanceOf(UnsupportedPackedAbiTypeError)
+    expect(error?.name).toBe('UnsupportedPackedAbiTypeError')
+    expect((error as UnsupportedPackedAbiTypeError).shortMessage).toBe(
+      `Type "${reported}" is not supported for packed encoding.`,
+    )
+  })
+
+  test.each([
+    ['string[]', [5]],
+    ['bytes[]', ['not hex']],
+    ['uint256[][]', ['not an array']],
+  ])('the type check precedes the value check for %s', (type, value) => {
+    expect(caught(() => encodePacked([type], [value] as never))).toBeInstanceOf(
+      UnsupportedPackedAbiTypeError,
+    )
+  })
+
+  const invalidValues: [type: string, value: unknown][] = [
+    // dynamic `bytes`: not a hex string
+    ['bytes', 'hello'],
+    ['bytes', ''],
+    ['bytes', 5],
+    ['bytes', undefined],
+    // `bool`: not a boolean
+    ['bool', 'true'],
+    ['bool', 1],
+    ['bool', undefined],
+    // `uintN` / `intN`: neither a number nor a bigint
+    ['uint256', '1'],
+    ['uint8', true],
+    ['int64', null],
+    // `bytesN`: not a hex string
+    ['bytes4', 'zz'],
+    ['bytes32', 5],
+    ['bytes1', undefined],
+  ]
+
+  test.each(
+    invalidValues,
+  )('an invalid value for %s (%o) throws InvalidAbiParameterValueError', (type, value) => {
+    const error = caught(() => encodePacked([type], [value] as never))
+    expect(error).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect(error).not.toBeInstanceOf(UnsupportedPackedAbiTypeError)
+    expect(error?.name).toBe('InvalidAbiParameterValueError')
+    expect((error as InvalidAbiParameterValueError).shortMessage).toBe(
+      `Value "${String(value)}" is not a valid value for ABI type "${type}".`,
+    )
+  })
+
+  test.each(
+    invalidValues,
+  )('%s (%o): encodeAbiParameters reports the same class and message', (type, value) => {
+    const packed = caught(() => encodePacked([type], [value] as never))
+    const standard = caught(() => encodeAbiParameters([{ type }], [value]))
+    expect(standard).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect(packed?.constructor).toBe(standard?.constructor)
+    expect(packed?.message).toBe(standard?.message)
+  })
+
+  test.each([
+    ['bool[]', [true, 'false'], 'bool', 'false'],
+    ['uint8[2]', [1n, '2'], 'uint8', '2'],
+    ['bytes2[]', ['0x0102', 'zz'], 'bytes2', 'zz'],
+  ])('an invalid element of %s throws InvalidAbiParameterValueError', (type, value, elementType, element) => {
+    const error = caught(() => encodePacked([type], [value] as never))
+    expect(error).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect((error as InvalidAbiParameterValueError).shortMessage).toBe(
+      `Value "${element}" is not a valid value for ABI type "${elementType}".`,
+    )
+    expect(
+      caught(() => encodeAbiParameters([{ type }], [value]))?.message,
+    ).toBe(error?.message)
+  })
+
+  test.each([
+    ['trcToken', '1', '1'],
+    ['trcToken', undefined, 'undefined'],
+    ['trcToken[]', [1n, '2'], '2'],
+    ['trcToken[2]', [null, 2n], 'null'],
+  ])('an invalid value for %s is reported under the `trcToken` type name', (type, value, reported) => {
+    const error = caught(() => encodePacked([type], [value] as never))
+    expect(error).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect((error as InvalidAbiParameterValueError).shortMessage).toBe(
+      `Value "${reported}" is not a valid value for ABI type "trcToken".`,
+    )
+    const standard = caught(() => encodeAbiParameters([{ type }], [value]))
+    expect(standard).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect(error?.message).toBe(standard?.message)
+  })
+
+  // Values whose string conversion throws.
+  const unprintable: [label: string, value: unknown][] = [
+    ['an object without a prototype', Object.create(null)],
+    ['an array holding a symbol', [Symbol('s')]],
+    [
+      'an object whose toString throws',
+      {
+        toString() {
+          throw new Error('toString')
+        },
+      },
+    ],
+  ]
+
+  test.each(
+    ['bytes', 'bool', 'uint256', 'int8', 'trcToken', 'bytes4'].flatMap((type) =>
+      unprintable.map(([label, value]) => [type, label, value] as const),
+    ),
+  )('%s with %s throws InvalidAbiParameterValueError', (type, _, value) => {
+    const packed = caught(() => encodePacked([type], [value] as never))
+    expect(packed).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect((packed as InvalidAbiParameterValueError).shortMessage).toBe(
+      `Value "object" is not a valid value for ABI type "${type}".`,
+    )
+    const standard = caught(() => encodeAbiParameters([{ type }], [value]))
+    expect(standard).toBeInstanceOf(InvalidAbiParameterValueError)
+    expect(packed?.message).toBe(standard?.message)
   })
 })

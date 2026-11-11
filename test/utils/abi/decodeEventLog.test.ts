@@ -2,8 +2,8 @@ import type { Abi } from 'abitype'
 import { describe, expect, test } from 'vitest'
 import {
   AbiEventSignatureNotFoundError,
-  DecodeLogDataMismatch,
-  DecodeLogTopicsMismatch,
+  DecodeLogDataMismatchError,
+  DecodeLogTopicsMismatchError,
 } from '../../../src/errors/abi.js'
 import { decodeEventLog } from '../../../src/utils/abi/decodeEventLog.js'
 import { toEventSelector } from '../../../src/utils/hash/toEventSelector.js'
@@ -90,7 +90,7 @@ describe('decodeEventLog (units)', () => {
         data: '0x',
         eventName: 'Transfer',
       }),
-    ).toThrow(DecodeLogDataMismatch)
+    ).toThrow(DecodeLogDataMismatchError)
   })
 
   test('throws when non-indexed data is truncated', () => {
@@ -101,7 +101,7 @@ describe('decodeEventLog (units)', () => {
         data: '0x0001',
         eventName: 'Transfer',
       }),
-    ).toThrow(DecodeLogDataMismatch)
+    ).toThrow(DecodeLogDataMismatchError)
   })
 })
 
@@ -167,7 +167,7 @@ describe('strict: false decodes leniently', () => {
         topics: transfer.topics,
         data: transfer.data,
       }),
-    ).toThrow(DecodeLogTopicsMismatch)
+    ).toThrow(DecodeLogTopicsMismatchError)
   })
 
   test('a recovered indexed parameter declared first is read first', () => {
@@ -237,7 +237,7 @@ describe('extra topics are rejected in strict mode', () => {
         topics: [...transfer.topics, EXTRA_TOPIC],
         data: transfer.data,
       }),
-    ).toThrow(DecodeLogTopicsMismatch)
+    ).toThrow(DecodeLogTopicsMismatchError)
   })
 
   test('the error reports the expected and received topic counts', () => {
@@ -265,7 +265,7 @@ describe('extra topics are rejected in strict mode', () => {
         eventName: 'Ping',
         topics: [EXTRA_TOPIC, EXTRA_TOPIC],
       }),
-    ).toThrow(DecodeLogTopicsMismatch)
+    ).toThrow(DecodeLogTopicsMismatchError)
   })
 
   test('strict: false tolerates the extra topic', () => {
@@ -280,7 +280,7 @@ describe('extra topics are rejected in strict mode', () => {
   })
 })
 
-describe('strict data mismatches are reported as DecodeLogDataMismatch', () => {
+describe('strict data mismatches are reported as DecodeLogDataMismatchError', () => {
   test('an out-of-bounds tail offset is wrapped, not leaked raw', () => {
     // One 32-byte word holding offset 32 — the dynamic tail it points at is
     // absent, which surfaces as a cursor overrun rather than a size shortfall.
@@ -297,7 +297,7 @@ describe('strict data mismatches are reported as DecodeLogDataMismatch', () => {
         topics: [toEventSelector('Note(string)')],
         data: `0x${(32).toString(16).padStart(64, '0')}`,
       }),
-    ).toThrow(DecodeLogDataMismatch)
+    ).toThrow(DecodeLogDataMismatchError)
   })
 })
 
