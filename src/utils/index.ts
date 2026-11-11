@@ -83,6 +83,12 @@ export {
   getAbiItem,
 } from './abi/getAbiItem.js'
 export {
+  type ParseEventLogsErrorType,
+  type ParseEventLogsParameters,
+  type ParseEventLogsReturnType,
+  parseEventLogs,
+} from './abi/parseEventLogs.js'
+export {
   type PrepareEncodeFunctionDataErrorType,
   type PrepareEncodeFunctionDataParameters,
   type PrepareEncodeFunctionDataReturnType,

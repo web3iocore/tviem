@@ -1,20 +1,26 @@
-import type { Abi, AbiEvent } from 'abitype'
+import type { AbiEvent } from 'abitype'
 import type { Client } from '../../clients/createClient.js'
 import type { RequestErrorType } from '../../clients/transports/http.js'
 import { BaseError, type BaseErrorType } from '../../errors/base.js'
 import { TronRpcError, type TronRpcErrorType } from '../../errors/rpc.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Address, AddressInput } from '../../types/address.js'
+import type {
+  EventFilterArgs,
+  ParsedEvent,
+  WideEventFilterArgs,
+} from '../../types/log.js'
 import type { Hex, LogTopic } from '../../types/misc.js'
-import {
-  type DecodeEventLogReturnType,
-  decodeEventLog,
-} from '../../utils/abi/decodeEventLog.js'
+import type { InferProperty, Prettify } from '../../types/utils.js'
+import type { DecodeEventLogReturnType } from '../../utils/abi/decodeEventLog.js'
 import {
   type EncodeEventTopicsErrorType,
   encodeEventTopics,
 } from '../../utils/abi/encodeEventTopics.js'
-import { formatAbiItem } from '../../utils/abi/formatAbiItem.js'
+import {
+  type ParseEventLogsErrorType,
+  parseEventLogs,
+} from '../../utils/abi/parseEventLogs.js'
 import {
   type ToBase58ErrorType,
   toBase58,
@@ -25,7 +31,6 @@ import {
   type NumberToHexErrorType,
   numberToHex,
 } from '../../utils/encoding/toHex.js'
-import { toEventSelector } from '../../utils/hash/toEventSelector.js'
 
 /** A block selector tag accepted by the TRON JSON-RPC bridge. */
 export type BlockTag = 'latest' | 'earliest' | 'finalized'
@@ -45,42 +50,75 @@ type RpcLog = {
   transactionIndex: Hex
 }
 
-/** A normalized TRON event log. */
-export type Log = {
-  /** The emitting contract (Base58Check). */
-  address: Address
-  /** Hash of the block containing the log. */
-  blockHash: Hex
-  /** Number of the block containing the log. */
-  blockNumber: bigint
-  /**
-   * Block timestamp in SECONDS. Absent on nodes older than GreatVoyage v4.8.2.
-   */
-  blockTimestamp?: bigint | undefined
-  /** ABI-encoded non-indexed parameters. */
-  data: Hex
-  /** Index of the log within its block. */
-  logIndex: number
-  /** `true` when the log was removed by a chain reorganization. */
-  removed: boolean
-  /** The log topics (`topics[0]` is the event selector). */
-  topics: readonly Hex[]
-  /** Hash of the transaction that emitted the log. */
-  transactionHash: Hex
-  /** Index of the transaction within its block. */
-  transactionIndex: number
-  /** The decoded event name, when `event`/`events` was given. */
-  eventName?: string | undefined
-  /**
-   * Decoded parameters (keyed by name, or positional for unnamed inputs),
-   * normalized to TRON/JS types: `address` → Base58Check, integers → `bigint`.
-   * A log that does not decode exactly (without `strict`) carries only the
-   * parameters recoverable from its topics — the rest are absent.
-   */
-  args?: Record<string, unknown> | readonly unknown[] | undefined
-}
+/**
+ * A normalized TRON event log.
+ *
+ * Without type arguments `eventName` and `args` are optional and untyped. With
+ * an `abiEvent` (or a list of `abiEvents`) the type is a union with one member
+ * per event: `eventName` is the event's literal name and `args` is inferred
+ * from its inputs, so checking `eventName` narrows `args`. With `strict: true`
+ * every argument is present; otherwise each one is optional, and `args` is
+ * `undefined` when none was recovered. An event that is not a literal keeps
+ * `eventName: string` and untyped `args`.
+ */
+export type Log<
+  abiEvent extends AbiEvent | undefined = undefined,
+  strict extends boolean | undefined = undefined,
+  abiEvents extends
+    | readonly AbiEvent[]
+    | readonly unknown[]
+    | undefined = abiEvent extends AbiEvent ? [abiEvent] : undefined,
+> = Prettify<
+  {
+    /** The emitting contract (Base58Check). */
+    address: Address
+    /** Hash of the block containing the log. */
+    blockHash: Hex
+    /** Number of the block containing the log. */
+    blockNumber: bigint
+    /**
+     * Block timestamp in SECONDS. Absent on nodes older than GreatVoyage v4.8.2.
+     */
+    blockTimestamp?: bigint | undefined
+    /** ABI-encoded non-indexed parameters. */
+    data: Hex
+    /** Index of the log within its block. */
+    logIndex: number
+    /** `true` when the log was removed by a chain reorganization. */
+    removed: boolean
+    /** The log topics (`topics[0]` is the event selector). */
+    topics: readonly Hex[]
+    /** Hash of the transaction that emitted the log. */
+    transactionHash: Hex
+    /** Index of the transaction within its block. */
+    transactionIndex: number
+  } & (abiEvents extends readonly unknown[]
+    ? ParsedEvent<abiEvents[number], [strict] extends [true] ? true : false>
+    : {
+        /** The decoded event name, when `event`/`events` was given. */
+        eventName?: string | undefined
+        /**
+         * Decoded parameters (keyed by name, or positional for unnamed inputs),
+         * normalized to TRON/JS types: `address` → Base58Check, integers → `bigint`.
+         * A log that does not decode exactly (without `strict`) carries only the
+         * parameters recoverable from its topics — the rest are absent.
+         */
+        args?: Record<string, unknown> | readonly unknown[] | undefined
+      })
+>
 
-export type GetLogsParameters = {
+/**
+ * The `getLogs` filter. With a literal `abiEvent` the `args` filter is typed
+ * from the event's indexed inputs. The `args` type argument is the type of
+ * the filter passed: one that cannot be checked against the event (see
+ * {@link WideEventFilterArgs}) is accepted as it is.
+ */
+export type GetLogsParameters<
+  abiEvent extends AbiEvent | undefined = AbiEvent,
+  abiEvents extends readonly AbiEvent[] | undefined = readonly AbiEvent[],
+  strict extends boolean | undefined = boolean,
+  args = never,
+> = {
   /**
    * Restrict to logs emitted by these contract(s) — any accepted address form.
    * Public nodes cap the list at 1000 entries.
@@ -89,31 +127,34 @@ export type GetLogsParameters = {
 } & (
   | {
       /** The event to filter on (its topics) and decode the logs with. */
-      event: AbiEvent
+      event: abiEvent
       events?: undefined
       /**
        * Indexed argument filter, positional over the indexed inputs or keyed
        * by name. An array entry is an OR-list of alternatives; `null` /
        * `undefined` leaves that topic as a wildcard.
        */
-      args?: readonly unknown[] | Record<string, unknown> | undefined
+      args?:
+        | (abiEvent extends AbiEvent ? EventFilterArgs<abiEvent> : never)
+        | WideEventFilterArgs<args>
+        | undefined
       /**
        * Drop logs that do not decode exactly against the event ABI, instead
        * of returning them partially decoded. @default false
        */
-      strict?: boolean | undefined
+      strict?: strict | undefined
       topics?: undefined
     }
   | {
       event?: undefined
       /** The events to filter on (`topics[0]` OR-list) and decode the logs with. */
-      events: readonly AbiEvent[]
+      events: abiEvents
       args?: undefined
       /**
        * Drop logs that do not decode exactly against the event ABIs, instead
        * of returning them partially decoded. @default false
        */
-      strict?: boolean | undefined
+      strict?: strict | undefined
       topics?: undefined
     }
   | {
@@ -142,9 +183,16 @@ export type GetLogsParameters = {
         /** Restrict to the single block with this hash. */
         blockHash?: Hex | undefined
       }
-  )
+  ) &
+  InferProperty<'strict', strict>
 
-export type GetLogsReturnType = Log[]
+export type GetLogsReturnType<
+  abiEvent extends AbiEvent | undefined = undefined,
+  abiEvents extends readonly AbiEvent[] | undefined = abiEvent extends AbiEvent
+    ? [abiEvent]
+    : undefined,
+  strict extends boolean | undefined = undefined,
+> = Log<abiEvent, strict, abiEvents>[]
 
 export type GetLogsErrorType =
   | BaseErrorType
@@ -154,6 +202,7 @@ export type GetLogsErrorType =
   | ToEvmErrorType
   | ToBase58ErrorType
   | NumberToHexErrorType
+  | ParseEventLogsErrorType
   | ErrorType
 
 /** The flattened (non-discriminated) view the implementation works against. */
@@ -185,10 +234,7 @@ function toBlockRef(block: bigint | number | BlockTag): string {
 /** Normalizes one raw log (plus its decoded form, when available) to a {@link Log}. */
 function formatLog(
   log: RpcLog,
-  decoded?: {
-    eventName?: string | undefined
-    args?: Record<string, unknown> | readonly unknown[] | undefined
-  },
+  decoded?: Partial<DecodeEventLogReturnType>,
 ): Log {
   return {
     address: toBase58(log.address),
@@ -230,13 +276,18 @@ let requestId = 0
  * decoded — `args` carries what its topics recover. A log whose selector
  * matches none of the given events is always dropped.
  *
+ * With a literal (`as const`) `event` / `events` the returned logs are typed
+ * per event: `eventName` is the literal name and `args` is inferred from that
+ * event's inputs, as is the `args` filter.
+ *
  * Protocol note: nodes cap the queried block span (5000 by default, via
  * `node.jsonrpc.maxBlockRange`) and the `address` / topic OR-list sizes
  * (1000 each) — an exceeded limit rejects with a {@link TronRpcError}.
  *
  * `eth_getLogs` has no transaction-hash filter dimension: to read the events
  * of one known transaction, use {@link getTransactionInfo} — its `logs` carry
- * the receipt's raw entries, decodable via `decodeEventLog`.
+ * the receipt's raw entries, decodable via `parseEventLogs` (or one at a time
+ * via `decodeEventLog`).
  *
  * @see https://developers.tron.network/reference/eth_getlogs
  *
@@ -262,6 +313,17 @@ let requestId = 0
  *   toBlock: 'latest',
  * })
  */
+export async function getLogs<
+  const abiEvent extends AbiEvent | undefined = undefined,
+  const abiEvents extends
+    | readonly AbiEvent[]
+    | undefined = abiEvent extends AbiEvent ? [abiEvent] : undefined,
+  strict extends boolean | undefined = undefined,
+  const args = never,
+>(
+  client: Client,
+  parameters?: GetLogsParameters<abiEvent, abiEvents, strict, args>,
+): Promise<GetLogsReturnType<abiEvent, abiEvents, strict>>
 export async function getLogs(
   client: Client,
   parameters: GetLogsParameters = {},
@@ -332,60 +394,13 @@ export async function getLogs(
       },
     )
 
-  // Several events can share one selector yet differ in indexed layout
-  // (ERC-20 vs ERC-721 `Transfer`) — match candidates per log, by selector.
-  const decodable = events?.map((abiEvent) => ({
-    abiEvent,
-    selector: toEventSelector(formatAbiItem(abiEvent)),
-  }))
+  const rpcLogs = response.result ?? []
+  if (!events) return rpcLogs.map((log) => formatLog(log))
 
-  const logs: Log[] = []
-  for (const log of response.result ?? []) {
-    if (!decodable) {
-      logs.push(formatLog(log))
-      continue
-    }
-    const logTopics = (log.topics ?? []) as readonly Hex[]
-    const candidates = decodable.filter(
-      ({ selector }) => selector === logTopics[0],
-    )
-    // A selector outside the provided ABI is dropped in both modes.
-    if (candidates.length === 0) continue
-
-    // Try each candidate until one decodes exactly.
-    let decoded: DecodeEventLogReturnType | undefined
-    for (const { abiEvent } of candidates) {
-      try {
-        decoded = decodeEventLog({
-          abi: [abiEvent] as unknown as Abi,
-          data: log.data,
-          topics: logTopics,
-        })
-        break
-      } catch {
-        // Mismatched `data` / `topics` — try the next candidate.
-      }
-    }
-
-    // No candidate decodes exactly: strict mode drops the log; otherwise fall
-    // back to a partial decode against the first candidate, so the arguments
-    // recoverable from the topics are still returned.
-    if (!decoded) {
-      if (strict) continue
-      const fallback = candidates[0]!.abiEvent
-      try {
-        decoded = decodeEventLog({
-          abi: [fallback] as unknown as Abi,
-          data: log.data,
-          topics: logTopics,
-          strict: false,
-        })
-      } catch {
-        const isUnnamed = (fallback.inputs ?? []).some((input) => !input.name)
-        decoded = { eventName: fallback.name, args: isUnnamed ? [] : {} }
-      }
-    }
-    logs.push(formatLog(log, decoded))
-  }
-  return logs
+  // Decode the raw logs (a node can omit `topics`), then format the kept ones.
+  return parseEventLogs({
+    abi: events,
+    logs: rpcLogs.map((log) => ({ ...log, topics: log.topics ?? [] })),
+    strict,
+  }).map(({ eventName, args, ...log }) => formatLog(log, { eventName, args }))
 }

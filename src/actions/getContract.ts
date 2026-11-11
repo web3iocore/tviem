@@ -13,8 +13,14 @@ import { BaseError } from '../errors/base.js'
 import type { ErrorType } from '../errors/utils.js'
 import type { Address } from '../types/address.js'
 import type { ContractFunctionName } from '../types/contract.js'
+import type { EventFilterArgs, WideEventFilterArgs } from '../types/log.js'
 import type { Hex } from '../types/misc.js'
-import type { IsNever, Prettify } from '../types/utils.js'
+import type {
+  Filter,
+  InferProperty,
+  IsNever,
+  Prettify,
+} from '../types/utils.js'
 import type { TronAbiParametersToPrimitiveTypes } from '../utils/abi/encodeAbiParameters.js'
 import { formatAbiItem } from '../utils/abi/formatAbiItem.js'
 import { getAction } from '../utils/getAction.js'
@@ -134,15 +140,22 @@ type GetEstimateFunction<
  * except `address` / `event` / `events` / `topics` (which the facade binds).
  * The block selectors are the same union `getLogs` declares — a range, or one
  * block by hash, never both — so the combination it refuses at runtime does
- * not compile here either. */
-export type GetEventsOptions = {
+ * not compile here either. `args` is typed from `abiEvent`; without type
+ * arguments it is untyped. The `args` type argument is the type of the filter
+ * passed: one that cannot be checked against `abiEvent` (see
+ * {@link WideEventFilterArgs}) is accepted as it is. */
+export type GetEventsOptions<
+  abiEvent extends AbiEvent = AbiEvent,
+  strict extends boolean | undefined = boolean | undefined,
+  args = never,
+> = {
   /**
    * Indexed argument filter, positional over the indexed inputs or keyed by
    * name. An array entry is an OR-list; `null` / `undefined` is a wildcard.
    */
-  args?: readonly unknown[] | Record<string, unknown> | undefined
+  args?: EventFilterArgs<abiEvent> | WideEventFilterArgs<args> | undefined
   /** Drop logs that do not decode against the event ABI. @default false */
-  strict?: boolean | undefined
+  strict?: strict | undefined
 } & (
   | {
       /** Inclusive lower block bound. @default 'latest' (node default) */
@@ -157,21 +170,43 @@ export type GetEventsOptions = {
       /** Restrict to the single block with this hash. */
       blockHash?: Hex | undefined
     }
-)
+) &
+  InferProperty<'strict', strict>
+
+/** `getEvents.<Event>` when the event cannot be resolved from the ABI type. */
+type GetEventsWideFunction = (
+  options?: GetEventsOptions,
+) => Promise<GetLogsReturnType>
+
+/** `getEvents.<Event>` for one event name: the logs (and the `args` filter)
+ * are inferred from the event, and `strict` from the options. Options held in
+ * a variable of the unparameterised {@link GetEventsOptions} are accepted too.
+ * A name carried by several events of the ABI is rejected at call time, so its
+ * promise never resolves to a value. */
+type GetEventsFunction<
+  abi extends Abi | readonly unknown[],
+  eventName extends string,
+  _abiEvents = Filter<abi, { type: 'event'; name: eventName }>,
+> = _abiEvents extends readonly [infer abiEvent extends AbiEvent]
+  ? <strict extends boolean | undefined = undefined, const args = never>(
+      options?: GetEventsOptions<abiEvent, strict, args>,
+    ) => Promise<GetLogsReturnType<abiEvent, [abiEvent], strict>>
+  : _abiEvents extends readonly [unknown, unknown, ...unknown[]]
+    ? (options?: GetEventsOptions) => Promise<never>
+    : GetEventsWideFunction
 
 /** `getEvents.<Event>(options?)` → the decoded logs matching that event. */
-type GetEventsGroup<_eventNames extends string> =
+type GetEventsGroup<
+  abi extends Abi | readonly unknown[],
+  _eventNames extends string,
+> =
   IsNever<_eventNames> extends true
-    ? {
-        [eventName: string]: (
-          options?: GetEventsOptions,
-        ) => Promise<GetLogsReturnType>
-      }
-    : {
-        [eventName in _eventNames]: (
-          options?: GetEventsOptions,
-        ) => Promise<GetLogsReturnType>
-      }
+    ? { [eventName: string]: GetEventsWideFunction }
+    : string extends _eventNames
+      ? { [eventName: string]: GetEventsWideFunction }
+      : {
+          [eventName in _eventNames]: GetEventsFunction<abi, eventName>
+        }
 
 export type GetContractReturnType<
   abi extends Abi | readonly unknown[] = Abi,
@@ -202,7 +237,7 @@ export type GetContractReturnType<
   {
     abi: abi
     address: address
-    getEvents: GetEventsGroup<_eventNames>
+    getEvents: GetEventsGroup<abi, _eventNames>
   } & (_hasRead extends true
     ? IsNever<_readNames> extends true
       ? unknown

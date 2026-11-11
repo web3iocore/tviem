@@ -1,13 +1,16 @@
+import type { Abi, AbiEvent } from 'abitype'
 import { expectTypeOf, test } from 'vitest'
 import type { SignableTransaction } from '../../src/accounts/types.js'
 import {
   type GetEventsOptions,
   getContract,
 } from '../../src/actions/getContract.js'
+import type { Log } from '../../src/actions/public/getLogs.js'
 import type { Client } from '../../src/clients/createClient.js'
 import type { PublicClient } from '../../src/clients/createPublicClient.js'
 import type { WalletClient } from '../../src/clients/createWalletClient.js'
-import type { AddressInput } from '../../src/types/address.js'
+import type { Address, AddressInput } from '../../src/types/address.js'
+import type { EventFilterArgs } from '../../src/types/log.js'
 import type { Hex } from '../../src/types/misc.js'
 
 const trc20Abi = [
@@ -152,4 +155,322 @@ test('getEvents block selectors are mutually exclusive, as in getLogs', () => {
     fromBlock: bigint
   }>().toExtend<Options>()
   expectTypeOf<{ blockHash: Hex; fromBlock: undefined }>().toExtend<Options>()
+})
+
+/////////////////////////////////////////////////////////////////////////////
+// getEvents inference
+
+const eventsAbi = [
+  ...trc20Abi,
+  {
+    type: 'event',
+    name: 'Approval',
+    inputs: [
+      { name: 'owner', type: 'address', indexed: true },
+      { name: 'spender', type: 'address', indexed: true },
+      { name: 'value', type: 'uint256', indexed: false },
+    ],
+  },
+  // Every input unnamed.
+  {
+    type: 'event',
+    name: 'Unnamed',
+    inputs: [
+      { type: 'address', indexed: true },
+      { type: 'uint256', indexed: false },
+    ],
+  },
+  // Indexed inputs of the hashed types, next to a non-indexed one.
+  {
+    type: 'event',
+    name: 'Hashed',
+    inputs: [
+      { name: 'label', type: 'string', indexed: true },
+      { name: 'ids', type: 'uint256[]', indexed: true },
+      { name: 'note', type: 'string', indexed: false },
+    ],
+  },
+  { type: 'event', name: 'Ping', inputs: [] },
+  // Two events sharing one name.
+  {
+    type: 'event',
+    name: 'Overloaded',
+    inputs: [{ name: 'a', type: 'address', indexed: true }],
+  },
+  {
+    type: 'event',
+    name: 'Overloaded',
+    inputs: [{ name: 'a', type: 'uint256', indexed: true }],
+  },
+] as const
+
+type AddressFilter = AddressInput | readonly AddressInput[] | null | undefined
+
+test('getEvents.<Event> returns logs inferred for that event', async () => {
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  type Transfer = (typeof eventsAbi)[3]
+
+  // Default (non-strict): each arg is optional, `args` can be `undefined`.
+  const logs = await contract.getEvents.Transfer()
+  expectTypeOf(logs).toEqualTypeOf<Log<Transfer>[]>()
+  expectTypeOf(logs[0]!.eventName).toEqualTypeOf<'Transfer'>()
+  expectTypeOf(logs[0]!.args).toEqualTypeOf<
+    | {
+        from?: Address | undefined
+        to?: Address | undefined
+        value?: bigint | undefined
+      }
+    | undefined
+  >()
+  expectTypeOf(await contract.getEvents.Transfer({})).toEqualTypeOf<
+    Log<Transfer>[]
+  >()
+  expectTypeOf(
+    await contract.getEvents.Transfer({ fromBlock: 1n, strict: false }),
+  ).toEqualTypeOf<Log<Transfer>[]>()
+
+  // `strict: true`: every arg is present.
+  const strict = await contract.getEvents.Transfer({ strict: true })
+  expectTypeOf(strict).toEqualTypeOf<Log<Transfer, true>[]>()
+  expectTypeOf(strict[0]!.args).toEqualTypeOf<{
+    from: Address
+    to: Address
+    value: bigint
+  }>()
+
+  // Each property is typed for its own event.
+  const approvals = await contract.getEvents.Approval({ strict: true })
+  expectTypeOf(approvals[0]!.eventName).toEqualTypeOf<'Approval'>()
+  expectTypeOf(approvals[0]!.args).toEqualTypeOf<{
+    owner: Address
+    spender: Address
+    value: bigint
+  }>()
+
+  // Unnamed inputs: a positional tuple.
+  const unnamed = await contract.getEvents.Unnamed({ strict: true })
+  expectTypeOf(unnamed[0]!.args).toEqualTypeOf<readonly [Address, bigint]>()
+  const looseUnnamed = await contract.getEvents.Unnamed()
+  expectTypeOf(looseUnnamed[0]!.args).toEqualTypeOf<
+    readonly [(Address | undefined)?, (bigint | undefined)?] | undefined
+  >()
+
+  // Indexed string / array: the 32-byte topic under `strict`, the topic or
+  // the value recovered from `data` otherwise.
+  const hashed = await contract.getEvents.Hashed({ strict: true })
+  expectTypeOf(hashed[0]!.args).toEqualTypeOf<{
+    label: Hex
+    ids: Hex
+    note: string
+  }>()
+  const looseHashed = await contract.getEvents.Hashed()
+  expectTypeOf(looseHashed[0]!.args?.label).toEqualTypeOf<
+    Hex | string | undefined
+  >()
+  expectTypeOf(looseHashed[0]!.args?.ids).toEqualTypeOf<
+    Hex | readonly bigint[] | undefined
+  >()
+
+  // No inputs.
+  const pings = await contract.getEvents.Ping({ strict: true })
+  expectTypeOf(pings[0]!.args).toEqualTypeOf<undefined>()
+  const loosePings = await contract.getEvents.Ping()
+  expectTypeOf(loosePings[0]!.args).toEqualTypeOf<
+    Record<string, never> | undefined
+  >()
+
+  // Only the events of the ABI are offered.
+  expectTypeOf(contract.getEvents).not.toHaveProperty('balanceOf')
+  // @ts-expect-error not an event of the ABI
+  contract.getEvents.Transferred
+})
+
+test('getEvents.<Event> filter args are typed from the event', () => {
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  type Transfer = (typeof eventsAbi)[3]
+  type Options = GetEventsOptions<Transfer>
+
+  expectTypeOf<NonNullable<Options['args']>>().toEqualTypeOf<
+    EventFilterArgs<Transfer>
+  >()
+  expectTypeOf<NonNullable<Options['args']>>().toEqualTypeOf<
+    | readonly [AddressFilter?, AddressFilter?]
+    | { from?: AddressFilter; to?: AddressFilter }
+  >()
+  expectTypeOf<Options>().toExtend<
+    Parameters<typeof contract.getEvents.Transfer>[0]
+  >()
+
+  // By name or position: a value, an OR-list, or a wildcard.
+  contract.getEvents.Transfer({ args: { from: 'T...' } })
+  contract.getEvents.Transfer({ args: { to: ['T...', '41...'], from: null } })
+  contract.getEvents.Transfer({ args: [undefined, 'T...'], blockHash: '0x1' })
+  contract.getEvents.Unnamed({ args: [['T...', 'T...']] })
+  contract.getEvents.Hashed({ args: { label: ['a', 'b'] } })
+
+  // @ts-expect-error `value` is not indexed
+  contract.getEvents.Transfer({ args: { value: 1n } })
+  // @ts-expect-error misspelt input name
+  contract.getEvents.Transfer({ args: { form: 'T...' } })
+  // @ts-expect-error an address filter is not a bigint
+  contract.getEvents.Transfer({ args: { from: 1n } })
+  // @ts-expect-error only two inputs are indexed
+  contract.getEvents.Transfer({ args: [null, null, 1n] })
+  // @ts-expect-error an address filter is not a bigint
+  contract.getEvents.Transfer({ args: [1n] })
+  // @ts-expect-error an OR-list of the wrong type
+  contract.getEvents.Unnamed({ args: [[1n, 2n]] })
+  // @ts-expect-error `owner` belongs to Approval
+  contract.getEvents.Transfer({ args: { owner: 'T...' } })
+  // @ts-expect-error unnamed inputs have no key
+  contract.getEvents.Unnamed({ args: { account: 'T...' } })
+  // @ts-expect-error an indexed array is not filterable
+  contract.getEvents.Hashed({ args: { ids: [1n] } })
+  // @ts-expect-error `note` is not indexed
+  contract.getEvents.Hashed({ args: { note: 'hello' } })
+  // @ts-expect-error no indexed inputs
+  contract.getEvents.Ping({ args: { anything: 1 } })
+
+  // A literal held in a variable is checked the same way.
+  const misspelt = { form: 'T...' }
+  // @ts-expect-error misspelt input name
+  contract.getEvents.Transfer({ args: misspelt })
+  const tooLong = [null, null, 1n] as const
+  // @ts-expect-error only two inputs are indexed
+  contract.getEvents.Transfer({ args: tooLong })
+  // @ts-expect-error not a filter
+  contract.getEvents.Transfer({ args: 'T...' })
+  // @ts-expect-error not an option
+  contract.getEvents.Transfer({ arg: { from: 'T...' } })
+})
+
+test('getEvents.<Event> takes a filter that is not narrowable as it is', async () => {
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  type Transfer = (typeof eventsAbi)[3]
+
+  // An array of unknown length, an object without known keys, or both.
+  const list = [] as readonly unknown[]
+  const record = {} as Record<string, unknown>
+  const wide = {} as GetEventsOptions['args']
+  expectTypeOf(await contract.getEvents.Transfer({ args: list })).toEqualTypeOf<
+    Log<Transfer>[]
+  >()
+  expectTypeOf(
+    await contract.getEvents.Transfer({ args: record, strict: true }),
+  ).toEqualTypeOf<Log<Transfer, true>[]>()
+  expectTypeOf(
+    await contract.getEvents.Transfer({ args: wide, fromBlock: 1n }),
+  ).toEqualTypeOf<Log<Transfer>[]>()
+  // A positional list built at runtime.
+  const built = ['T...', null].filter(Boolean)
+  expectTypeOf(await contract.getEvents.Unnamed({ args: built })).toEqualTypeOf<
+    Log<(typeof eventsAbi)[5]>[]
+  >()
+})
+
+test('getEvents.<Event>: a strict that can be undefined is not strict', async () => {
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  type Transfer = (typeof eventsAbi)[3]
+
+  // `undefined` selects the default, which is non-strict.
+  const forward = (strict?: true) => contract.getEvents.Transfer({ strict })
+  expectTypeOf(forward).returns.resolves.toEqualTypeOf<Log<Transfer>[]>()
+  const maybe = {} as { strict?: true | undefined; fromBlock?: bigint }
+  expectTypeOf(await contract.getEvents.Transfer(maybe)).toEqualTypeOf<
+    Log<Transfer>[]
+  >()
+  expectTypeOf(
+    await contract.getEvents.Transfer({ strict: undefined }),
+  ).toEqualTypeOf<Log<Transfer>[]>()
+  expectTypeOf(
+    await contract.getEvents.Transfer({ strict: true as boolean }),
+  ).toEqualTypeOf<Log<Transfer>[]>()
+})
+
+test('getEvents.<Event> of an overloaded name never resolves to a value', () => {
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  // The call is rejected at runtime, whatever the options.
+  expectTypeOf(contract.getEvents.Overloaded).toEqualTypeOf<
+    (options?: GetEventsOptions) => Promise<never>
+  >()
+  expectTypeOf(contract.getEvents.Overloaded()).resolves.toBeNever()
+
+  // The same entry listed twice (merged ABIs) is typed the same way.
+  const merged = getContract({
+    abi: [eventsAbi[3], eventsAbi[3]],
+    address,
+    client,
+  })
+  expectTypeOf(merged.getEvents.Transfer()).resolves.toBeNever()
+})
+
+test('getEvents on a wide ABI keeps the untyped shape', async () => {
+  const client = {} as Client
+  for (const abi of [eventsAbi as Abi, eventsAbi as readonly unknown[]]) {
+    const contract = getContract({ abi, address, client })
+    const logs = await contract.getEvents.Anything!({
+      args: { whatever: 1 },
+      strict: true,
+    })
+    expectTypeOf(logs).toEqualTypeOf<Log[]>()
+  }
+  const contract = getContract({ abi: eventsAbi as Abi, address, client })
+  expectTypeOf(contract.getEvents.Transfer!).toEqualTypeOf<
+    (options?: GetEventsOptions) => Promise<Log[]>
+  >()
+})
+
+test('GetEventsOptions stays usable without type arguments', () => {
+  expectTypeOf<GetEventsOptions['args']>().toEqualTypeOf<
+    Record<string, unknown> | readonly unknown[] | undefined
+  >()
+  expectTypeOf<GetEventsOptions['strict']>().toEqualTypeOf<
+    boolean | undefined
+  >()
+  expectTypeOf<GetEventsOptions>().toEqualTypeOf<GetEventsOptions<AbiEvent>>()
+  const options: GetEventsOptions = {
+    args: { from: 'T...' },
+    strict: true,
+    fromBlock: 1n,
+    toBlock: 'latest',
+  }
+
+  // Options built without type arguments are accepted by a typed event, with
+  // or without `args`; the logs are still inferred from the event.
+  const client = {} as Client
+  const contract = getContract({ abi: eventsAbi, address, client })
+  type Transfer = (typeof eventsAbi)[3]
+  expectTypeOf(contract.getEvents.Transfer(options)).resolves.toEqualTypeOf<
+    Log<Transfer>[]
+  >()
+  const range: GetEventsOptions = { fromBlock: 1n, toBlock: 'latest' }
+  expectTypeOf(contract.getEvents.Transfer(range)).resolves.toEqualTypeOf<
+    Log<Transfer>[]
+  >()
+  expectTypeOf(
+    contract.getEvents.Transfer({ ...range, strict: true }),
+  ).resolves.toEqualTypeOf<Log<Transfer, true>[]>()
+  // A wrapper declared with the unparameterised name type-checks.
+  const transfers = (options?: GetEventsOptions) =>
+    contract.getEvents.Transfer(options)
+  expectTypeOf(transfers).returns.resolves.toEqualTypeOf<Log<Transfer>[]>()
+  // ...as does one that picks the event by name.
+  const events = (
+    name: 'Transfer' | 'Approval',
+    options?: GetEventsOptions,
+  ): Promise<Log[]> => contract.getEvents[name](options)
+  expectTypeOf(events).toBeFunction()
+
+  // With an event, `args` and `strict` are typed.
+  expectTypeOf<
+    NonNullable<GetEventsOptions<Transfer, true>['args']>
+  >().toEqualTypeOf<EventFilterArgs<Transfer>>()
+  expectTypeOf<GetEventsOptions<Transfer, true>['strict']>().toEqualTypeOf<
+    true | undefined
+  >()
 })

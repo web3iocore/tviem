@@ -1,4 +1,4 @@
-import type { Abi, AbiStateMutability } from 'abitype'
+import type { Abi, AbiEvent, AbiStateMutability } from 'abitype'
 import {
   type EstimateEnergyParameters,
   type EstimateEnergyReturnType,
@@ -96,7 +96,16 @@ export type PublicActions = {
   /** Fetches a block by number. */
   getBlock: (parameters: GetBlockParameters) => Promise<GetBlockReturnType>
   /** Reads event logs matching a filter, via the JSON-RPC `eth_getLogs` method. */
-  getLogs: (parameters?: GetLogsParameters) => Promise<GetLogsReturnType>
+  getLogs: <
+    const abiEvent extends AbiEvent | undefined = undefined,
+    const abiEvents extends
+      | readonly AbiEvent[]
+      | undefined = abiEvent extends AbiEvent ? [abiEvent] : undefined,
+    strict extends boolean | undefined = undefined,
+    const args = never,
+  >(
+    parameters?: GetLogsParameters<abiEvent, abiEvents, strict, args>,
+  ) => Promise<GetLogsReturnType<abiEvent, abiEvents, strict>>
   /** Fetches the latest block (chain head, or solidified with `confirmed`). */
   getNowBlock: (
     parameters?: GetNowBlockParameters,
@@ -173,8 +182,15 @@ export function publicActions(client: Client): PublicActions {
       getAction(client, getAccountResources, 'getAccountResources')(parameters),
     getBlock: (parameters) =>
       getAction(client, getBlock, 'getBlock')(parameters),
-    getLogs: (parameters = {}) =>
-      getAction(client, getLogs, 'getLogs')(parameters),
+    // getAction erases the action's type parameters (it sees the wide
+    // instantiation), so the generic signature promised by the interface is
+    // re-asserted on the function.
+    getLogs: ((parameters: GetLogsParameters = {}) =>
+      getAction(
+        client,
+        getLogs,
+        'getLogs',
+      )(parameters)) as PublicActions['getLogs'],
     getNowBlock: (parameters) =>
       getAction(client, getNowBlock, 'getNowBlock')(parameters as never),
     getTransaction: (parameters) =>

@@ -1,4 +1,10 @@
 // Read (public) + write (wallet) action surface, plus the `getContract` facade.
+export type {
+  DecodedEvent,
+  DecodedEventArgs,
+  EventFilterArgs,
+  ParsedEvent,
+} from '../types/log.js'
 // biome-ignore lint/performance/noBarrelFile: entrypoint module
 export {
   type GetContractErrorType,

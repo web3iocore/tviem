@@ -824,6 +824,12 @@ export type {
   Widen,
 } from './types/contract.js'
 export type {
+  DecodedEvent,
+  DecodedEventArgs,
+  EventFilterArgs,
+  ParsedEvent,
+} from './types/log.js'
+export type {
   ByteArray,
   CompactSignature,
   Hash,
@@ -960,6 +966,12 @@ export {
   type GetAbiItemReturnType,
   getAbiItem,
 } from './utils/abi/getAbiItem.js'
+export {
+  type ParseEventLogsErrorType,
+  type ParseEventLogsParameters,
+  type ParseEventLogsReturnType,
+  parseEventLogs,
+} from './utils/abi/parseEventLogs.js'
 export {
   type PrepareEncodeFunctionDataErrorType,
   type PrepareEncodeFunctionDataParameters,

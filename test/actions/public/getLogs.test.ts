@@ -402,3 +402,24 @@ test('an absent result formats to an empty log list', async () => {
   const { client } = mock(undefined)
   expect(await getLogs(client)).toEqual([])
 })
+
+test('a log without topics is dropped by an event filter and kept without one', async () => {
+  const { topics: _dropped, ...withoutTopics } = rawLog
+
+  // No selector to match the given events against, in either mode.
+  const lenient = mock([withoutTopics])
+  expect(await getLogs(lenient.client, { event: transferEvent })).toEqual([])
+  const strict = mock([withoutTopics])
+  expect(
+    await getLogs(strict.client, {
+      events: [transferEvent, approvalEvent],
+      strict: true,
+    }),
+  ).toEqual([])
+
+  // Without `event` / `events` the log is returned, with empty topics.
+  const plain = mock([withoutTopics])
+  const [log] = await getLogs(plain.client)
+  expect(log?.topics).toEqual([])
+  expect(log && 'eventName' in log).toBe(false)
+})

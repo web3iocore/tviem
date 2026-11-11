@@ -35,6 +35,26 @@ export type Filter<
   : readonly [...Acc]
 
 /**
+ * An inference site for the `key` property of a parameters object: `type` is
+ * inferred from the type of the property as written, including an `undefined`
+ * that inference through the optional property declaration leaves out. It
+ * resolves to `unknown`, so it does not change what the object accepts.
+ *
+ * @example
+ * declare function get<const strict extends boolean | undefined = undefined>(
+ *   parameters: { strict?: strict | undefined } & InferProperty<'strict', strict>,
+ * ): strict
+ * declare const strict: true | undefined
+ * const result = get({ strict })
+ * //    ^? const result: true | undefined
+ */
+export type InferProperty<key extends PropertyKey, type> = [type] extends [
+  never,
+]
+  ? { [_ in key]: type }
+  : unknown
+
+/**
  * @description Checks if {@link T} can be narrowed further than {@link U}
  * @param T - Type to check
  * @param U - Type to against

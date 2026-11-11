@@ -15,7 +15,14 @@ import {
 } from '../../errors/abi.js'
 import { PositionOutOfBoundsError } from '../../errors/cursor.js'
 import type { ErrorType } from '../../errors/utils.js'
+import type { ContractEventName } from '../../types/contract.js'
+import type {
+  DecodedEvent,
+  EventCandidates,
+  WideEventName,
+} from '../../types/log.js'
 import type { Hex } from '../../types/misc.js'
+import type { InferProperty } from '../../types/utils.js'
 import { size } from '../data/size.js'
 import {
   type ToEventSelectorErrorType,
@@ -28,15 +35,22 @@ import {
 import { getArrayComponents } from './encodeAbiParameters.js'
 import { formatAbiItem, formatAbiParams } from './formatAbiItem.js'
 
-export type DecodeEventLogParameters = {
+export type DecodeEventLogParameters<
+  abi extends Abi | readonly unknown[] = Abi | readonly unknown[],
+  eventName extends string | undefined = ContractEventName<abi> | undefined,
+  strict extends boolean | undefined = boolean | undefined,
+> = {
   /** ABI containing the event definition. */
-  abi: Abi | readonly unknown[]
+  abi: abi
   /** Ordered log topics (`topics[0]` is the selector for non-anonymous events). */
   topics: readonly Hex[]
   /** Non-indexed event data. */
   data?: Hex | undefined
-  /** Event name (required to decode `anonymous` events). */
-  eventName?: string | undefined
+  /**
+   * Event name (required to decode `anonymous` events): one of the event
+   * names of `abi`, or a name held as a plain `string`.
+   */
+  eventName?: ContractEventName<abi> | WideEventName<eventName> | undefined
   /**
    * Whether decoding must be exact. When `false`, an indexed parameter with no
    * topic is recovered from `data` instead, extra topics are ignored, and
@@ -44,13 +58,26 @@ export type DecodeEventLogParameters = {
    * is still returned.
    * @default true
    */
-  strict?: boolean | undefined
-}
+  strict?: strict | undefined
+} & InferProperty<'eventName', eventName>
 
-export type DecodeEventLogReturnType = {
-  eventName: string
-  args: Record<string, unknown> | readonly unknown[] | undefined
-}
+/**
+ * The decoded `{ eventName, args }`, one union member per event of `abi`
+ * (restricted to `eventName` when it is a literal name), with `args` inferred
+ * from the event's inputs — see `DecodedEventArgs`. An `eventName` that can be
+ * `undefined`, or that is a plain `string`, keeps every event. `strict`
+ * follows the function's default: only `false` selects the partial form. An
+ * ABI that is not a literal keeps the wide `eventName: string` and untyped
+ * `args`.
+ */
+export type DecodeEventLogReturnType<
+  abi extends Abi | readonly unknown[] = Abi | readonly unknown[],
+  eventName extends string | undefined = ContractEventName<abi> | undefined,
+  strict extends boolean | undefined = boolean | undefined,
+> = DecodedEvent<
+  EventCandidates<abi, eventName>,
+  [strict] extends [true | undefined] ? true : false
+>
 
 export type DecodeEventLogErrorType =
   | AbiEventNotFoundErrorType
@@ -88,10 +115,20 @@ const docsPath = '/docs/abi/decodeEventLog'
  * decodeEventLog({ abi, topics, data })
  * // { eventName: 'Transfer', args: { from: 'T…', to: 'T…', value: 1000000n } }
  */
-export function decodeEventLog(
-  parameters: DecodeEventLogParameters,
-): DecodeEventLogReturnType {
-  const { abi, topics, data, eventName, strict = true } = parameters
+export function decodeEventLog<
+  const abi extends Abi | readonly unknown[],
+  eventName extends string | undefined = undefined,
+  strict extends boolean | undefined = true,
+>(
+  parameters: DecodeEventLogParameters<abi, eventName, strict>,
+): DecodeEventLogReturnType<abi, eventName, strict> {
+  const {
+    abi,
+    topics,
+    data,
+    eventName,
+    strict = true,
+  } = parameters as DecodeEventLogParameters
   const [topic0, ...argTopics_] = topics
 
   const abiItem = selectEvent(abi, { eventName, topic0 })
@@ -206,7 +243,7 @@ export function decodeEventLog(
     args: (Array.isArray(args) ? args.length : Object.keys(args).length)
       ? args
       : undefined,
-  }
+  } as DecodeEventLogReturnType<abi, eventName, strict>
 }
 
 /////////////////////////////////////////////////////////////////////////////
