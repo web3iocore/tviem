@@ -130,7 +130,7 @@ export async function buildAndBroadcast(
     client,
     broadcastTransaction,
     'broadcastTransaction',
-  )({ signedTransaction: signed })
+  )({ transaction: signed })
 
   return { txID: signed.txID, ...acknowledgement }
 }

@@ -38,7 +38,7 @@ export type BroadcastHexParameters = {
    * any case) — e.g. `toBroadcastHex` output, or bytes serialized by another
    * stack entirely.
    */
-  transaction: string
+  serializedTransaction: string
 }
 export type BroadcastHexReturnType = {
   /**
@@ -131,10 +131,20 @@ export async function broadcastHex(
   client: Client,
   parameters: BroadcastHexParameters,
 ): Promise<BroadcastHexReturnType> {
+  // `parameters` that is not an object, or carries no
+  // `serializedTransaction`, is reported as a parameter error before
+  // anything is read from it.
+  const source = parameters?.serializedTransaction
+  if (source === undefined || source === null)
+    throw new InvalidParameterError(
+      'Invalid serializedTransaction: expected the signed transaction as a hex string.',
+      { param: 'serializedTransaction', reason: 'type' },
+    )
+
   // Canonical wire spelling: bare lowercase hex. The decoded (validated)
   // bytes and the relayed body both come from this one normalized string.
-  const transaction = bareHex(parameters.transaction)
-  const bytes = hexToBytes(`0x${transaction}` as Hex)
+  const serializedTransaction = bareHex(source)
+  const bytes = hexToBytes(`0x${serializedTransaction}` as Hex)
 
   // Read the outer `Transaction` frame. `raw_data` must appear exactly once:
   // protobuf merge semantics would concatenate repeated occurrences, making
@@ -147,14 +157,14 @@ export async function broadcastHex(
       if (field.wireType !== 2 || rawData !== undefined)
         throw new InvalidParameterError(
           'The transaction hex does not carry a single well-formed `raw_data` (field 1).',
-          { param: 'transaction', reason: 'format' },
+          { param: 'serializedTransaction', reason: 'format' },
         )
       rawData = field.value
     } else if (field.fieldNo === 2) {
       if (field.wireType !== 2)
         throw new InvalidParameterError(
           'The transaction hex carries a malformed `signature` (field 2).',
-          { param: 'transaction', reason: 'format' },
+          { param: 'serializedTransaction', reason: 'format' },
         )
       signatures += 1
     }
@@ -162,7 +172,7 @@ export async function broadcastHex(
   if (rawData === undefined)
     throw new InvalidParameterError(
       'The transaction hex does not carry a `raw_data` (field 1).',
-      { param: 'transaction', reason: 'format' },
+      { param: 'serializedTransaction', reason: 'format' },
     )
 
   // Pre-condition: never broadcast an unsigned transaction.
@@ -189,7 +199,7 @@ export async function broadcastHex(
         node: 'full',
         method: 'POST',
         path: 'broadcasthex',
-        body: { transaction },
+        body: { transaction: serializedTransaction },
       },
       { retryCount: 0 },
     )

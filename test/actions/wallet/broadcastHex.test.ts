@@ -54,7 +54,9 @@ test('POSTs the exact hex to broadcasthex and returns the LOCAL txid', async () 
   })
   const client = createClient({ transport })
 
-  const response = await broadcastHex(client, { transaction: BROADCAST_HEX })
+  const response = await broadcastHex(client, {
+    serializedTransaction: BROADCAST_HEX,
+  })
 
   // The node echoes an all-zero txid; the locally computed sha256(raw_data)
   // wins. The node's other acknowledgement fields ride along, plus the
@@ -80,7 +82,7 @@ test('normalizes a `0x`-prefixed upper-case input to the bare lowercase wire for
   const client = createClient({ transport })
 
   const response = await broadcastHex(client, {
-    transaction: `0x${BROADCAST_HEX.toUpperCase()}`,
+    serializedTransaction: `0x${BROADCAST_HEX.toUpperCase()}`,
   })
 
   expect(response.txid).toBe(TX_ID)
@@ -106,7 +108,9 @@ test('passes the acknowledgement fields through (message hex-decoded), never the
     },
   })
   const client = createClient({ transport })
-  expect(await broadcastHex(client, { transaction: BROADCAST_HEX })).toEqual({
+  expect(
+    await broadcastHex(client, { serializedTransaction: BROADCAST_HEX }),
+  ).toEqual({
     txid: TX_ID,
     result: true,
     code: 'SUCCESS',
@@ -124,7 +128,9 @@ test('omits an echoed transaction that does not parse as JSON', async () => {
     },
   })
   const client = createClient({ transport })
-  const response = await broadcastHex(client, { transaction: BROADCAST_HEX })
+  const response = await broadcastHex(client, {
+    serializedTransaction: BROADCAST_HEX,
+  })
   // The echo is informational — a malformed one never fails the broadcast.
   expect(response.txid).toBe(TX_ID)
   expect(response.transaction).toBeUndefined()
@@ -143,7 +149,9 @@ test('relays bytes the model layer cannot represent untouched', async () => {
     raw_data_hex: foreignRawData,
     signature: [SIG],
   })
-  const response = await broadcastHex(client, { transaction: foreignHex })
+  const response = await broadcastHex(client, {
+    serializedTransaction: foreignHex,
+  })
 
   // Relayed untouched, txid still computed from the exact raw_data bytes.
   expect(bodyOf('broadcasthex')).toEqual({ transaction: foreignHex })
@@ -160,7 +168,7 @@ test('throws TronRpcError when the hex carries no signature', async () => {
   const client = createClient({ transport })
   await expect(
     broadcastHex(client, {
-      transaction: toBroadcastHex({ raw_data_hex: RAW_DATA_HEX }),
+      serializedTransaction: toBroadcastHex({ raw_data_hex: RAW_DATA_HEX }),
     }),
   ).rejects.toBeInstanceOf(TronRpcError)
   expect(calls).toHaveLength(0)
@@ -174,9 +182,9 @@ test('refuses hex without a raw_data field', async () => {
 
   // A signature-only protobuf: field 2 (LEN), no field 1.
   const sigOnly = `1241${SIG}`
-  const err = (await broadcastHex(client, { transaction: sigOnly }).catch(
-    (e) => e,
-  )) as BaseError
+  const err = (await broadcastHex(client, {
+    serializedTransaction: sigOnly,
+  }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)
   expect(calls).toHaveLength(0)
 })
@@ -189,11 +197,11 @@ test('refuses undecodable bytes before any request is sent', async () => {
 
   // Truncated protobuf: a LEN field-1 header promising 4 bytes, none present.
   await expect(
-    broadcastHex(client, { transaction: '0a04' }),
+    broadcastHex(client, { serializedTransaction: '0a04' }),
   ).rejects.toBeInstanceOf(BaseError)
   // Not hex at all.
   await expect(
-    broadcastHex(client, { transaction: 'zz' }),
+    broadcastHex(client, { serializedTransaction: 'zz' }),
   ).rejects.toBeInstanceOf(BaseError)
   expect(calls).toHaveLength(0)
 })
@@ -206,7 +214,7 @@ test('surfaces a broadcast rejection as TronBroadcastError with a decoded messag
   })
   const client = createClient({ transport })
   const err = (await broadcastHex(client, {
-    transaction: BROADCAST_HEX,
+    serializedTransaction: BROADCAST_HEX,
   }).catch((e) => e)) as TronBroadcastError
   expect(err).toBeInstanceOf(TronBroadcastError)
   expect(err.shortMessage).toContain('Account resource insufficient error.')
@@ -227,7 +235,7 @@ test('maps an expiration rejection to TransactionExpiredError', async () => {
   })
   const client = createClient({ transport })
   const error = await broadcastHex(client, {
-    transaction: BROADCAST_HEX,
+    serializedTransaction: BROADCAST_HEX,
   }).catch((caught) => caught)
   expect(error).toBeInstanceOf(TransactionExpiredError)
   // The node's own rejection survives as `cause` (as on broadcastTransaction):
@@ -253,7 +261,7 @@ test('a rejection whose body carries no `result` key is a TronBroadcastError wit
   })
   const client = createClient({ transport })
   const err = (await broadcastHex(client, {
-    transaction: BROADCAST_HEX,
+    serializedTransaction: BROADCAST_HEX,
   }).catch((e) => e)) as TronBroadcastError
 
   expect(err).toBeInstanceOf(TronBroadcastError)
@@ -272,7 +280,7 @@ test('refuses an empty acknowledgement body instead of resolving', async () => {
   })
   const client = createClient({ transport })
   await expect(
-    broadcastHex(client, { transaction: BROADCAST_HEX }),
+    broadcastHex(client, { serializedTransaction: BROADCAST_HEX }),
   ).rejects.toThrow('The node did not acknowledge the broadcast.')
 })
 
@@ -282,7 +290,7 @@ test('throws TronRpcError on a `{ result: false }` rejection without a code', as
   })
   const client = createClient({ transport })
   await expect(
-    broadcastHex(client, { transaction: BROADCAST_HEX }),
+    broadcastHex(client, { serializedTransaction: BROADCAST_HEX }),
   ).rejects.toBeInstanceOf(TronRpcError)
 })
 
@@ -304,12 +312,12 @@ test('never retries the broadcast, even when the transport retries', async () =>
   })
   const client = createClient({ transport })
   await expect(
-    broadcastHex(client, { transaction: BROADCAST_HEX }),
+    broadcastHex(client, { serializedTransaction: BROADCAST_HEX }),
   ).rejects.toThrow()
   expect(attempts).toBe(1)
 })
 
-test('a frame error names the `transaction` parameter', async () => {
+test('a frame error names the `serializedTransaction` parameter', async () => {
   const { transport, calls } = createMockTransport({
     responses: { broadcasthex: { response: { result: true } } },
   })
@@ -319,7 +327,7 @@ test('a frame error names the `transaction` parameter', async () => {
     '',
   )
 
-  for (const [transaction, message] of [
+  for (const [serializedTransaction, message] of [
     // Signature only: field 2 (LEN), no field 1.
     [
       `1241${SIG}`,
@@ -341,14 +349,65 @@ test('a frame error names the `transaction` parameter', async () => {
       'The transaction hex carries a malformed `signature` (field 2).',
     ],
   ] as const) {
-    const err = await broadcastHex(client, { transaction }).catch((e) => e)
+    const err = await broadcastHex(client, { serializedTransaction }).catch(
+      (e) => e,
+    )
     expect(err).toBeInstanceOf(InvalidParameterError)
     expect(err).toMatchObject({
       name: 'InvalidParameterError',
       shortMessage: message,
-      param: 'transaction',
+      param: 'serializedTransaction',
       reason: 'format',
     })
   }
   expect(calls).toHaveLength(0)
+})
+
+test('parameters without a `serializedTransaction` are refused before any request', async () => {
+  const { transport, calls } = createMockTransport({
+    responses: { broadcasthex: { response: { result: true } } },
+  })
+  const client = createClient({ transport })
+
+  for (const parameters of [
+    undefined,
+    null,
+    BROADCAST_HEX,
+    7,
+    {},
+    { serializedTransaction: undefined },
+    { serializedTransaction: null },
+    // The former parameter name is not read.
+    { transaction: BROADCAST_HEX },
+  ]) {
+    const error = await broadcastHex(client, parameters as never).catch(
+      (e) => e,
+    )
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      shortMessage:
+        'Invalid serializedTransaction: expected the signed transaction as a hex string.',
+      param: 'serializedTransaction',
+      reason: 'type',
+    })
+  }
+  expect(calls).toHaveLength(0)
+})
+
+test('the hex is passed as `serializedTransaction`, not `transaction`', async () => {
+  const { transport, calls, bodyOf } = createMockTransport({
+    responses: { broadcasthex: { response: { result: true } } },
+  })
+  const client = createClient({ transport })
+
+  await expect(
+    // @ts-expect-error — `transaction` does not exist on the parameters.
+    broadcastHex(client, { transaction: BROADCAST_HEX }),
+  ).rejects.toBeInstanceOf(InvalidParameterError)
+  expect(calls).toHaveLength(0)
+
+  // The request body keeps the node's own key for the hex.
+  await broadcastHex(client, { serializedTransaction: BROADCAST_HEX })
+  expect(bodyOf('broadcasthex')).toEqual({ transaction: BROADCAST_HEX })
 })

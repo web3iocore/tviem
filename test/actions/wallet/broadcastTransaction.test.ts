@@ -36,7 +36,9 @@ test('POSTs the signed transaction JSON to broadcasttransaction and returns the 
   })
   const client = createClient({ transport })
 
-  const response = await broadcastTransaction(client, { signedTransaction })
+  const response = await broadcastTransaction(client, {
+    transaction: signedTransaction,
+  })
 
   // broadcasttransaction.ok echoes an all-zero txid; the local id wins. The
   // node's other acknowledgement fields ride along, and the broadcast
@@ -70,7 +72,9 @@ test('passes the acknowledgement fields through (message hex-decoded), never the
     },
   })
   const client = createClient({ transport })
-  expect(await broadcastTransaction(client, { signedTransaction })).toEqual({
+  expect(
+    await broadcastTransaction(client, { transaction: signedTransaction }),
+  ).toEqual({
     txid: TX_ID,
     result: true,
     code: 'SUCCESS',
@@ -91,7 +95,7 @@ test('returns the snapshot it broadcast, not the caller object', async () => {
   // the four-field snapshot that was integrity-checked and actually sent.
   const decorated = { ...signedTransaction, visible: false }
   const response = await broadcastTransaction(client, {
-    signedTransaction: decorated,
+    transaction: decorated,
   })
   expect(response.transaction).toEqual(signedTransaction)
   expect(response.transaction).not.toHaveProperty('visible')
@@ -160,7 +164,7 @@ test.each([
   const client = createClient({ transport })
 
   const response = await broadcastTransaction(client, {
-    signedTransaction: respell(value),
+    transaction: respell(value),
   })
 
   // The same bytes, so the same transaction — sent in the one form the node
@@ -177,7 +181,7 @@ test('throws TronRpcError when the transaction carries no signature', async () =
   const client = createClient({ transport })
   await expect(
     broadcastTransaction(client, {
-      signedTransaction: { ...signedTransaction, signature: [] },
+      transaction: { ...signedTransaction, signature: [] },
     }),
   ).rejects.toBeInstanceOf(TronRpcError)
 })
@@ -193,7 +197,7 @@ test('refuses a txID that does not hash from the raw_data bytes', async () => {
   const client = createClient({ transport })
 
   const err = (await broadcastTransaction(client, {
-    signedTransaction: { ...signedTransaction, txID: 'ab'.repeat(32) },
+    transaction: { ...signedTransaction, txID: 'ab'.repeat(32) },
   }).catch((e) => e)) as BaseError
   expect(err).toBeInstanceOf(BaseError)
   expect(err.message).toContain('integrity check (txCheck)')
@@ -207,7 +211,7 @@ test('refuses a raw_data model that does not serialize to raw_data_hex', async (
   const client = createClient({ transport })
 
   const err = (await broadcastTransaction(client, {
-    signedTransaction: {
+    transaction: {
       ...signedTransaction,
       // A drifted model: the bytes (and signature) say something else.
       raw_data: { ...signedTransaction.raw_data, fee_limit: 1_000_000 },
@@ -225,9 +229,9 @@ test('surfaces a broadcast rejection as TronBroadcastError with a decoded messag
     },
   })
   const client = createClient({ transport })
-  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
-    (e) => e,
-  )) as TronBroadcastError
+  const err = (await broadcastTransaction(client, {
+    transaction: signedTransaction,
+  }).catch((e) => e)) as TronBroadcastError
   expect(err).toBeInstanceOf(TronBroadcastError)
   expect(err.shortMessage).toContain('Account resource insufficient error.')
 })
@@ -247,7 +251,7 @@ test('maps an expiration rejection to TransactionExpiredError', async () => {
   })
   const client = createClient({ transport })
   await expect(
-    broadcastTransaction(client, { signedTransaction }),
+    broadcastTransaction(client, { transaction: signedTransaction }),
   ).rejects.toBeInstanceOf(TransactionExpiredError)
 })
 
@@ -262,9 +266,9 @@ test('the expiration remap keeps the node rejection as cause', async () => {
     responses: { broadcasttransaction: { error: rejection } },
   })
   const client = createClient({ transport })
-  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
-    (e) => e,
-  )) as TransactionExpiredError
+  const err = (await broadcastTransaction(client, {
+    transaction: signedTransaction,
+  }).catch((e) => e)) as TransactionExpiredError
 
   expect(err).toBeInstanceOf(TransactionExpiredError)
   // The raw node body stays reachable through the cause.
@@ -285,9 +289,9 @@ test('a rejection whose body carries no `result` key is a TronBroadcastError wit
     responses: { broadcasttransaction: { error: rejection } },
   })
   const client = createClient({ transport })
-  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
-    (e) => e,
-  )) as TronBroadcastError
+  const err = (await broadcastTransaction(client, {
+    transaction: signedTransaction,
+  }).catch((e) => e)) as TronBroadcastError
 
   expect(err).toBeInstanceOf(TronBroadcastError)
   expect(err.name).toBe('TronBroadcastError')
@@ -309,9 +313,9 @@ test('an expiration rejection without a `result` key maps to TransactionExpiredE
     },
   })
   const client = createClient({ transport })
-  const err = (await broadcastTransaction(client, { signedTransaction }).catch(
-    (e) => e,
-  )) as TransactionExpiredError
+  const err = (await broadcastTransaction(client, {
+    transaction: signedTransaction,
+  }).catch((e) => e)) as TransactionExpiredError
 
   expect(err).toBeInstanceOf(TransactionExpiredError)
   expect(err.cause).toBeInstanceOf(TronBroadcastError)
@@ -326,7 +330,7 @@ test('refuses an empty acknowledgement body instead of resolving', async () => {
   })
   const client = createClient({ transport })
   await expect(
-    broadcastTransaction(client, { signedTransaction }),
+    broadcastTransaction(client, { transaction: signedTransaction }),
   ).rejects.toThrow('The node did not acknowledge the broadcast.')
 })
 
@@ -336,7 +340,7 @@ test('throws TronRpcError on a `{ result: false }` rejection without a code', as
   })
   const client = createClient({ transport })
   await expect(
-    broadcastTransaction(client, { signedTransaction }),
+    broadcastTransaction(client, { transaction: signedTransaction }),
   ).rejects.toBeInstanceOf(TronRpcError)
 })
 
@@ -359,7 +363,7 @@ test('never retries the broadcast, even when the transport retries', async () =>
   })
   const client = createClient({ transport })
   await expect(
-    broadcastTransaction(client, { signedTransaction }),
+    broadcastTransaction(client, { transaction: signedTransaction }),
   ).rejects.toThrow()
   expect(attempts).toBe(1)
 })
@@ -407,7 +411,7 @@ test('defuses a nested getter that swaps the body after the integrity check', as
   const client = createClient({ transport })
 
   const response = await broadcastTransaction(client, {
-    signedTransaction: evil as typeof signedTransaction,
+    transaction: evil as typeof signedTransaction,
   })
 
   const sent = bodyOf('broadcasttransaction') as typeof signedTransaction
@@ -420,12 +424,12 @@ test('defuses a nested getter that swaps the body after the integrity check', as
   expect(response.txid).toBe(TX_ID)
 })
 
-test('a non-data value in the signed transaction is reported under `signedTransaction`', async () => {
+test('a non-data value in the signed transaction is reported under `transaction`', async () => {
   const { transport, calls } = createMockTransport({ responses: {} })
   const client = createClient({ transport })
 
   const error = await broadcastTransaction(client, {
-    signedTransaction: {
+    transaction: {
       ...signedTransaction,
       raw_data: { ...signedTransaction.raw_data, data: (() => 'aa') as never },
     },
@@ -433,12 +437,67 @@ test('a non-data value in the signed transaction is reported under `signedTransa
   expect(error).toBeInstanceOf(InvalidParameterError)
   expect(error).toMatchObject({
     name: 'InvalidParameterError',
-    param: 'signedTransaction.raw_data.data',
+    param: 'transaction.raw_data.data',
     reason: 'type',
   })
-  // The message keeps its own root label.
   expect(error.shortMessage).toBe(
     'Cannot clone the transaction: `transaction.raw_data.data` is a function, but a signable transaction must be plain data.',
   )
   expect(calls).toHaveLength(0)
+})
+
+test('parameters without a `transaction` are refused before any request', async () => {
+  const { transport, calls } = createMockTransport({
+    responses: {
+      broadcasttransaction: { response: rpc('broadcasttransaction.ok') },
+    },
+  })
+  const client = createClient({ transport })
+
+  for (const parameters of [
+    undefined,
+    null,
+    'ab',
+    7,
+    {},
+    { transaction: undefined },
+    { transaction: null },
+    // The former parameter name is not read.
+    { signedTransaction },
+  ]) {
+    const error = await broadcastTransaction(client, parameters as never).catch(
+      (e) => e,
+    )
+    expect(error).toBeInstanceOf(InvalidParameterError)
+    expect(error).toMatchObject({
+      name: 'InvalidParameterError',
+      shortMessage:
+        'Invalid transaction: expected a signed transaction object.',
+      param: 'transaction',
+      reason: 'type',
+    })
+  }
+  expect(calls).toHaveLength(0)
+})
+
+test('the transaction is passed as `transaction`, not `signedTransaction`', async () => {
+  const { transport, calls } = createMockTransport({
+    responses: {
+      broadcasttransaction: { response: rpc('broadcasttransaction.ok') },
+    },
+  })
+  const client = createClient({ transport })
+
+  await expect(
+    // @ts-expect-error — `signedTransaction` does not exist on the parameters.
+    broadcastTransaction(client, { signedTransaction }),
+  ).rejects.toBeInstanceOf(InvalidParameterError)
+  await expect(
+    broadcastTransaction(client, {
+      transaction: signedTransaction,
+      // @ts-expect-error — `signedTransaction` does not exist on the parameters.
+      signedTransaction,
+    }),
+  ).resolves.toMatchObject({ txid: TX_ID })
+  expect(calls.map((c) => c.path)).toEqual(['broadcasttransaction'])
 })

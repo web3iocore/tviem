@@ -73,7 +73,7 @@ test('an override added after the factory applies to direct calls only', async (
 
   // Direct call: the override answers, the transport is not asked.
   await client.broadcastTransaction({
-    signedTransaction: {} as never,
+    transaction: {} as never,
   })
   expect(overrideCalls).toBe(1)
 

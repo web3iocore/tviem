@@ -6,6 +6,10 @@ import {
 } from '../../clients/transports/http.js'
 import { TronNodeError } from '../../errors/node.js'
 import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
+import {
   TransactionExpiredError,
   type TransactionExpiredErrorType,
   TronRpcError,
@@ -28,7 +32,7 @@ import {
 
 export type BroadcastTransactionParameters = {
   /** A signed transaction (must already carry at least one signature). */
-  signedTransaction: SignableTransaction
+  transaction: SignableTransaction
 }
 export type BroadcastTransactionReturnType = {
   /**
@@ -63,6 +67,7 @@ export type BroadcastTransactionErrorType =
   | AssertRpcSuccessErrorType
   | CanonicalizeTransactionErrorType
   | CloneTransactionErrorType
+  | InvalidParameterErrorType
   | RequestErrorType
   | TransactionExpiredErrorType
   | TronRpcErrorType
@@ -124,21 +129,26 @@ export async function broadcastTransaction(
   client: Client,
   parameters: BroadcastTransactionParameters,
 ): Promise<BroadcastTransactionReturnType> {
+  // `parameters` that is not an object, or carries no `transaction`, is
+  // reported as a parameter error before anything is read from it.
+  const source = parameters?.transaction
+  if (source === undefined || source === null)
+    throw new InvalidParameterError(
+      'Invalid transaction: expected a signed transaction object.',
+      { param: 'transaction', reason: 'type' },
+    )
+
   // Snapshot the fields once, so the values integrity-checked below are the
   // same ones serialized into the wire body. The copy has to be DEEP: picking
   // the four fields still shares `raw_data` with the caller, leaving every
   // nested accessor live to answer txCheck one way and the request body —
   // which the node rebuilds the transaction from — another.
-  const source = parameters.signedTransaction
-  const snapshot = cloneTransaction(
-    {
-      txID: source.txID,
-      raw_data: source.raw_data,
-      raw_data_hex: source.raw_data_hex,
-      signature: source.signature,
-    },
-    'signedTransaction',
-  )
+  const snapshot = cloneTransaction({
+    txID: source.txID,
+    raw_data: source.raw_data,
+    raw_data_hex: source.raw_data_hex,
+    signature: source.signature,
+  })
   const { txID, signature } = snapshot
 
   // Pre-condition: never broadcast an unsigned transaction.

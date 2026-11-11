@@ -135,8 +135,8 @@ counterpart that returns an unsigned transaction you can hand to
 
 ```ts
 const unsigned = await wallet.buildSendTrx({ to: 'T…', amount: parseTrx('1') })
-const signedTransaction = await account.signTransaction(unsigned)
-const { txid } = await wallet.broadcastTransaction({ signedTransaction })
+const signed = await account.signTransaction(unsigned)
+const { txid } = await wallet.broadcastTransaction({ transaction: signed })
 ```
 
 ### Build for an address you hold no key for
