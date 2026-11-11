@@ -6,12 +6,14 @@
 // so a call the node is guaranteed to reject cannot type-check.
 import { expectTypeOf, test } from 'vitest'
 
+import type { AccountPermission } from '../../../src/actions/public/getAccount.js'
 import type {
   AccountPermissionUpdateParameters,
   ActivePermissionInput,
   BuildAccountPermissionUpdateParameters,
   PermissionInput,
 } from '../../../src/actions/wallet/accountPermissionUpdate.js'
+import type { Hex } from '../../../src/types/misc.js'
 import type {
   Int64,
   Permission,
@@ -92,4 +94,62 @@ test('the loose protobuf Permission model is not accepted as input', () => {
     owner: PermissionMessageInput
     actives: PermissionMessageInput[]
   }>().not.toExtend<AccountPermissionUpdateParameters>()
+})
+
+test('the permission name is spelled permissionName', () => {
+  expectTypeOf<PermissionInput['permissionName']>().toEqualTypeOf<
+    string | undefined
+  >()
+  expectTypeOf<ActivePermissionInput['permissionName']>().toEqualTypeOf<
+    string | undefined
+  >()
+  expectTypeOf<PermissionInput>().not.toHaveProperty('permission_name')
+  expectTypeOf<ActivePermissionInput>().not.toHaveProperty('permission_name')
+
+  const keys: PermissionKeyInput[] = []
+  const operations = '00'.repeat(32)
+  const owner: PermissionInput = {
+    permissionName: 'owner',
+    threshold: 1n,
+    keys,
+  }
+  const active: ActivePermissionInput = {
+    permissionName: 'active0',
+    threshold: 1n,
+    keys,
+    operations,
+  }
+  expectTypeOf({
+    owner,
+    actives: [active],
+  }).toExtend<AccountPermissionUpdateParameters>()
+
+  // The wire model's `permission_name` is not an input key.
+  const wireOwner: PermissionInput = {
+    // @ts-expect-error — `permission_name` does not exist on PermissionInput.
+    permission_name: 'owner',
+    threshold: 1n,
+    keys,
+  }
+  const wireActive: ActivePermissionInput = {
+    // @ts-expect-error — `permission_name` does not exist on ActivePermissionInput.
+    permission_name: 'active0',
+    threshold: 1n,
+    keys,
+    operations,
+  }
+  void wireOwner
+  void wireActive
+})
+
+test('a permission formatted by getAccount is assignable to the inputs', () => {
+  expectTypeOf<AccountPermission>().toExtend<PermissionInput>()
+  expectTypeOf<
+    AccountPermission & { operations: Hex }
+  >().toExtend<ActivePermissionInput>()
+  expectTypeOf<{
+    owner: AccountPermission
+    witness: AccountPermission
+    actives: (AccountPermission & { operations: Hex })[]
+  }>().toExtend<AccountPermissionUpdateParameters>()
 })

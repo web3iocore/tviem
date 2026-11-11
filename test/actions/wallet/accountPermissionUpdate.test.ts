@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest'
 import { privateKeyToAccount } from '../../../src/accounts/privateKeyToAccount.js'
 import {
+  type AccountPermission,
+  getAccount,
+} from '../../../src/actions/public/getAccount.js'
+import {
   type AccountPermissionUpdateParameters,
   accountPermissionUpdate,
   buildAccountPermissionUpdate,
@@ -72,7 +76,7 @@ test('updates owner + active permissions byte-for-byte against the gold vector',
 
   const { txID } = await accountPermissionUpdate(client, {
     owner: {
-      permission_name: 'owner',
+      permissionName: 'owner',
       threshold: 2n,
       keys: [
         { address: 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC', weight: 1n },
@@ -82,7 +86,7 @@ test('updates owner + active permissions byte-for-byte against the gold vector',
     actives: [
       {
         id: 2,
-        permission_name: 'active0',
+        permissionName: 'active0',
         threshold: 1n,
         operations:
           '0x7fff1fc0033e0300000000000000000000000000000000000000000000000000',
@@ -173,9 +177,9 @@ test('throws AccountNotFoundError when no account is available', async () => {
 
 test('builds a full owner + witness + actives set offline', async () => {
   const { txID } = await offlineBuild({
-    owner: { permission_name: 'owner', ...validOwner() },
-    witness: { permission_name: 'witness', ...validOwner() },
-    actives: [{ permission_name: 'active0', ...validActive() }],
+    owner: { permissionName: 'owner', ...validOwner() },
+    witness: { permissionName: 'witness', ...validOwner() },
+    actives: [{ permissionName: 'active0', ...validActive() }],
   })
   expect(txID).toMatch(/^[0-9a-f]{64}$/)
 })
@@ -360,4 +364,193 @@ test('validation errors carry their class and the field they refer to', async ()
   })
   expect(wrongId).toBeInstanceOf(PermissionError)
   expect(wrongId).toMatchObject({ name: 'PermissionError', permissionId: 5 })
+})
+
+test('`permissionName` is written to the wire model as `permission_name`', async () => {
+  const tx = await offlineBuild({
+    owner: { permissionName: 'owner', ...validOwner() },
+    witness: { permissionName: 'witness', ...validOwner() },
+    actives: [{ permissionName: 'active0', ...validActive() }],
+  })
+  const value = tx.raw_data.contract[0]!.parameter.value as {
+    owner: Record<string, unknown>
+    witness: Record<string, unknown>
+    actives: Record<string, unknown>[]
+  }
+  expect(value.owner.permission_name).toBe('owner')
+  expect(value.witness.permission_name).toBe('witness')
+  expect(value.actives[0]!.permission_name).toBe('active0')
+  expect(value.owner).not.toHaveProperty('permissionName')
+  expect(value.actives[0]).not.toHaveProperty('permissionName')
+})
+
+test('the wire spelling `permission_name` on a permission input is an unknown field', async () => {
+  const { transport, calls } = writeMock()
+  const client = createWalletClient({ account, transport })
+  const failure = (parameters: Record<string, unknown>) =>
+    accountPermissionUpdate(
+      client,
+      parameters as unknown as AccountPermissionUpdateParameters,
+    ).catch((e) => e)
+
+  // An inherited value and an accessor are read like an own property.
+  class NamedByAccessor {
+    threshold = 1n
+    keys = [{ ...key }]
+    get permission_name() {
+      return 'owner'
+    }
+  }
+  const namedByPrototype = Object.assign(
+    Object.create({ permission_name: 'owner' }),
+    validOwner(),
+  )
+
+  for (const [parameters, slot] of [
+    [
+      {
+        owner: { permission_name: 'owner', ...validOwner() },
+        actives: [validActive()],
+      },
+      'owner',
+    ],
+    [
+      {
+        owner: validOwner(),
+        witness: { permission_name: 'witness', ...validOwner() },
+        actives: [validActive()],
+      },
+      'witness',
+    ],
+    [
+      {
+        owner: validOwner(),
+        actives: [
+          validActive(),
+          { permission_name: 'active1', ...validActive() },
+        ],
+      },
+      'actives[1]',
+    ],
+    // Reported even next to the current spelling, and for a null value.
+    [
+      {
+        owner: {
+          permissionName: 'owner',
+          permission_name: 'owner',
+          ...validOwner(),
+        },
+        actives: [validActive()],
+      },
+      'owner',
+    ],
+    [
+      {
+        owner: { permission_name: null, ...validOwner() },
+        actives: [validActive()],
+      },
+      'owner',
+    ],
+    [{ owner: new NamedByAccessor(), actives: [validActive()] }, 'owner'],
+    [{ owner: namedByPrototype, actives: [validActive()] }, 'owner'],
+  ] as const) {
+    const err = await failure(parameters)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err).toMatchObject({
+      name: 'InvalidParameterError',
+      shortMessage: `Invalid ${slot} permission: unknown field \`permission_name\` (the permission name is passed as \`permissionName\`).`,
+      // For 'unknown-field' the param is the unrecognised key itself.
+      param: 'permission_name',
+      reason: 'unknown-field',
+    })
+  }
+
+  // Nothing was fetched, signed or broadcast for any of them.
+  expect(calls).toHaveLength(0)
+})
+
+test('`permission_name: undefined` is the same as leaving it out', async () => {
+  const baseline = await offlineBuild({
+    owner: validOwner(),
+    actives: [validActive()],
+  })
+  const tx = await offlineBuild({
+    owner: { ...validOwner(), permission_name: undefined },
+    actives: [{ ...validActive(), permission_name: undefined }],
+  })
+  expect(tx.raw_data_hex).toBe(baseline.raw_data_hex)
+})
+
+test('other fields on a permission input are not carried into the model', async () => {
+  const baseline = await offlineBuild({
+    owner: validOwner(),
+    witness: validOwner(),
+    actives: [validActive()],
+  })
+  const tx = await offlineBuild({
+    owner: {
+      ...validOwner(),
+      type: 2,
+      id: 7,
+      parent_id: 3,
+      operations: validActive().operations,
+    },
+    witness: { ...validOwner(), type: 0, id: 1 },
+    actives: [{ ...validActive(), type: 0, parent_id: 3 }],
+  })
+  expect(tx.raw_data_hex).toBe(baseline.raw_data_hex)
+  expect(tx.txID).toBe(baseline.txID)
+})
+
+test('permissions read with getAccount are accepted as inputs', async () => {
+  const { transport } = createMockTransport({
+    responses: { getaccount: { response: rpc('getaccount.rich') } },
+  })
+  const state = await getAccount(createPublicClient({ transport }), {
+    address: 'TPL66VK2gCXNCD7EJg9pgJRfqcRazjhUZY',
+  })
+  if (!state?.ownerPermission || !state.witnessPermission)
+    throw new Error('expected permissions')
+  const active = state.activePermission[0]
+  if (!active?.operations) throw new Error('expected an active permission')
+  // The formatted shape carries `type` / `id` next to the input fields.
+  expect(state.ownerPermission.type).toBe(0)
+  expect(state.witnessPermission).toMatchObject({ type: 1, id: 1 })
+  expect(active).toMatchObject({ type: 2, id: 2 })
+
+  const offline = createWalletClient({
+    account,
+    transport: createMockTransport({ responses: {} }).transport,
+  })
+  // No cast: the formatted permission is assignable to the input types.
+  const tx = await buildAccountPermissionUpdate(offline, {
+    owner: state.ownerPermission,
+    witness: state.witnessPermission,
+    actives: [{ ...active, operations: active.operations }],
+    blockHeader,
+  })
+
+  // The same bytes as the input spelled out field by field.
+  const pick = ({ permissionName, threshold, keys }: AccountPermission) => ({
+    permissionName,
+    threshold,
+    keys,
+  })
+  const spelledOut = await buildAccountPermissionUpdate(offline, {
+    owner: pick(state.ownerPermission),
+    witness: pick(state.witnessPermission),
+    actives: [{ ...pick(active), id: 2, operations: active.operations }],
+    blockHeader,
+  })
+  expect(tx.raw_data_hex).toBe(spelledOut.raw_data_hex)
+  expect(tx.txID).toBe(spelledOut.txID)
+
+  const value = tx.raw_data.contract[0]!.parameter.value as {
+    owner: Record<string, unknown>
+    witness: Record<string, unknown>
+    actives: Record<string, unknown>[]
+  }
+  expect(value.owner.permission_name).toBe('owner')
+  expect(value.witness.permission_name).toBe('witness')
+  expect(value.actives[0]!.permission_name).toBe('active')
 })

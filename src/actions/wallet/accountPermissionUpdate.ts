@@ -59,7 +59,7 @@ import {
  */
 export type PermissionInput = {
   /** Permission name (informational, e.g. `'owner'`). */
-  permission_name?: string | undefined
+  permissionName?: string | undefined
   /** Combined signature weight required to authorize an operation (`int64`). */
   threshold: Int64
   /** Signer keys and their weights (`{ address, weight }`) — at least one. */
@@ -147,9 +147,12 @@ export type BuildAccountPermissionUpdateErrorType =
 
 /**
  * Validates a permission input and assembles the codec model for its slot.
- * Fields are picked explicitly: stray model fields on the caller's object
- * (`type`, `parent_id`, or `operations` on an owner/witness permission, which
- * java-tron forbids) must not ride into the signed bytes.
+ * Fields are picked explicitly: other fields on the caller's object (`type`,
+ * `parent_id`, or `id` / `operations` on an owner/witness permission) are not
+ * carried into the model, so a permission formatted by `getAccount` or
+ * `getSignWeight` is accepted as it is. The name is read from
+ * `permissionName` only; a defined `permission_name` (the wire model's
+ * spelling) throws as an unknown field.
  */
 function toPermission(
   input: PermissionInput,
@@ -169,10 +172,15 @@ function toPermission(
         reason: Array.isArray(input.keys) ? 'range' : 'type',
       },
     )
+  if ((input as { permission_name?: unknown }).permission_name !== undefined)
+    throw new InvalidParameterError(
+      `Invalid ${slot} permission: unknown field \`permission_name\` (the permission name is passed as \`permissionName\`).`,
+      { param: 'permission_name', reason: 'unknown-field' },
+    )
   return {
     type,
-    ...(input.permission_name !== undefined
-      ? { permission_name: input.permission_name }
+    ...(input.permissionName !== undefined
+      ? { permission_name: input.permissionName }
       : {}),
     threshold: input.threshold,
     // Pinned to hex here, synchronously: the codec first reads the model after
@@ -327,7 +335,7 @@ export async function buildAccountPermissionUpdate(
  * required. Each permission's `type` is set from the slot it is passed in
  * (`owner` → OWNER, `witness` → WITNESS, `actives` → ACTIVE), so callers only
  * supply `threshold`, `keys` (`{ address, weight }`), an optional
- * `permission_name`, and — for active permissions — the 32-byte `operations`
+ * `permissionName`, and — for active permissions — the 32-byte `operations`
  * bitmap of allowed contract types.
  *
  * @param client The Client to use.

@@ -21,7 +21,7 @@ const [fixture] = loadTxFixtureFile('account-permission-update-contract.json')
 // The same params the full accountPermissionUpdate test pins against the vector.
 const params = {
   owner: {
-    permission_name: 'owner',
+    permissionName: 'owner',
     threshold: 2n,
     keys: [
       { address: 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC' as const, weight: 1n },
@@ -31,7 +31,7 @@ const params = {
   actives: [
     {
       id: 2,
-      permission_name: 'active0',
+      permissionName: 'active0',
       threshold: 1n,
       operations:
         '0x7fff1fc0033e0300000000000000000000000000000000000000000000000000' as const,
