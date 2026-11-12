@@ -2,8 +2,11 @@ import { expect, test } from 'vitest'
 import { buildWriteContract } from '../../../src/actions/wallet/writeContract.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import { AbiItemAmbiguityError } from '../../../src/errors/abi.js'
 import { AccountNotFoundError } from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
+import { encodeFunctionData } from '../../../src/utils/abi/encodeFunctionData.js'
+import { toFunctionSelector } from '../../../src/utils/hash/toFunctionSelector.js'
 import { rpc } from '../../fixtures/rpc/loader.js'
 import { createMockTransport } from '../../mock/createMockTransport.js'
 
@@ -181,4 +184,140 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
       args: [recipient, 1000000n],
     }),
   ).rejects.toBeInstanceOf(AccountNotFoundError)
+})
+
+test('overloads differing only in array shape: ambiguous by name, built by selector or single-overload ABI', async () => {
+  const overload = (type: string) => ({
+    type: 'function',
+    name: 'airdrop',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type },
+      { name: 'value', type: 'uint256' },
+    ],
+    outputs: [],
+  })
+  const dynamic = overload('address[]')
+  const fixed = overload('address[2]')
+  const args = [[account, recipient], 1n]
+  const calldataOf = (tx: { raw_data: { contract: unknown } }) =>
+    (
+      (tx.raw_data.contract as Record<string, unknown>[])[0] as {
+        parameter: { value: { data: string } }
+      }
+    ).parameter.value.data
+
+  for (const abi of [
+    [dynamic, fixed],
+    [fixed, dynamic],
+  ]) {
+    const { transport, calls } = writeMock()
+    const client = createWalletClient({ account, transport })
+
+    // Two elements fit both overloads: no transaction is built.
+    await expect(
+      buildWriteContract(client, {
+        address: contract,
+        abi,
+        functionName: 'airdrop',
+        args,
+      }),
+    ).rejects.toBeInstanceOf(AbiItemAmbiguityError)
+    expect(calls).toEqual([])
+
+    // The selector names one overload, whatever the ABI order.
+    for (const [item, signature] of [
+      [dynamic, 'airdrop(address[],uint256)'],
+      [fixed, 'airdrop(address[2],uint256)'],
+    ] as const) {
+      const expected = encodeFunctionData({
+        abi: [item],
+        functionName: 'airdrop',
+        args,
+      })
+      expect(expected.slice(0, 10)).toBe(toFunctionSelector(signature))
+
+      const bySelector = await buildWriteContract(client, {
+        address: contract,
+        abi,
+        functionName: toFunctionSelector(signature),
+        args,
+      })
+      expect(`0x${calldataOf(bySelector)}`).toBe(expected)
+
+      // So does an ABI holding that overload alone.
+      const bySingleAbi = await buildWriteContract(client, {
+        address: contract,
+        abi: [item],
+        functionName: 'airdrop',
+        args,
+      })
+      expect(`0x${calldataOf(bySingleAbi)}`).toBe(expected)
+    }
+  }
+})
+
+test('literal abi: the overloads are ambiguous by name, an abi holding one of them builds it', async () => {
+  const dynamicAbi = [
+    {
+      type: 'function',
+      name: 'airdrop',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'to', type: 'address[]' },
+        { name: 'value', type: 'uint256' },
+      ],
+      outputs: [],
+    },
+  ] as const
+  const fixedAbi = [
+    {
+      ...dynamicAbi[0],
+      inputs: [
+        { name: 'to', type: 'address[2]' },
+        { name: 'value', type: 'uint256' },
+      ],
+    },
+  ] as const
+  const { transport, calls } = writeMock()
+  const client = createWalletClient({ account, transport })
+  const calldataOf = (tx: { raw_data: { contract: unknown } }) =>
+    (
+      (tx.raw_data.contract as Record<string, unknown>[])[0] as {
+        parameter: { value: { data: string } }
+      }
+    ).parameter.value.data
+
+  for (const abi of [
+    [dynamicAbi[0], fixedAbi[0]],
+    [fixedAbi[0], dynamicAbi[0]],
+  ] as const)
+    await expect(
+      buildWriteContract(client, {
+        address: contract,
+        abi,
+        functionName: 'airdrop',
+        args: [[account, recipient], 1n],
+      }),
+    ).rejects.toBeInstanceOf(AbiItemAmbiguityError)
+  expect(calls).toEqual([])
+
+  const dynamic = await buildWriteContract(client, {
+    address: contract,
+    abi: dynamicAbi,
+    functionName: 'airdrop',
+    args: [[account, recipient], 1n],
+  })
+  expect(calldataOf(dynamic).slice(0, 8)).toBe(
+    toFunctionSelector('airdrop(address[],uint256)').slice(2),
+  )
+  const fixed = await buildWriteContract(client, {
+    address: contract,
+    abi: fixedAbi,
+    functionName: 'airdrop',
+    args: [[account, recipient], 1n],
+  })
+  expect(calldataOf(fixed).slice(0, 8)).toBe(
+    toFunctionSelector('airdrop(address[2],uint256)').slice(2),
+  )
 })

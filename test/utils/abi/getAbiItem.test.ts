@@ -1,15 +1,17 @@
 import type { Abi } from 'abitype'
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 
 import { AbiItemAmbiguityError } from '../../../src/errors/abi.js'
 import { decodeFunctionResult } from '../../../src/utils/abi/decodeFunctionResult.js'
 import { encodeFunctionData } from '../../../src/utils/abi/encodeFunctionData.js'
+import { formatAbiItem } from '../../../src/utils/abi/formatAbiItem.js'
 import {
   getAbiItem,
   getAmbiguousTypes,
   isArgOfType,
 } from '../../../src/utils/abi/getAbiItem.js'
 import { prepareEncodeFunctionData } from '../../../src/utils/abi/prepareEncodeFunctionData.js'
+import { toFunctionSelector } from '../../../src/utils/hash/toFunctionSelector.js'
 
 const abi = [
   {
@@ -1172,4 +1174,679 @@ test('object-form tuples are read by name when nested and inside arrays', () => 
       [{ a: addr }],
     ]),
   ).toEqual(['address', 'string'])
+})
+
+// Overloads that differ only in array / tuple shape: `T[]` and `T[k]` both
+// accept `k` elements, and a tuple and an array both accept an array-form
+// value. Such a call names no single overload, in either ABI order.
+describe('overloads differing in array / tuple shape', () => {
+  const A = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
+  const B = 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K'
+
+  type Input = { name?: string; type: string; components?: readonly Input[] }
+  const fn = (...inputs: Input[]) => ({
+    type: 'function',
+    name: 'f',
+    stateMutability: 'nonpayable',
+    outputs: [],
+    inputs,
+  })
+  type Fn = ReturnType<typeof fn>
+  const tuple = (...components: Input[]): Input => ({
+    name: 't',
+    type: 'tuple',
+    components,
+  })
+  const uintPairComponents: Input[] = [
+    { name: 'a', type: 'uint256' },
+    { name: 'b', type: 'uint256' },
+  ]
+  const uintPair = tuple(...uintPairComponents)
+
+  /** Every order of `items`. */
+  const permutations = (items: readonly Fn[]): Fn[][] =>
+    items.length <= 1
+      ? [[...items]]
+      : items.flatMap((item, index) =>
+          permutations(items.filter((_, i) => i !== index)).map((rest) => [
+            item,
+            ...rest,
+          ]),
+        )
+  /** The signature `args` resolve to among `items`. */
+  const resolve = (items: readonly Fn[], args: readonly unknown[]) =>
+    formatAbiItem(
+      getAbiItem({ abi: items as unknown as Abi, name: 'f', args }) as never,
+    )
+  /** The error `fn` throws, or `undefined` when it returns. */
+  const thrown = (run: () => unknown): unknown => {
+    try {
+      run()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+  /** Asserts `args` are ambiguous among `items` in every ABI order. */
+  const expectAmbiguous = (
+    items: readonly Fn[],
+    args: readonly unknown[],
+    types?: readonly [string, string],
+  ) => {
+    for (const abi of permutations(items)) {
+      const error = thrown(() => resolve(abi, args))
+      expect(error).toBeInstanceOf(AbiItemAmbiguityError)
+      for (const type of types ?? [])
+        expect((error as AbiItemAmbiguityError).message).toContain(
+          `\`${type}\` in \`f(`,
+        )
+    }
+  }
+  /** Asserts `args` resolve to `signature` among `items` in every ABI order. */
+  const expectResolved = (
+    items: readonly Fn[],
+    args: readonly unknown[],
+    signature: string,
+  ) => {
+    for (const abi of permutations(items))
+      expect(resolve(abi, args)).toBe(signature)
+  }
+
+  describe('T[] and T[k]', () => {
+    const dynamic = fn(
+      { name: 'xs', type: 'address[]' },
+      { name: 'n', type: 'uint256' },
+    )
+    const fixed = fn(
+      { name: 'xs', type: 'address[2]' },
+      { name: 'n', type: 'uint256' },
+    )
+
+    test('k elements are ambiguous, in either ABI order', () => {
+      expectAmbiguous(
+        [dynamic, fixed],
+        [[A, B], 1n],
+        ['address[]', 'address[2]'],
+      )
+    })
+
+    test('the error names both overloads and both types', () => {
+      const error = thrown(() => resolve([dynamic, fixed], [[A, B], 1n]))
+      expect((error as Error).message).toContain(
+        '`address[2]` in `f(address[2],uint256)`, and',
+      )
+      expect((error as Error).message).toContain(
+        '`address[]` in `f(address[],uint256)`',
+      )
+    })
+
+    test('another element count only fits T[]', () => {
+      expectResolved([dynamic, fixed], [[A, B, A], 1n], 'f(address[],uint256)')
+      expectResolved([dynamic, fixed], [[A], 1n], 'f(address[],uint256)')
+      expectResolved([dynamic, fixed], [[], 1n], 'f(address[],uint256)')
+    })
+
+    test('getAmbiguousTypes reports the pair in the order given', () => {
+      const args = [[A, B], 1n]
+      expect(
+        getAmbiguousTypes(dynamic.inputs as never, fixed.inputs as never, args),
+      ).toEqual(['address[]', 'address[2]'])
+      expect(
+        getAmbiguousTypes(fixed.inputs as never, dynamic.inputs as never, args),
+      ).toEqual(['address[2]', 'address[]'])
+      // A value only one of the two accepts settles the position.
+      expect(
+        getAmbiguousTypes(dynamic.inputs as never, fixed.inputs as never, [
+          [A, B, A],
+          1n,
+        ]),
+      ).toBeUndefined()
+    })
+
+    test('in a later parameter position', () => {
+      const items = [
+        fn({ name: 'n', type: 'uint256' }, { name: 'xs', type: 'bool[]' }),
+        fn({ name: 'n', type: 'uint256' }, { name: 'xs', type: 'bool[3]' }),
+      ]
+      expectAmbiguous(items, [1n, [true, false, true]], ['bool[]', 'bool[3]'])
+      expectResolved(items, [1n, [true, false]], 'f(uint256,bool[])')
+    })
+
+    test('element types that cannot both accept the values are not ambiguous', () => {
+      const items = [
+        fn({ name: 'xs', type: 'address[]' }),
+        fn({ name: 'xs', type: 'uint256[2]' }),
+      ]
+      expectResolved(items, [[1n, 2n]], 'f(uint256[2])')
+      expectResolved(items, [[A, B]], 'f(address[])')
+    })
+
+    test('an element-type ambiguity is still reported as the element pair', () => {
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'uint8[]' }),
+          fn({ name: 'xs', type: 'uint256[2]' }),
+        ],
+        [[1n, 2n]],
+        ['uint8', 'uint256'],
+      )
+    })
+
+    test('overloads with different parameter counts are not ambiguous', () => {
+      const items = [fn({ name: 'xs', type: 'address[]' }), fixed]
+      expectResolved(items, [[A, B]], 'f(address[])')
+      expectResolved(items, [[A, B], 1n], 'f(address[2],uint256)')
+    })
+  })
+
+  describe('a tuple and T[k]', () => {
+    const tupleItem = fn(uintPair)
+    const fixed = fn({ name: 'xs', type: 'uint256[2]' })
+
+    test('an array-form value is ambiguous, in either ABI order', () => {
+      expectAmbiguous(
+        [tupleItem, fixed],
+        [[1n, 2n]],
+        ['(uint256,uint256)', 'uint256[2]'],
+      )
+    })
+
+    test('an object-form value only fits the tuple', () => {
+      expectResolved(
+        [tupleItem, fixed],
+        [{ a: 1n, b: 2n }],
+        'f((uint256,uint256))',
+      )
+      expect(
+        getAmbiguousTypes(tupleItem.inputs as never, fixed.inputs as never, [
+          { a: 1n, b: 2n },
+        ]),
+      ).toBeUndefined()
+    })
+
+    test('components of different types are ambiguous when the elements fit both', () => {
+      const mixed = fn(
+        tuple({ name: 'a', type: 'uint256' }, { name: 'b', type: 'uint8' }),
+      )
+      expectAmbiguous(
+        [mixed, fixed],
+        [[1n, 2n]],
+        ['(uint256,uint8)', 'uint256[2]'],
+      )
+    })
+
+    test('components the elements cannot all fit are not ambiguous', () => {
+      const mixed = fn(
+        tuple({ name: 'a', type: 'uint256' }, { name: 'to', type: 'address' }),
+      )
+      expectResolved([mixed, fixed], [[1n, A]], 'f((uint256,address))')
+      expectResolved([mixed, fixed], [[1n, 2n]], 'f(uint256[2])')
+    })
+
+    test('a different component count is not ambiguous', () => {
+      const triple = fn(
+        tuple(
+          { name: 'a', type: 'uint256' },
+          { name: 'b', type: 'uint256' },
+          { name: 'c', type: 'uint256' },
+        ),
+      )
+      expectResolved([triple, fixed], [[1n, 2n]], 'f(uint256[2])')
+      expectResolved(
+        [triple, fixed],
+        [[1n, 2n, 3n]],
+        'f((uint256,uint256,uint256))',
+      )
+    })
+  })
+
+  describe('a tuple and T[]', () => {
+    const tupleItem = fn(uintPair)
+    const dynamic = fn({ name: 'xs', type: 'uint256[]' })
+
+    test('an array-form value is ambiguous, in either ABI order', () => {
+      expectAmbiguous(
+        [tupleItem, dynamic],
+        [[1n, 2n]],
+        ['(uint256,uint256)', 'uint256[]'],
+      )
+    })
+
+    test('another element count only fits T[]', () => {
+      expectResolved([tupleItem, dynamic], [[1n, 2n, 3n]], 'f(uint256[])')
+      expectResolved([tupleItem, dynamic], [[]], 'f(uint256[])')
+    })
+
+    test('an object-form value only fits the tuple', () => {
+      expectResolved(
+        [tupleItem, dynamic],
+        [{ b: 2n, a: 1n }],
+        'f((uint256,uint256))',
+      )
+    })
+  })
+
+  describe('nested', () => {
+    test('an inner array dimension', () => {
+      const items = [
+        fn({ name: 'xs', type: 'address[][]' }),
+        fn({ name: 'xs', type: 'address[2][]' }),
+      ]
+      expectAmbiguous(items, [[[A, B]]], ['address[]', 'address[2]'])
+      expectAmbiguous(items, [
+        [
+          [A, B],
+          [B, A],
+        ],
+      ])
+      // One inner array of another length only fits the dynamic dimension.
+      expectResolved(items, [[[A, B], [A]]], 'f(address[][])')
+      expectResolved(items, [[[A, B, A]]], 'f(address[][])')
+    })
+
+    test('an outer array dimension', () => {
+      const items = [
+        fn({ name: 'xs', type: 'address[][]' }),
+        fn({ name: 'xs', type: 'address[][2]' }),
+      ]
+      expectAmbiguous(items, [[[A], [A, B]]], ['address[][]', 'address[][2]'])
+      expectResolved(items, [[[A]]], 'f(address[][])')
+    })
+
+    test('inside a tuple component, for array-form and object-form tuples', () => {
+      const items = [
+        fn(
+          tuple(
+            { name: 'xs', type: 'address[]' },
+            { name: 'n', type: 'uint256' },
+          ),
+        ),
+        fn(
+          tuple(
+            { name: 'xs', type: 'address[2]' },
+            { name: 'n', type: 'uint256' },
+          ),
+        ),
+      ]
+      expectAmbiguous(items, [[[A, B], 1n]], ['address[]', 'address[2]'])
+      expectAmbiguous(
+        items,
+        [{ xs: [A, B], n: 1n }],
+        ['address[]', 'address[2]'],
+      )
+      expectAmbiguous(items, [{ n: 1n, xs: [A, B] }])
+      expectResolved(
+        items,
+        [{ xs: [A, B, A], n: 1n }],
+        'f((address[],uint256))',
+      )
+    })
+
+    test('a tuple component against an array component', () => {
+      const items = [
+        fn(tuple({ ...uintPair, name: 'p' }, { name: 'n', type: 'uint256' })),
+        fn(
+          tuple(
+            { name: 'p', type: 'uint256[2]' },
+            { name: 'n', type: 'uint256' },
+          ),
+        ),
+      ]
+      expectAmbiguous(
+        items,
+        [{ p: [1n, 2n], n: 3n }],
+        ['(uint256,uint256)', 'uint256[2]'],
+      )
+      expectAmbiguous(items, [[[1n, 2n], 3n]])
+      expectResolved(
+        items,
+        [{ p: { a: 1n, b: 2n }, n: 3n }],
+        'f(((uint256,uint256),uint256))',
+      )
+    })
+
+    test('tuple arrays of different length', () => {
+      const element = [{ name: 'a', type: 'uint256' }]
+      const items = [
+        fn({ name: 'ts', type: 'tuple[]', components: element }),
+        fn({ name: 'ts', type: 'tuple[2]', components: element }),
+      ]
+      expectAmbiguous(
+        items,
+        [[{ a: 1n }, { a: 2n }]],
+        ['(uint256)[]', '(uint256)[2]'],
+      )
+      expectAmbiguous(items, [[[1n], [2n]]])
+      expectResolved(items, [[{ a: 1n }]], 'f((uint256)[])')
+    })
+
+    test('an array of tuples against an array of arrays', () => {
+      const items = [
+        fn({
+          name: 'ts',
+          type: 'tuple[]',
+          components: uintPairComponents,
+        }),
+        fn({ name: 'xs', type: 'uint256[2][]' }),
+      ]
+      expectAmbiguous(items, [[[1n, 2n]]], ['(uint256,uint256)', 'uint256[2]'])
+      // Object-form elements only fit the tuple array.
+      expectResolved(items, [[{ a: 1n, b: 2n }]], 'f((uint256,uint256)[])')
+    })
+
+    test('an empty outer array carries no element: differing inner shapes are ambiguous', () => {
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'address[][]' }),
+          fn({ name: 'xs', type: 'address[2][]' }),
+        ],
+        [[]],
+        ['address[]', 'address[2]'],
+      )
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'address[2][]' }),
+          fn({ name: 'xs', type: 'address[3][]' }),
+        ],
+        [[]],
+        ['address[2]', 'address[3]'],
+      )
+      expectAmbiguous(
+        [
+          fn({
+            name: 'ts',
+            type: 'tuple[]',
+            components: uintPairComponents,
+          }),
+          fn({ name: 'xs', type: 'uint256[2][]' }),
+        ],
+        [[]],
+        ['(uint256,uint256)', 'uint256[2]'],
+      )
+    })
+  })
+
+  describe('the scalar types under the two shapes', () => {
+    const hexA = '0x1111111111111111111111111111111111111111'
+    const addressPair = tuple(
+      { name: 'a', type: 'address' },
+      { name: 'b', type: 'address' },
+    )
+    /** Asserts `args` are not ambiguous among `items` in either ABI order. */
+    const expectUnambiguous = (
+      items: readonly Fn[],
+      args: readonly unknown[],
+    ) => {
+      for (const abi of permutations(items))
+        expect(thrown(() => resolve(abi, args))).toBeUndefined()
+      expect(
+        getAmbiguousTypes(
+          items[0]!.inputs as never,
+          items[1]!.inputs as never,
+          args,
+        ),
+      ).toBeUndefined()
+      expect(
+        getAmbiguousTypes(
+          items[1]!.inputs as never,
+          items[0]!.inputs as never,
+          args,
+        ),
+      ).toBeUndefined()
+    }
+
+    test('address values and a bytes32 shape: not a shape pair', () => {
+      const dynamic = fn({ name: 'xs', type: 'address[]' })
+      const words = fn({ name: 'xs', type: 'bytes32[2]' })
+      expectUnambiguous([dynamic, words], [[hexA, B]])
+      expectUnambiguous([fn(addressPair), words], [[hexA, B]])
+      expectUnambiguous(
+        [
+          fn({ name: 'xs', type: 'address[][]' }),
+          fn({
+            name: 'ts',
+            type: 'tuple[]',
+            components: [
+              { name: 'a', type: 'bytes32' },
+              { name: 'b', type: 'bytes32' },
+            ],
+          }),
+        ],
+        [[[hexA, B]]],
+      )
+      // As for the same pair of element types under one shape.
+      expectUnambiguous(
+        [fn({ name: 'xs', type: 'address[2]' }), words],
+        [[hexA, B]],
+      )
+
+      // The call encodes as the address overload.
+      expect(resolve([words, dynamic], [[hexA, B]])).toBe('f(address[])')
+      expect(
+        encodeFunctionData({
+          abi: [words, dynamic] as unknown as Abi,
+          functionName: 'f',
+          args: [[hexA, B]],
+        }).slice(0, 10),
+      ).toBe(toFunctionSelector('f(address[])'))
+    })
+
+    test('one scalar type under both shapes, whatever its spelling', () => {
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'uint[]' }),
+          fn({ name: 'xs', type: 'uint256[2]' }),
+        ],
+        [[1n, 2n]],
+        ['uint[]', 'uint256[2]'],
+      )
+    })
+
+    test('a tuple and an array whose scalar types are ambiguous for the values', () => {
+      expectAmbiguous(
+        [fn(addressPair), fn({ name: 'xs', type: 'bytes20[2]' })],
+        [[hexA, hexA]],
+        ['(address,address)', 'bytes20[2]'],
+      )
+      expectAmbiguous(
+        [fn(addressPair), fn({ name: 'xs', type: 'string[]' })],
+        [[hexA, B]],
+        ['(address,address)', 'string[]'],
+      )
+    })
+
+    test('object-form tuples are read by name under an array-length pair', () => {
+      const swapped = [uintPairComponents[1]!, uintPairComponents[0]!]
+      const items = [
+        fn({ name: 'ts', type: 'tuple[]', components: uintPairComponents }),
+        fn({ name: 'ts', type: 'tuple[2]', components: swapped }),
+      ]
+      expectAmbiguous(
+        items,
+        [
+          [
+            { a: 1n, b: 2n },
+            { b: 4n, a: 3n },
+          ],
+        ],
+        ['(uint256,uint256)[]', '(uint256,uint256)[2]'],
+      )
+      expectResolved(items, [[{ a: 1n, b: 2n }]], 'f((uint256,uint256)[])')
+    })
+
+    test('an empty outer array: the inner shapes are compared with no value', () => {
+      // Element types that take a value to be ambiguous are not, as under
+      // one inner shape.
+      expectUnambiguous(
+        [
+          fn({ name: 'xs', type: 'uint256[2][]' }),
+          fn({ name: 'xs', type: 'string[3][]' }),
+        ],
+        [[]],
+      )
+      expectUnambiguous(
+        [
+          fn({ name: 'xs', type: 'uint256[2][]' }),
+          fn({ name: 'xs', type: 'string[2][]' }),
+        ],
+        [[]],
+      )
+      expectUnambiguous(
+        [
+          fn({ name: 'xs', type: 'uint8[][]' }),
+          fn({ name: 'xs', type: 'uint256[2][]' }),
+        ],
+        [[]],
+      )
+      // A pair ambiguous for any value is reported as that pair.
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'address[2][]' }),
+          fn({ name: 'xs', type: 'bytes20[3][]' }),
+        ],
+        [[]],
+        ['address', 'bytes20'],
+      )
+      // A tuple and an array of another length.
+      expectAmbiguous(
+        [
+          fn({ name: 'ts', type: 'tuple[]', components: uintPairComponents }),
+          fn({ name: 'xs', type: 'uint256[3][]' }),
+        ],
+        [[]],
+        ['(uint256,uint256)', 'uint256[3]'],
+      )
+      // Empty inner arrays under an outer array-length pair.
+      expectAmbiguous(
+        [
+          fn({ name: 'xs', type: 'address[][]' }),
+          fn({ name: 'xs', type: 'address[][2]' }),
+        ],
+        [[[], []]],
+        ['address[][]', 'address[][2]'],
+      )
+    })
+  })
+
+  describe('three or more overloads', () => {
+    test('every ABI order reports an ambiguity among shape overloads', () => {
+      const items = [
+        fn({ name: 'xs', type: 'address[]' }),
+        fn({ name: 'xs', type: 'address[2]' }),
+        fn(
+          tuple({ name: 'a', type: 'address' }, { name: 'b', type: 'address' }),
+        ),
+      ]
+      expectAmbiguous(items, [[A, B]])
+      // Three elements only fit the dynamic array.
+      expectResolved(items, [[A, B, A]], 'f(address[])')
+    })
+
+    test('an overload that does not match leaves the ambiguous pair reported', () => {
+      const items = [
+        fn({ name: 'xs', type: 'address[]' }),
+        fn({ name: 'n', type: 'uint256' }),
+        fn({ name: 'xs', type: 'address[2]' }),
+        fn({ name: 'xs', type: 'address[3]' }),
+      ]
+      expectAmbiguous(items, [[A, B]], ['address[]', 'address[2]'])
+      expectAmbiguous(items, [[A, B, A]], ['address[]', 'address[3]'])
+      expectResolved(items, [[A]], 'f(address[])')
+      expectResolved(items, [1n], 'f(uint256)')
+    })
+
+    test('a pair separated by a matching, unambiguous overload is reported in every order', () => {
+      // `function` accepts the same hex string and is ambiguous with neither
+      // `address` nor `bytes20`.
+      const items = [
+        fn({ name: 'x', type: 'address' }),
+        fn({ name: 'x', type: 'function' }),
+        fn({ name: 'x', type: 'bytes20' }),
+      ]
+      expectAmbiguous(
+        items,
+        ['0x2b5ad5c4795c026514f8317c7a215e218dccd6cf'],
+        ['address', 'bytes20'],
+      )
+    })
+  })
+
+  describe('selecting one overload', () => {
+    const dynamic = fn(
+      { name: 'xs', type: 'address[]' },
+      { name: 'n', type: 'uint256' },
+    )
+    const fixed = fn(
+      { name: 'xs', type: 'address[2]' },
+      { name: 'n', type: 'uint256' },
+    )
+    const args = [[A, B], 1n]
+    const signatures = ['f(address[],uint256)', 'f(address[2],uint256)']
+
+    test('getAbiItem: the 4-byte selector as the name', () => {
+      for (const abi of permutations([dynamic, fixed]))
+        for (const signature of signatures)
+          expect(
+            formatAbiItem(
+              getAbiItem({
+                abi: abi as unknown as Abi,
+                name: toFunctionSelector(signature),
+                args,
+              }) as never,
+            ),
+          ).toBe(signature)
+    })
+
+    test('getAbiItem: an ABI holding the single overload', () => {
+      expect(resolve([dynamic], args)).toBe(signatures[0])
+      expect(resolve([fixed], args)).toBe(signatures[1])
+    })
+
+    test('encodeFunctionData: ambiguous by name, resolved by selector or single-overload ABI', () => {
+      const single = [dynamic, fixed].map((item) =>
+        encodeFunctionData({
+          abi: [item] as unknown as Abi,
+          functionName: 'f',
+          args,
+        }),
+      )
+      // Same arguments, two different calls.
+      expect(single[0]).not.toBe(single[1])
+      expect(single[0]!.slice(0, 10)).toBe(toFunctionSelector(signatures[0]!))
+      expect(single[1]!.slice(0, 10)).toBe(toFunctionSelector(signatures[1]!))
+
+      for (const abi of permutations([dynamic, fixed]) as unknown as Abi[]) {
+        expect(() =>
+          encodeFunctionData({ abi, functionName: 'f', args }),
+        ).toThrowError(AbiItemAmbiguityError)
+        signatures.forEach((signature, index) => {
+          expect(
+            encodeFunctionData({
+              abi,
+              functionName: toFunctionSelector(signature),
+              args,
+            }),
+          ).toBe(single[index])
+        })
+      }
+    })
+
+    test('prepareEncodeFunctionData and decodeFunctionResult resolve the same way', () => {
+      for (const abi of permutations([dynamic, fixed]) as unknown as Abi[]) {
+        expect(() =>
+          prepareEncodeFunctionData({ abi, functionName: 'f', args }),
+        ).toThrowError(AbiItemAmbiguityError)
+        expect(() =>
+          decodeFunctionResult({ abi, functionName: 'f', args, data: '0x' }),
+        ).toThrowError(AbiItemAmbiguityError)
+        expect(
+          prepareEncodeFunctionData({
+            abi,
+            functionName: toFunctionSelector(signatures[1]!),
+            args,
+          }).functionName,
+        ).toBe(toFunctionSelector(signatures[1]!))
+      }
+    })
+  })
 })

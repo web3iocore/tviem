@@ -16,7 +16,7 @@ import { isAddress } from '../address/isAddress.js'
 import { isHex } from '../data/isHex.js'
 import { toEventSelector } from '../hash/toEventSelector.js'
 import { toFunctionSelector } from '../hash/toFunctionSelector.js'
-import { formatAbiItem } from './formatAbiItem.js'
+import { formatAbiItem, formatAbiParams } from './formatAbiItem.js'
 
 export type GetAbiItemParameters<
   abi extends Abi | readonly unknown[] = Abi,
@@ -59,7 +59,10 @@ const ARRAY_SUFFIX = /\[([0-9]*)\]$/
  * (`0x…` hex). When several overloads share a name, `args` disambiguates them
  * by matching each argument against the candidate parameter types (`address`
  * matching is TRON-aware, accepting any address form). A combination that two
- * overloads could both encode throws {@link AbiItemAmbiguityError}.
+ * overloads could both encode throws {@link AbiItemAmbiguityError}, whatever
+ * their order in `abi` — see {@link getAmbiguousTypes} for the type pairs.
+ * Passing the 4-byte selector as `name`, or an `abi` holding the single
+ * overload, selects one of them.
  *
  * @example
  * getAbiItem({ abi, name: 'transfer' })
@@ -98,7 +101,7 @@ export function getAbiItem<
   if (abiItems.length === 1)
     return abiItems[0] as GetAbiItemReturnType<abi, name, args>
 
-  let matchedAbiItem: AbiItem | undefined
+  const matchedAbiItems: AbiItem[] = []
   for (const abiItem of abiItems) {
     if (!('inputs' in abiItem)) continue
     if (!args || args.length === 0) {
@@ -115,13 +118,13 @@ export function getAbiItem<
       return isArgOfType(arg, abiParameter)
     })
     if (matched) {
-      // Two overloads that both structurally accept `args` are ambiguous only
-      // when a parameter position has types that encode identically.
-      if (
-        matchedAbiItem &&
-        'inputs' in matchedAbiItem &&
-        matchedAbiItem.inputs
-      ) {
+      // Overloads that all structurally accept `args` are ambiguous when a
+      // parameter position holds a pair of types `getAmbiguousTypes` reports.
+      // This match is compared with every earlier one, nearest first, so the
+      // outcome is the same for any order of the overloads in the ABI.
+      for (let index = matchedAbiItems.length - 1; index >= 0; index--) {
+        const matchedAbiItem = matchedAbiItems[index]!
+        if (!('inputs' in matchedAbiItem) || !matchedAbiItem.inputs) continue
         const ambiguousTypes = getAmbiguousTypes(
           abiItem.inputs,
           matchedAbiItem.inputs,
@@ -139,13 +142,13 @@ export function getAbiItem<
             },
           )
       }
-      // Advance to this match so the next candidate is disambiguated against
-      // the immediately-previous match (and the last structural match wins),
+      // With no ambiguous pair, the last structural match is the result,
       // matching the reference overload-resolution semantics.
-      matchedAbiItem = abiItem
+      matchedAbiItems.push(abiItem)
     }
   }
 
+  const matchedAbiItem = matchedAbiItems[matchedAbiItems.length - 1]
   if (matchedAbiItem)
     return matchedAbiItem as GetAbiItemReturnType<abi, name, args>
   return abiItems[0] as GetAbiItemReturnType<abi, name, args>
@@ -246,6 +249,20 @@ export function isArgOfType(arg: unknown, abiParameter: AbiParameter): boolean {
  * for a string argument, and differing bytes widths are ambiguous with each
  * other for a string/Uint8Array argument — like differing integer widths,
  * they accept the same arguments but select different functions.
+ *
+ * Two types that differ in shape are ambiguous for an argument both accept:
+ * arrays of different length (`T[]` and `T[k]` for `k` elements), and a tuple
+ * with an array (`(T,T)` and `T[2]` or `T[]` for an array-form value whose
+ * elements fit both). The pair is reported as the two formatted types, e.g.
+ * `['address[]', 'address[2]']` or `['(uint256,uint256)', 'uint256[2]']`.
+ * The scalar types the two shapes hold have to be one type, or a pair
+ * reported above for the value: `uint8[]` and `uint256[2]` are ambiguous for
+ * two numbers, `address[]` and `bytes32[2]` are not for two addresses. Under
+ * an empty array there is no element to inspect, and the two element types
+ * are compared with no value — `T[]` and `T[2]`, or `T[2]` and `T[3]`, are
+ * ambiguous as the element types of an empty array. An object-form tuple
+ * value is not an array value, and an argument only one of the two types
+ * accepts settles the position.
  */
 export function getAmbiguousTypes(
   sourceParameters: readonly AbiParameter[],
@@ -297,10 +314,10 @@ export function getAmbiguousTypes(
       continue
     }
 
-    if (
-      ARRAY_SUFFIX.test(sourceParameter.type) &&
-      ARRAY_SUFFIX.test(targetParameter.type)
-    ) {
+    const sourceArray = ARRAY_SUFFIX.exec(sourceParameter.type)
+    const targetArray = ARRAY_SUFFIX.exec(targetParameter.type)
+
+    if (sourceArray && targetArray) {
       const sourceElement = {
         ...sourceParameter,
         type: sourceParameter.type.replace(ARRAY_SUFFIX, ''),
@@ -321,6 +338,25 @@ export function getAmbiguousTypes(
         elements,
       )
       if (ambiguous) return ambiguous
+      // No element pair is ambiguous; `T[]` and `T[k]` (or, under an empty
+      // array, `T[j]` and `T[k]`) still accept the same value.
+      if (
+        sourceArray[1] !== targetArray[1] &&
+        isArgOfBoth(arg, sourceParameter, targetParameter)
+      )
+        return formatTypes(sourceParameter, targetParameter)
+      continue
+    }
+
+    // A tuple and an array both accept an array-form value whose elements fit
+    // the tuple's components and the array's element type.
+    if (
+      (sourceParameter.type === 'tuple' && targetArray) ||
+      (sourceArray && targetParameter.type === 'tuple')
+    ) {
+      const arg = args[parameterIndex as unknown as number]
+      if (isArgOfBoth(arg, sourceParameter, targetParameter))
+        return formatTypes(sourceParameter, targetParameter)
       continue
     }
 
@@ -375,6 +411,115 @@ export function getAmbiguousTypes(
   }
 
   return undefined
+}
+
+/**
+ * Whether `arg` is a value of both parameter types with nothing in it to tell
+ * them apart: both types accept it, and each pair of scalar types it is read
+ * as is one type or a pair {@link getAmbiguousTypes} reports for that value.
+ * An absent `arg` is the placeholder element of an empty array; the types are
+ * then compared with no value.
+ */
+function isArgOfBoth(
+  arg: unknown,
+  sourceParameter: AbiParameter,
+  targetParameter: AbiParameter,
+): boolean {
+  if (
+    arg !== undefined &&
+    !(isArgOfType(arg, sourceParameter) && isArgOfType(arg, targetParameter))
+  )
+    return false
+
+  const sourceComponents = getTupleComponents(sourceParameter)
+  const targetComponents = getTupleComponents(targetParameter)
+
+  // An object-form value is read by component name by both tuples.
+  if (
+    sourceComponents &&
+    targetComponents &&
+    arg !== undefined &&
+    !Array.isArray(arg)
+  )
+    return sourceComponents.every((sourceComponent) => {
+      const targetComponent = targetComponents.find(
+        (component) => component.name === sourceComponent.name,
+      )
+      return (
+        targetComponent !== undefined &&
+        isArgOfBoth(
+          (arg as Record<string, unknown>)[sourceComponent.name ?? ''],
+          sourceComponent,
+          targetComponent,
+        )
+      )
+    })
+
+  // One parameter per value: a tuple's components, an array's element type
+  // repeated. With no value, an array stands for as many elements as the
+  // tuple it is compared with has components, or for one.
+  const values = Array.isArray(arg) && arg.length > 0 ? arg : undefined
+  const count =
+    values?.length ?? sourceComponents?.length ?? targetComponents?.length ?? 1
+  const sourceElements =
+    sourceComponents ?? getArrayElements(sourceParameter, count)
+  const targetElements =
+    targetComponents ?? getArrayElements(targetParameter, count)
+
+  if (!sourceElements || !targetElements) {
+    // A scalar type and a tuple or array hold no common value.
+    if (sourceElements || targetElements) return false
+    return (
+      canonicalIntegerType(sourceParameter.type) ===
+        canonicalIntegerType(targetParameter.type) ||
+      getAmbiguousTypes([sourceParameter], [targetParameter], [arg]) !==
+        undefined
+    )
+  }
+
+  return (
+    sourceElements.length === targetElements.length &&
+    sourceElements.every((sourceElement, index) =>
+      isArgOfBoth(values?.[index], sourceElement, targetElements[index]!),
+    )
+  )
+}
+
+/** The components of a tuple parameter; `undefined` for any other type. */
+function getTupleComponents(
+  abiParameter: AbiParameter,
+): readonly AbiParameter[] | undefined {
+  if (abiParameter.type !== 'tuple') return undefined
+  return 'components' in abiParameter
+    ? (abiParameter.components as readonly AbiParameter[])
+    : []
+}
+
+/**
+ * The element parameter of an array parameter, `count` times; `undefined`
+ * for any other type.
+ */
+function getArrayElements(
+  abiParameter: AbiParameter,
+  count: number,
+): readonly AbiParameter[] | undefined {
+  if (!ARRAY_SUFFIX.test(abiParameter.type)) return undefined
+  const element = {
+    ...abiParameter,
+    type: abiParameter.type.replace(ARRAY_SUFFIX, ''),
+  } as AbiParameter
+  return Array.from({ length: count }, () => element)
+}
+
+/** The two parameter types as they appear in a formatted ABI item. */
+function formatTypes(
+  sourceParameter: AbiParameter,
+  targetParameter: AbiParameter,
+): [string, string] {
+  return [
+    formatAbiParams([sourceParameter]),
+    formatAbiParams([targetParameter]),
+  ]
 }
 
 function isAddressArg(arg: unknown): boolean {
