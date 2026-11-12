@@ -32,11 +32,22 @@ export type IsAddressErrorType = ErrorType
  * isAddress('T...') // true
  * isAddress('0x...') // false — EVM hex is not the canonical form
  * isAddress('0x...', { strict: false }) // true — any accepted input form
+ *
+ * As a type guard it narrows to {@link Address} in strict mode, and to
+ * {@link AddressInput} when `strict` is `false` or not known to be `true`.
  */
 export function isAddress(
   address: string,
+  options?: { strict?: true | undefined } | undefined,
+): address is Address
+export function isAddress(
+  address: string,
+  options: IsAddressOptions | undefined,
+): address is AddressInput
+export function isAddress(
+  address: string,
   options?: IsAddressOptions | undefined,
-): address is Address {
+): boolean {
   const { strict = true } = options ?? {}
   if (typeof address !== 'string') return false
   if (strict) {
