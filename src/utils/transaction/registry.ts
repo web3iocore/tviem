@@ -107,11 +107,10 @@ import type { ContractMessage } from './types.js'
 /**
  * `Transaction.Contract.ContractType` integers, matching java-tron's enum.
  * Most types carry a registered codec (encode + decode). The ones that do not
- * (`getContractCodecByType` returns `undefined` — `VoteAssetContract`,
- * `CustomContract`, `GetContract`, `ShieldedTransferContract`,
- * `MarketSellAssetContract`, `MarketCancelOrderContract`) decode to a
- * bare-hex parameter body and never serialize (see `decodeRawData` /
- * `serializeRawData`).
+ * (`VoteAssetContract`, `CustomContract`, `GetContract`,
+ * `ShieldedTransferContract`, `MarketSellAssetContract`,
+ * `MarketCancelOrderContract`) decode to a bare-hex parameter body and never
+ * serialize (see `decodeRawData` / `serializeRawData`).
  */
 export const ContractType = {
   AccountCreateContract: 0,
@@ -214,7 +213,7 @@ function defineContractCodec<input, output>(
   }
 }
 
-/** All registered contract codecs (v0.1 contract set). */
+/** All registered contract codecs. */
 export const contractCodecs: readonly ContractCodec[] = [
   defineContractCodec(
     ContractType.TransferContract,

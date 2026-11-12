@@ -7,7 +7,6 @@ import {
   InvalidBytesBooleanError,
   InvalidHexBooleanError,
   InvalidHexValueError,
-  RlpDepthLimitExceededError,
   SizeOverflowError,
 } from '../../src/errors/encoding.js'
 
@@ -54,13 +53,6 @@ test('InvalidHexValueError', () => {
   expect(error.shortMessage).toBe(
     'Hex value "0x0a1" is an odd length (5). It must be an even length.',
   )
-})
-
-test('RlpDepthLimitExceededError', () => {
-  const error = new RlpDepthLimitExceededError({ limit: 3 })
-  expect(error).toBeInstanceOf(BaseError)
-  expect(error.name).toBe('RlpDepthLimitExceededError')
-  expect(error.shortMessage).toBe('RLP depth limit of `3` exceeded.')
 })
 
 test('SizeOverflowError', () => {

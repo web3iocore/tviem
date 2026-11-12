@@ -26,7 +26,7 @@ export type BytesInput = string | ByteArray
 /**
  * `int64` field input: `bigint`, `number`, or a decimal string. The
  * canonical (decoded) form is a JSON number within `±(2^53 − 1)` and a
- * decimal string beyond — see `int64ToJson`.
+ * decimal string beyond.
  */
 export type Int64 = bigint | number | string
 

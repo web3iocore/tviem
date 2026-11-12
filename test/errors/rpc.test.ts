@@ -5,7 +5,6 @@ import {
   AccountNotFoundError,
   AccountTypeNotSupportedError,
   BlockNotFoundError,
-  CallExecutionError,
   ContractFunctionRevertedError,
   TransactionExpiredError,
   TransactionMismatchError,
@@ -133,15 +132,6 @@ test('ContractFunctionRevertedError prefers an explicit message over decoded fie
   expect(err.reason).toBe('ignored')
 })
 
-test('CallExecutionError wraps and retains its cause', () => {
-  const cause = new ContractFunctionRevertedError({ reason: 'boom' })
-  const err = new CallExecutionError(cause)
-  expect(err).toBeInstanceOf(BaseError)
-  expect(err.name).toBe('CallExecutionError')
-  expect(err.shortMessage).toBe('Execution reverted with an unexpected error.')
-  expect(err.cause).toBe(cause)
-})
-
 test('WaitForTransactionReceiptTimeoutError names the hash when provided', () => {
   const err = new WaitForTransactionReceiptTimeoutError({ hash: '0xabc' })
   expect(err).toBeInstanceOf(BaseError)
@@ -237,7 +227,7 @@ test('UserRejectedRequestError carries the wallet error as cause (details / walk
   expect(wrapped.walk()).toBe(inner)
 
   // Wrapping it in another error still lets a caller find the rejection.
-  const outer = new CallExecutionError(err)
+  const outer = new TronRpcError('outer', { cause: err })
   expect(outer.walk((e) => e instanceof UserRejectedRequestError)).toBe(err)
 })
 

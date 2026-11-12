@@ -548,9 +548,7 @@ export {
 export { mainnet } from './chains/definitions/mainnet.js'
 export { nile } from './chains/definitions/nile.js'
 export { shasta } from './chains/definitions/shasta.js'
-// ---------------------------------------------------------------------------
-// v0.1b — clients / transports / chains
-// ---------------------------------------------------------------------------
+// Clients and transports.
 export {
   type Client,
   type ClientConfig,
@@ -587,7 +585,6 @@ export {
   type HttpTransport,
   type HttpTransportConfig,
   http,
-  normalizeTronError,
   type RequestErrorType,
 } from './clients/transports/http.js'
 export { trxUnits } from './constants/unit.js'
@@ -691,8 +688,6 @@ export {
   type InvalidHexValueErrorType,
   MissingHexPrefixError,
   type MissingHexPrefixErrorType,
-  RlpDepthLimitExceededError,
-  type RlpDepthLimitExceededErrorType,
   SizeOverflowError,
   type SizeOverflowErrorType,
   UnsupportedWireTypeError,
@@ -743,8 +738,6 @@ export {
   type BlockMismatchErrorType,
   BlockNotFoundError,
   type BlockNotFoundErrorType,
-  CallExecutionError,
-  type CallExecutionErrorType,
   ContractFunctionRevertedError,
   type ContractFunctionRevertedErrorType,
   TransactionExpiredError,
@@ -814,9 +807,6 @@ export type {
   TronRpcUrls,
 } from './types/chain.js'
 export type {
-  AbiEventParametersToPrimitiveTypes,
-  AbiEventParameterToPrimitiveType,
-  AbiEventTopicToPrimitiveType,
   AbiItem,
   AbiItemArgs,
   AbiItemName,
@@ -828,19 +818,11 @@ export type {
   ContractEventName,
   ContractFunctionArgs,
   ContractFunctionName,
-  ContractFunctionParameters,
   ContractFunctionReturnType,
-  EventDefinition,
   ExtractAbiFunctionForArgs,
   ExtractAbiItem,
   ExtractAbiItemForArgs,
   ExtractAbiItemNames,
-  GetEventArgs,
-  LogTopicType,
-  MaybeAbiEventName,
-  MaybeExtractEventArgsFromAbi,
-  UnionWiden,
-  Widen,
 } from './types/contract.js'
 export type {
   DecodedEvent,
@@ -1090,7 +1072,6 @@ export {
   type BytesToStringErrorType,
   type BytesToStringOpts,
   bytesToBigInt,
-  bytesToBigInt as bytesToBigint,
   bytesToBool,
   bytesToNumber,
   bytesToString,
@@ -1222,7 +1203,6 @@ export {
   type GetTransactionIdErrorType,
   getTransactionId,
 } from './utils/transaction/getTransactionId.js'
-export { int64ToJson } from './utils/transaction/int64.js'
 export {
   type FlexErrorType,
   type FlexInput,
@@ -1238,16 +1218,12 @@ export {
   type RefBlockParams,
 } from './utils/transaction/prepareTransaction.js'
 export {
-  type ContractCodec,
   ContractType,
   type ContractTypeName,
-  contractCodecs,
   contractTypeNameOf,
   contractTypeUrlPrefix,
   type DecodeContractParameterErrorType,
   decodeContractParameter,
-  getContractCodecByType,
-  getContractCodecByTypeUrl,
 } from './utils/transaction/registry.js'
 export {
   type RawContract,

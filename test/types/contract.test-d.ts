@@ -14,9 +14,6 @@ import type {
   TronHexAddress,
 } from '../../src/types/address.js'
 import type {
-  AbiEventParametersToPrimitiveTypes,
-  AbiEventParameterToPrimitiveType,
-  AbiEventTopicToPrimitiveType,
   AbiItem,
   AbiItemArgs,
   AbiItemName,
@@ -30,23 +27,15 @@ import type {
   ContractEventName,
   ContractFunctionArgs,
   ContractFunctionName,
-  ContractFunctionParameters,
   ContractFunctionReturnType,
-  EventDefinition,
   ExtractAbiFunctionForArgs,
   ExtractAbiItem,
   ExtractAbiItemForArgs,
   ExtractAbiItemNames,
-  GetEventArgs,
   IsAbiFunctionPayable,
   IsContractConstructorPayable,
   IsContractFunctionPayable,
   IsPayable,
-  LogTopicType,
-  MaybeAbiEventName,
-  MaybeExtractEventArgsFromAbi,
-  UnionWiden,
-  Widen,
 } from '../../src/types/contract.js'
 import type { DecodedEventArgs, EventFilterArgs } from '../../src/types/log.js'
 import type { Hex } from '../../src/types/misc.js'
@@ -59,7 +48,7 @@ import {
   type nonpayableConstructorAbi,
   type payableConstructorAbi,
   type payableNoArgsConstructorAbi,
-  vaultAbi,
+  type vaultAbi,
 } from '../fixtures/abi/contractTypes.js'
 
 const trc20Abi = parseAbi([
@@ -742,153 +731,6 @@ test('ExtractAbiItemForArgs: any address form selects the address overload', () 
       readonly [typeof evmAddress, 1]
     >['type']
   >().toEqualTypeOf<'error'>()
-})
-
-test('ContractFunctionParameters', () => {
-  type Transfer = ContractFunctionParameters<
-    typeof vaultAbi,
-    'nonpayable',
-    'transfer'
-  >
-  expectTypeOf<Transfer['address']>().toEqualTypeOf<Address>()
-  expectTypeOf<Transfer['abi']>().toEqualTypeOf<typeof vaultAbi>()
-  expectTypeOf<Transfer['args']>().toEqualTypeOf<
-    readonly [AddressInput, bigint | number]
-  >()
-  expectTypeOf<Transfer['args']>().toEqualTypeOf<
-    ContractFunctionArgs<typeof vaultAbi, 'nonpayable', 'transfer'>
-  >()
-
-  expectTypeOf({
-    abi: vaultAbi,
-    address: base58Address,
-    functionName: 'transfer',
-    args: [hexAddress, 1],
-  } as const).toExtend<Transfer>()
-  expectTypeOf({
-    abi: vaultAbi,
-    address: base58Address,
-    functionName: 'transfer',
-    args: [hexAddress, '1'],
-  } as const).not.toExtend<Transfer>()
-
-  // an overloaded name with an overload without inputs: `args` are optional
-  // and take any overload's tuple, or the tuple passed, widened
-  type Write = 'nonpayable' | 'payable'
-  expectTypeOf<
-    ContractFunctionParameters<typeof vaultAbi, Write, 'stake'>['args']
-  >().toEqualTypeOf<readonly [] | readonly [AddressInput] | undefined>()
-  expectTypeOf<
-    ContractFunctionParameters<
-      typeof vaultAbi,
-      Write,
-      'stake',
-      readonly [typeof evmAddress]
-    >['args']
-  >().toEqualTypeOf<
-    readonly [] | readonly [AddressInput] | readonly [Hex] | undefined
-  >()
-  // without such an overload they are the tuple passed
-  expectTypeOf<
-    ContractFunctionParameters<
-      typeof vaultAbi,
-      Write,
-      'send',
-      readonly [typeof evmAddress]
-    >['args']
-  >().toEqualTypeOf<readonly [typeof evmAddress]>()
-
-  // a function without inputs keeps `args` optional
-  expectTypeOf<{
-    abi: typeof vaultAbi
-    address: Address
-    functionName: 'name'
-  }>().toExtend<ContractFunctionParameters<typeof vaultAbi, 'view', 'name'>>()
-
-  // unparameterised
-  expectTypeOf<ContractFunctionParameters['address']>().toEqualTypeOf<Address>()
-  expectTypeOf<
-    ContractFunctionParameters['functionName']
-  >().toEqualTypeOf<string>()
-  expectTypeOf<ContractFunctionParameters['args']>().toEqualTypeOf<
-    readonly unknown[] | undefined
-  >()
-})
-
-test('Widen / UnionWiden keep the address prefix', () => {
-  expectTypeOf<Widen<typeof base58Address>>().toEqualTypeOf<Address>()
-  expectTypeOf<Widen<typeof hexAddress>>().toEqualTypeOf<TronHexAddress>()
-  expectTypeOf<Widen<typeof evmAddress>>().toEqualTypeOf<Hex>()
-  expectTypeOf<Widen<'hello'>>().toEqualTypeOf<string>()
-  expectTypeOf<Widen<1n>>().toEqualTypeOf<bigint>()
-  expectTypeOf<Widen<1>>().toEqualTypeOf<number>()
-  expectTypeOf<Widen<true>>().toEqualTypeOf<boolean>()
-  expectTypeOf<Widen<readonly [typeof base58Address, 1n]>>().toEqualTypeOf<
-    readonly [Address, bigint]
-  >()
-  expectTypeOf<
-    UnionWiden<readonly [typeof evmAddress, 1] | readonly []>
-  >().toEqualTypeOf<readonly [Hex, number] | readonly []>()
-})
-
-test('viem event helpers resolve through the TRON mapping', () => {
-  type TransferEvent = ExtractAbiEvent<typeof vaultAbi, 'Transfer'>
-  type From = TransferEvent['inputs'][0]
-
-  // filter form: TRON inputs
-  expectTypeOf<GetEventArgs<typeof vaultAbi, 'Transfer'>>().toEqualTypeOf<{
-    from?: AddressInput | readonly AddressInput[] | null | undefined
-    to?: AddressInput | readonly AddressInput[] | null | undefined
-  }>()
-  expectTypeOf<
-    MaybeExtractEventArgsFromAbi<typeof vaultAbi, 'Transfer'>
-  >().toEqualTypeOf<GetEventArgs<typeof vaultAbi, 'Transfer'>>()
-  expectTypeOf<
-    AbiEventParametersToPrimitiveTypes<TransferEvent['inputs']>
-  >().toEqualTypeOf<GetEventArgs<typeof vaultAbi, 'Transfer'>>()
-  expectTypeOf<AbiEventParameterToPrimitiveType<From>>().toEqualTypeOf<
-    AddressInput | readonly AddressInput[] | null
-  >()
-
-  // decoded form: TRON outputs
-  expectTypeOf<
-    GetEventArgs<
-      typeof vaultAbi,
-      'Transfer',
-      { EnableUnion: false; IndexedOnly: false; Required: true }
-    >
-  >().toEqualTypeOf<{ from: Address; to: Address; value: bigint }>()
-  expectTypeOf<
-    AbiEventParameterToPrimitiveType<From, { EnableUnion: false }>
-  >().toEqualTypeOf<Address>()
-  expectTypeOf<
-    AbiEventTopicToPrimitiveType<From, Hex>
-  >().toEqualTypeOf<Address>()
-  expectTypeOf<
-    AbiEventTopicToPrimitiveType<From, readonly Hex[]>
-  >().toEqualTypeOf<readonly Address[]>()
-  expectTypeOf<AbiEventTopicToPrimitiveType<From, null>>().toEqualTypeOf<null>()
-  // a hashed type stays the topic
-  expectTypeOf<
-    AbiEventTopicToPrimitiveType<{ type: 'string'; name: 'tag' }, '0xabc'>
-  >().toEqualTypeOf<'0xabc'>()
-
-  // raw topics stay hex
-  expectTypeOf<LogTopicType>().toEqualTypeOf<Hex | readonly Hex[] | null>()
-
-  // wide abi / absent names
-  expectTypeOf<GetEventArgs<Abi, string>>().toEqualTypeOf<
-    readonly unknown[] | Record<string, unknown>
-  >()
-  expectTypeOf<
-    MaybeExtractEventArgsFromAbi<undefined, undefined>
-  >().toEqualTypeOf<undefined>()
-  expectTypeOf<
-    MaybeExtractEventArgsFromAbi<typeof vaultAbi, undefined>
-  >().toEqualTypeOf<undefined>()
-  expectTypeOf<MaybeAbiEventName<TransferEvent>>().toEqualTypeOf<'Transfer'>()
-  expectTypeOf<MaybeAbiEventName<undefined>>().toEqualTypeOf<undefined>()
-  expectTypeOf<'Transfer(address,address,uint256)'>().toExtend<EventDefinition>()
 })
 
 //////////////////////////////////////////////////////////////////////

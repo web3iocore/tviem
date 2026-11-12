@@ -1,7 +1,6 @@
 import type {
   Abi,
   AbiConstructor,
-  AbiEvent,
   AbiFunction,
   AbiParameter,
   AbiStateMutability,
@@ -13,20 +12,9 @@ import type {
   ExtractAbiFunctionNames,
 } from 'abitype'
 
-import type {
-  TronAbiParametersToPrimitiveTypes,
-  TronAbiParameterToPrimitiveType,
-} from '../utils/abi/encodeAbiParameters.js'
-import type { Address, TronHexAddress } from './address.js'
+import type { TronAbiParametersToPrimitiveTypes } from '../utils/abi/encodeAbiParameters.js'
 import type { DecodedEventArgs, EventFilterArgs } from './log.js'
-import type { Hex, LogTopic } from './misc.js'
-import type {
-  Filter,
-  IsUnion,
-  MaybeRequired,
-  Prettify,
-  UnionToTuple,
-} from './utils.js'
+import type { IsUnion, UnionToTuple } from './utils.js'
 
 export type ContractFunctionName<
   abi extends Abi | readonly unknown[] = Abi,
@@ -166,41 +154,6 @@ export type ContractEventArgsFromTopics<
     : readonly unknown[] | Record<string, unknown> | undefined
 
 /**
- * Widens a literal argument type to the type of its ABI value: a `0x…`,
- * `T…` or `41…` string keeps its prefix, any other string widens to
- * `string`, numbers to `number`, bigints to `bigint`; tuples and objects
- * widen member by member.
- */
-export type Widen<type> =
-  | ([unknown] extends [type] ? unknown : never)
-  | (type extends Function ? type : never)
-  | (type extends bigint ? bigint : never)
-  | (type extends boolean ? boolean : never)
-  | (type extends number ? number : never)
-  | (type extends string
-      ? type extends Hex
-        ? Hex
-        : type extends Address
-          ? Address
-          : type extends TronHexAddress
-            ? TronHexAddress
-            : string
-      : never)
-  | (type extends readonly [] ? readonly [] : never)
-  | (type extends Record<string, unknown>
-      ? { [K in keyof type]: Widen<type[K]> }
-      : never)
-  | (type extends { length: number }
-      ? {
-          [K in keyof type]: Widen<type[K]>
-        } extends infer Val extends readonly unknown[]
-        ? readonly [...Val]
-        : never
-      : never)
-
-export type UnionWiden<type> = type extends any ? Widen<type> : never
-
-/**
  * The function of `abi` selected by `functionName` and `args`: an overloaded
  * name is narrowed to the overloads whose TRON `inputs` tuple
  * ({@link ContractFunctionArgs}) accepts `args`, so any address form selects
@@ -235,62 +188,6 @@ type CheckArgs<
 > = (readonly [] extends args ? readonly [] : args) extends targetArgs // fallback to `readonly []` if `args` has no value (e.g. `args` property not provided)
   ? abiItem
   : never
-
-/**
- * The common parameters of a contract call: the `abi`, a `functionName` of
- * it, its `args` in the TRON `inputs` mapping (optional when the function
- * takes none) and the contract's Base58Check `address`.
- */
-export type ContractFunctionParameters<
-  abi extends Abi | readonly unknown[] = Abi,
-  mutability extends AbiStateMutability = AbiStateMutability,
-  functionName extends ContractFunctionName<
-    abi,
-    mutability
-  > = ContractFunctionName<abi, mutability>,
-  args extends ContractFunctionArgs<
-    abi,
-    mutability,
-    functionName
-  > = ContractFunctionArgs<abi, mutability, functionName>,
-  deployless extends boolean = false,
-  ///
-  allFunctionNames = ContractFunctionName<abi, mutability>,
-  allArgs = ContractFunctionArgs<abi, mutability, functionName>,
-  abiFunction = ExtractAbiFunction<
-    abi extends Abi ? abi : Abi,
-    functionName,
-    mutability
-  >,
-  // when `args` is inferred to `readonly []` ("inputs": []) or `never` (`abi` declared as `Abi` or not inferrable), allow `args` to be optional.
-  // important that both branches return same structural type
-> = {
-  abi: abi
-  functionName:
-    | allFunctionNames // show all options
-    | (functionName extends allFunctionNames ? functionName : never) // infer value
-} & (readonly [] extends allArgs
-  ? {
-      args?:
-        | allArgs
-        | (abi extends Abi
-            ? Abi extends abi
-              ? never
-              : UnionWiden<IsUnion<abiFunction> extends true ? args : allArgs>
-            : never)
-        | undefined
-    }
-  : {
-      args: IsUnion<abiFunction> extends true ? args : allArgs
-    }) &
-  (deployless extends true
-    ? {
-        address?: undefined
-        code: Hex
-      }
-    : {
-        address: Address
-      })
 
 /**
  * The return type of a contract function, in the TRON `outputs` mapping:
@@ -522,159 +419,3 @@ export type ExtractAbiItemForArgs<
         : never
       : abiItem
     : never
-
-export type EventDefinition = `${string}(${string})`
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-
-export type MaybeAbiEventName<abiEvent extends AbiEvent | undefined> =
-  abiEvent extends AbiEvent ? abiEvent['name'] : undefined
-
-export type MaybeExtractEventArgsFromAbi<
-  abi extends Abi | readonly unknown[] | undefined,
-  eventName extends string | undefined,
-> = abi extends Abi | readonly unknown[]
-  ? eventName extends string
-    ? GetEventArgs<abi, eventName>
-    : undefined
-  : undefined
-
-//////////////////////////////////////////////////////////////////////
-// ABI item args
-
-export type GetEventArgs<
-  abi extends Abi | readonly unknown[],
-  eventName extends string,
-  config extends EventParameterOptions = DefaultEventParameterOptions,
-  abiEvent extends AbiEvent & { type: 'event' } = abi extends Abi
-    ? ExtractAbiEvent<abi, eventName>
-    : AbiEvent & { type: 'event' },
-  args = AbiEventParametersToPrimitiveTypes<abiEvent['inputs'], config>,
-> =
-  args extends Record<PropertyKey, never>
-    ? readonly unknown[] | Record<string, unknown>
-    : args
-
-//////////////////////////////////////////////////////////////////////
-// ABI event types
-
-type EventParameterOptions = {
-  EnableUnion?: boolean
-  IndexedOnly?: boolean
-  Required?: boolean
-}
-type DefaultEventParameterOptions = {
-  EnableUnion: true
-  IndexedOnly: true
-  Required: false
-}
-
-export type AbiEventParametersToPrimitiveTypes<
-  abiParameters extends readonly AbiParameter[],
-  //
-  _options extends EventParameterOptions = DefaultEventParameterOptions,
-  // Remove non-indexed parameters based on `Options['IndexedOnly']`
-> = abiParameters extends readonly []
-  ? readonly []
-  : Filter<
-        abiParameters,
-        _options['IndexedOnly'] extends true ? { indexed: true } : object
-      > extends infer Filtered extends readonly AbiParameter[]
-    ? _HasUnnamedAbiParameter<Filtered> extends true
-      ? // Has unnamed tuple parameters so return as array
-          | readonly [
-              ...{
-                [K in keyof Filtered]: AbiEventParameterToPrimitiveType<
-                  Filtered[K],
-                  _options
-                >
-              },
-            ]
-          // Distribute over tuple to represent optional parameters
-          | (_options['Required'] extends true
-              ? never
-              : // Distribute over tuple to represent optional parameters
-                Filtered extends readonly [
-                    ...infer Head extends readonly AbiParameter[],
-                    infer _,
-                  ]
-                ? AbiEventParametersToPrimitiveTypes<
-                    readonly [...{ [K in keyof Head]: Omit<Head[K], 'name'> }],
-                    _options
-                  >
-                : never)
-      : // All tuple parameters are named so return as object
-        {
-            [Parameter in Filtered[number] as Parameter extends {
-              name: infer Name extends string
-            }
-              ? Name
-              : never]?:
-              | AbiEventParameterToPrimitiveType<Parameter, _options>
-              | undefined
-          } extends infer Mapped
-        ? Prettify<
-            MaybeRequired<
-              Mapped,
-              _options['Required'] extends boolean
-                ? _options['Required']
-                : false
-            >
-          >
-        : never
-    : never
-
-// TODO: Speed up by returning immediately as soon as named parameter is found.
-type _HasUnnamedAbiParameter<abiParameters extends readonly AbiParameter[]> =
-  abiParameters extends readonly [
-    infer Head extends AbiParameter,
-    ...infer Tail extends readonly AbiParameter[],
-  ]
-    ? Head extends { name: string }
-      ? Head['name'] extends ''
-        ? true
-        : _HasUnnamedAbiParameter<Tail>
-      : true
-    : false
-
-/**
- * @internal
- */
-export type LogTopicType<
-  primitiveType = Hex,
-  topic extends LogTopic = LogTopic,
-> = topic extends Hex
-  ? primitiveType
-  : topic extends readonly Hex[]
-    ? readonly primitiveType[]
-    : topic extends null
-      ? null
-      : never
-
-/**
- * @internal
- */
-export type AbiEventParameterToPrimitiveType<
-  abiParameter extends AbiParameter,
-  //
-  _options extends EventParameterOptions = DefaultEventParameterOptions,
-  // A filter value (`EnableUnion`) is in the TRON `inputs` mapping, a decoded
-  // value in the `outputs` mapping.
-  _type = TronAbiParameterToPrimitiveType<
-    abiParameter,
-    _options['EnableUnion'] extends true ? 'inputs' : 'outputs'
-  >,
-> = _options['EnableUnion'] extends true ? LogTopicType<_type> : _type
-
-type HashedEventTypes = 'bytes' | 'string' | 'tuple' | `${string}[${string}]`
-
-/**
- * @internal
- */
-export type AbiEventTopicToPrimitiveType<
-  abiParameter extends AbiParameter,
-  topic extends LogTopic,
-  primitiveType = abiParameter['type'] extends HashedEventTypes
-    ? topic
-    : TronAbiParameterToPrimitiveType<abiParameter, 'outputs'>,
-> = LogTopicType<primitiveType, topic>

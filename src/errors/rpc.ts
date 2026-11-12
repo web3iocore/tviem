@@ -195,23 +195,6 @@ export class ContractFunctionRevertedError extends BaseError {
   }
 }
 
-/** A top-level call execution failure (T4 RD-5 wraps the underlying cause). */
-export type CallExecutionErrorType = CallExecutionError & {
-  name: 'CallExecutionError'
-}
-export class CallExecutionError extends BaseError {
-  constructor(
-    cause: BaseError | Error,
-    { docsPath }: { docsPath?: string | undefined } = {},
-  ) {
-    super('Execution reverted with an unexpected error.', {
-      cause,
-      docsPath,
-      name: 'CallExecutionError',
-    })
-  }
-}
-
 /** `waitForTransactionReceipt` exceeded its timeout (T5 WR-5). */
 export type WaitForTransactionReceiptTimeoutErrorType =
   WaitForTransactionReceiptTimeoutError & {

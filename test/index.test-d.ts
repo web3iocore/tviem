@@ -6,9 +6,6 @@ import {
   signTypedData as signTypedDataWithKey,
 } from '../src/accounts/index.js'
 import type {
-  AbiEventParametersToPrimitiveTypes,
-  AbiEventParameterToPrimitiveType,
-  AbiEventTopicToPrimitiveType,
   AbiItem,
   AbiItemArgs,
   AbiItemName,
@@ -26,7 +23,6 @@ import type {
   ContractEventName,
   ContractFunctionArgs,
   ContractFunctionName,
-  ContractFunctionParameters,
   ContractFunctionReturnType,
   ContractFunctionRevertedError,
   DecodeEventLogErrorType,
@@ -35,42 +31,43 @@ import type {
   DecodeLogTopicsMismatchError,
   DecodeLogTopicsMismatchErrorType,
   EncodePackedErrorType,
-  EventDefinition,
   EvmAddress,
   ExtractAbiFunctionForArgs,
   ExtractAbiItem,
   ExtractAbiItemForArgs,
   ExtractAbiItemNames,
-  GetEventArgs,
   Hex,
   InvalidAbiParameterValueErrorType,
-  LogTopicType,
-  MaybeAbiEventName,
-  MaybeExtractEventArgsFromAbi,
   PublicClient,
   RequestErrorType,
   Transport,
   TronHexAddress,
   TronNodeError,
   TronRequestFn,
-  UnionWiden,
   UnsupportedPackedAbiTypeError,
   UnsupportedPackedAbiTypeErrorType,
-  Widen,
 } from '../src/index.js'
 import {
   addressToHex,
+  bytesToBigInt,
+  ContractType,
+  type contractTypeUrlPrefix,
   createPublicClient,
+  HDKey,
   http,
   isAddress,
   keccak256,
   nile,
+  normalizeAddress,
   parseTrx,
   signMessage,
   signTransaction,
   signTypedData,
   toBase58,
   toEvm,
+  type UnknownContractTypeError,
+  type UnsupportedWireTypeError,
+  type VarintOverflowError,
 } from '../src/index.js'
 
 test('branded address types', () => {
@@ -290,8 +287,6 @@ test('the root entrypoint exports the contract helper types, on the TRON mapping
     ExtractAbiItem<typeof abi, 'Transfer'>
   >().toEqualTypeOf<TransferEvent>()
   expectTypeOf<(typeof abi)[number]>().toExtend<AbiItem>()
-  expectTypeOf<'Transfer(address,uint256)'>().toExtend<EventDefinition>()
-  expectTypeOf<MaybeAbiEventName<TransferEvent>>().toEqualTypeOf<'Transfer'>()
 
   // arguments: the TRON `inputs` mapping
   expectTypeOf<
@@ -307,12 +302,6 @@ test('the root entrypoint exports the contract helper types, on the TRON mapping
     readonly [AddressInput, bigint | number]
   >()
   expectTypeOf<
-    ContractFunctionParameters<typeof abi, 'nonpayable', 'transfer'>['args']
-  >().toEqualTypeOf<readonly [AddressInput, bigint | number]>()
-  expectTypeOf<
-    ContractFunctionParameters<typeof abi, 'nonpayable', 'transfer'>['address']
-  >().toEqualTypeOf<Address>()
-  expectTypeOf<
     ExtractAbiFunctionForArgs<
       typeof abi,
       'nonpayable',
@@ -323,10 +312,6 @@ test('the root entrypoint exports the contract helper types, on the TRON mapping
   expectTypeOf<
     ExtractAbiItemForArgs<typeof abi, 'Denied', readonly [Address]>['type']
   >().toEqualTypeOf<'error'>()
-  expectTypeOf<
-    Widen<'TA5DvvvmYbS75o3DKtgy2ATAGVHhpFkRLe'>
-  >().toEqualTypeOf<Address>()
-  expectTypeOf<UnionWiden<1n | 'x'>>().toEqualTypeOf<bigint | string>()
 
   // results: the TRON `outputs` mapping
   expectTypeOf<
@@ -344,23 +329,6 @@ test('the root entrypoint exports the contract helper types, on the TRON mapping
   expectTypeOf<
     ContractEventArgsFromTopics<typeof abi, 'Transfer'>
   >().toEqualTypeOf<{ from: Address; value: bigint }>()
-  expectTypeOf<GetEventArgs<typeof abi, 'Transfer'>>().toEqualTypeOf<{
-    from?: AddressFilter | undefined
-  }>()
-  expectTypeOf<
-    MaybeExtractEventArgsFromAbi<typeof abi, 'Transfer'>
-  >().toEqualTypeOf<GetEventArgs<typeof abi, 'Transfer'>>()
-  expectTypeOf<
-    AbiEventParametersToPrimitiveTypes<TransferEvent['inputs']>
-  >().toEqualTypeOf<GetEventArgs<typeof abi, 'Transfer'>>()
-  expectTypeOf<
-    AbiEventParameterToPrimitiveType<TransferEvent['inputs'][0]>
-  >().toEqualTypeOf<AddressFilter>()
-  expectTypeOf<
-    AbiEventTopicToPrimitiveType<TransferEvent['inputs'][0], Hex>
-  >().toEqualTypeOf<Address>()
-  // raw topics stay hex
-  expectTypeOf<LogTopicType>().toEqualTypeOf<Hex | readonly Hex[] | null>()
 })
 
 test('the root entrypoint exports no `Tron`-prefixed contract helper type', () => {
@@ -382,4 +350,95 @@ test('the root entrypoint exports no `Tron`-prefixed contract helper type', () =
   expectTypeOf<import('../src/index.js').TronAbiParametersToPrimitiveTypes>()
   // @ts-expect-error not exported: the mapping stays internal
   expectTypeOf<import('../src/index.js').TronAbiParameterToPrimitiveType>()
+})
+
+test('the root entrypoint exports none of the removed type names', () => {
+  // Every reference supplies the type arguments the removed definition took,
+  // so the only error left for each directive is the missing export.
+  // event helper types without a function signature that uses them
+  expectTypeOf<
+    // @ts-expect-error not exported: `ContractEventArgs` is the filter type
+    import('../src/index.js').GetEventArgs<readonly unknown[], string>
+  >()
+  expectTypeOf<
+    // @ts-expect-error not exported
+    import('../src/index.js').MaybeExtractEventArgsFromAbi<undefined, undefined>
+  >()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').MaybeAbiEventName<undefined>>()
+  expectTypeOf<
+    // @ts-expect-error not exported
+    import('../src/index.js').AbiEventParametersToPrimitiveTypes<readonly []>
+  >()
+  expectTypeOf<
+    // @ts-expect-error not exported
+    import('../src/index.js').AbiEventParameterToPrimitiveType<{
+      type: 'address'
+    }>
+  >()
+  expectTypeOf<
+    // @ts-expect-error not exported
+    import('../src/index.js').AbiEventTopicToPrimitiveType<
+      { type: 'address' },
+      Hex
+    >
+  >()
+  // @ts-expect-error not exported: `LogTopic` is the topic type
+  expectTypeOf<import('../src/index.js').LogTopicType>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').EventDefinition>()
+  // call parameter helper types without a function signature that uses them
+  // @ts-expect-error not exported: each action exports its own parameters type
+  expectTypeOf<import('../src/index.js').ContractFunctionParameters>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').Widen<unknown>>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').UnionWiden<unknown>>()
+  // the codec registry entry type
+  // @ts-expect-error not exported: the codec registry stays internal
+  expectTypeOf<import('../src/index.js').ContractCodec>()
+  // the types of the removed error classes
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').CallExecutionError>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').CallExecutionErrorType>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').RlpDepthLimitExceededError>()
+  // @ts-expect-error not exported
+  expectTypeOf<import('../src/index.js').RlpDepthLimitExceededErrorType>()
+})
+
+test('the root entrypoint exports no removed value', () => {
+  type Root = typeof import('../src/index.js')
+  expectTypeOf<
+    Extract<
+      keyof Root,
+      | 'CallExecutionError'
+      | 'RlpDepthLimitExceededError'
+      | 'bytesToBigint'
+      | 'contractCodecs'
+      | 'getContractCodecByType'
+      | 'getContractCodecByTypeUrl'
+      | 'int64ToJson'
+      | 'normalizeTronError'
+    >
+  >().toEqualTypeOf<never>()
+})
+
+test('the root entrypoint keeps the public names next to the removed ones', () => {
+  expectTypeOf(HDKey.fromMasterSeed).returns.toEqualTypeOf<HDKey>()
+  expectTypeOf<
+    typeof contractTypeUrlPrefix
+  >().toEqualTypeOf<'type.googleapis.com/protocol.'>()
+  expectTypeOf(ContractType.TransferContract).toEqualTypeOf<1>()
+  expectTypeOf<ContractType>().toExtend<number>()
+  expectTypeOf<VarintOverflowError>().toExtend<BaseError>()
+  expectTypeOf<UnsupportedWireTypeError>().toExtend<BaseError>()
+  expectTypeOf<UnknownContractTypeError>().toExtend<BaseError>()
+  expectTypeOf(normalizeAddress)
+    .parameter(0)
+    .toEqualTypeOf<AddressInput | ByteArray>()
+  expectTypeOf(normalizeAddress).returns.toEqualTypeOf<ByteArray>()
+  expectTypeOf(bytesToBigInt).parameter(0).toEqualTypeOf<ByteArray>()
+  expectTypeOf(bytesToBigInt).returns.toEqualTypeOf<bigint>()
 })

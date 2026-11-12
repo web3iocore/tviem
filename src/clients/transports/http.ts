@@ -151,7 +151,7 @@ function isBroadcastPath(path: string): boolean {
 /**
  * Everything a `client.request` round-trip can throw: the HTTP layer
  * (network failure, timeout) plus the four documented TRON node error
- * shapes surfaced by {@link normalizeTronError}. The building block for
+ * shapes the transport throws for a response body. The building block for
  * per-action `XxxErrorType` unions.
  */
 export type RequestErrorType =

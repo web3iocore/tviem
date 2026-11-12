@@ -136,6 +136,49 @@ describe('package exports surface (freeze guard)', () => {
     expect('getChainParameters' in actions).toBe(true)
   })
 
+  test('codec registry lookups, response normalization and names without a use are absent from every entry point', () => {
+    const entrypoints = { root, accounts, actions, chains, utils }
+    for (const name of [
+      // error classes that no code path constructs
+      'CallExecutionError',
+      'RlpDepthLimitExceededError',
+      // second spelling of `bytesToBigInt`
+      'bytesToBigint',
+      // implementation helpers of the transaction codec and the http transport
+      'contractCodecs',
+      'getContractCodecByType',
+      'getContractCodecByTypeUrl',
+      'int64ToJson',
+      'normalizeTronError',
+    ])
+      for (const [entrypoint, mod] of Object.entries(entrypoints))
+        expect(name in mod, `${entrypoint} exports ${name}`).toBe(false)
+  })
+
+  test('the public names next to them stay exported', () => {
+    for (const name of [
+      'HDKey',
+      'ContractType',
+      'contractTypeUrlPrefix',
+      'UnknownContractTypeError',
+      'UnsupportedWireTypeError',
+      'VarintOverflowError',
+      'normalizeAddress',
+      'bytesToBigInt',
+    ])
+      expect(name in root, `root exports ${name}`).toBe(true)
+    for (const name of [
+      'ContractType',
+      'contractTypeUrlPrefix',
+      'normalizeAddress',
+      'bytesToBigInt',
+    ])
+      expect(name in utils, `utils exports ${name}`).toBe(true)
+    expect('HDKey' in accounts).toBe(true)
+    expect(root.HDKey).toBe(accounts.HDKey)
+    expect(root.bytesToBigInt).toBe(utils.bytesToBigInt)
+  })
+
   test('root + subpath export names are frozen', () => {
     const names = (mod: object) => Object.keys(mod).sort()
     expect({

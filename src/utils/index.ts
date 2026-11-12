@@ -183,7 +183,6 @@ export {
   type BytesToStringErrorType,
   type BytesToStringOpts,
   bytesToBigInt,
-  bytesToBigInt as bytesToBigint,
   bytesToBool,
   bytesToNumber,
   bytesToString,
@@ -312,7 +311,6 @@ export {
   type GetTransactionIdErrorType,
   getTransactionId,
 } from './transaction/getTransactionId.js'
-export { int64ToJson } from './transaction/int64.js'
 export {
   type FlexErrorType,
   type FlexInput,
@@ -328,16 +326,12 @@ export {
   type RefBlockParams,
 } from './transaction/prepareTransaction.js'
 export {
-  type ContractCodec,
   ContractType,
   type ContractTypeName,
-  contractCodecs,
   contractTypeNameOf,
   contractTypeUrlPrefix,
   type DecodeContractParameterErrorType,
   decodeContractParameter,
-  getContractCodecByType,
-  getContractCodecByTypeUrl,
 } from './transaction/registry.js'
 export {
   type RawContract,
