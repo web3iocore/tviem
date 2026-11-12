@@ -283,6 +283,60 @@ test('an inline abi is inferred as a literal', () => {
   else expectTypeOf(decoded.args).toEqualTypeOf<undefined>()
 })
 
+test('literal abi: events sharing a name each contribute a member', () => {
+  // The TRC-20 and TRC-721 `Transfer` layouts share one selector; the log
+  // decides at runtime which of them it decodes against.
+  const transfersAbi = [
+    {
+      type: 'event',
+      name: 'Transfer',
+      inputs: [
+        { indexed: true, name: 'from', type: 'address' },
+        { indexed: true, name: 'to', type: 'address' },
+        { indexed: true, name: 'tokenId', type: 'uint256' },
+      ],
+    },
+    trc20Abi[0],
+    trc20Abi[1],
+  ] as const
+  type TokenArgs = { from: Address; to: Address; tokenId: bigint }
+
+  // With or without the name, whichever layout comes first in the abi.
+  const named = decodeEventLog({
+    abi: transfersAbi,
+    topics,
+    eventName: 'Transfer',
+  })
+  expectTypeOf(named).toEqualTypeOf<
+    | { eventName: 'Transfer'; args: TokenArgs }
+    | { eventName: 'Transfer'; args: TransferArgs }
+  >()
+  // @ts-expect-error `value` is not on the TRC-721 member
+  named.args.value
+  if ('value' in named.args)
+    expectTypeOf(named.args).toEqualTypeOf<TransferArgs>()
+  else expectTypeOf(named.args).toEqualTypeOf<TokenArgs>()
+
+  const unnamed = decodeEventLog({ abi: transfersAbi, topics })
+  expectTypeOf(unnamed.args).toEqualTypeOf<
+    TokenArgs | TransferArgs | ApprovalArgs
+  >()
+
+  // `strict: false` gives the partial form of each member.
+  expectTypeOf(
+    decodeEventLog({
+      abi: transfersAbi,
+      topics,
+      eventName: 'Transfer',
+      strict: false,
+    }).args,
+  ).toEqualTypeOf<
+    | { from?: Address; to?: Address; tokenId?: bigint }
+    | { from?: Address; to?: Address; value?: bigint }
+    | undefined
+  >()
+})
+
 test('literal abi: strict defaults to true; false gives the partial form', () => {
   // `strict: true` and `strict: undefined` are the default.
   expectTypeOf(

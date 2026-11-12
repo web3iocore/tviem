@@ -98,6 +98,13 @@ const docsPath = '/docs/abi/decodeEventLog'
  * indexed parameters are read from `topics`, and non-indexed parameters are
  * decoded from `data`.
  *
+ * Several events of `abi` can share one selector and differ only in which
+ * inputs are indexed (TRC-20 vs TRC-721 `Transfer`). Each of them is tried in
+ * ABI order and the first one the log decodes against exactly is the result,
+ * with or without `strict`. When none decodes exactly, the first of them
+ * decides: its mismatch is thrown, or with `strict: false` its partial decode
+ * is returned. With `eventName`, the events tried are those of that name.
+ *
  * TRON behavior: indexed/non-indexed `address` parameters decode to the
  * canonical Base58Check form (`T…`). Indexed dynamic parameters (`string`,
  * `bytes`, arrays, tuples) are only present as their `keccak256` hash in the
@@ -129,13 +136,65 @@ export function decodeEventLog<
     eventName,
     strict = true,
   } = parameters as DecodeEventLogParameters
-  const [topic0, ...argTopics_] = topics
+  const candidates = selectEvents(abi, { eventName, topic0: topics[0] })
 
-  const abiItem = selectEvent(abi, { eventName, topic0 })
+  // Events sharing one selector differ in indexed layout only: the first one
+  // the log decodes against exactly is the result.
+  if (candidates.length > 1)
+    for (const abiItem of candidates) {
+      try {
+        return decodeEvent(abiItem, {
+          topics,
+          data,
+          strict: true,
+        }) as DecodeEventLogReturnType<abi, eventName, strict>
+      } catch {
+        // Mismatched `topics` / `data` — try the next candidate.
+      }
+    }
+
+  // A single candidate, or none that decodes exactly: the first candidate
+  // decides, in the requested mode.
+  return decodeEvent(candidates[0]!, {
+    topics,
+    data,
+    strict,
+  }) as DecodeEventLogReturnType<abi, eventName, strict>
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Internal
+
+/** Whether an indexed value of this type is stored as its `keccak256` hash. */
+function isHashedType(type: string): boolean {
+  return (
+    type === 'string' ||
+    type === 'bytes' ||
+    type === 'tuple' ||
+    getArrayComponents(type) !== undefined
+  )
+}
+
+/**
+ * Decodes a log against one event: indexed parameters from `topics`,
+ * non-indexed ones from `data`. With `strict`, a log that does not match the
+ * event exactly throws; otherwise the decodable subset of `args` is returned.
+ */
+function decodeEvent(
+  abiItem: AbiEvent,
+  {
+    topics,
+    data,
+    strict,
+  }: { topics: readonly Hex[]; data?: Hex | undefined; strict: boolean },
+): {
+  eventName: string
+  args: Record<string, unknown> | unknown[] | undefined
+} {
   const inputs = (abiItem.inputs ?? []) as readonly AbiParameter[]
 
   // Anonymous events carry no selector, so every topic is an argument topic.
-  const argTopics = abiItem.anonymous ? topics : argTopics_
+  const argTopics = abiItem.anonymous ? topics : topics.slice(1)
 
   // A log carrying MORE topics than the event has indexed parameters is not a
   // log of this event — reject it instead of silently dropping the extras.
@@ -243,29 +302,23 @@ export function decodeEventLog<
     args: (Array.isArray(args) ? args.length : Object.keys(args).length)
       ? args
       : undefined,
-  } as DecodeEventLogReturnType<abi, eventName, strict>
+  }
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// Internal
-
-/** Whether an indexed value of this type is stored as its `keccak256` hash. */
-function isHashedType(type: string): boolean {
-  return (
-    type === 'string' ||
-    type === 'bytes' ||
-    type === 'tuple' ||
-    getArrayComponents(type) !== undefined
-  )
-}
-
-function selectEvent(
+/**
+ * The events of `abi` a log can decode against, in ABI order: the
+ * non-anonymous events whose selector is `topic0`, restricted to the events
+ * named `eventName` when it is given. With no selector to go by — a log
+ * without topics, or events of that name that are all anonymous — the first
+ * event named `eventName` is the only candidate.
+ */
+function selectEvents(
   abi: Abi | readonly unknown[],
   {
     eventName,
     topic0,
   }: { eventName?: string | undefined; topic0?: Hex | undefined },
-): AbiEvent {
+): readonly AbiEvent[] {
   const events = (abi as readonly { type?: string; name?: string }[]).filter(
     (item): item is AbiEvent => item.type === 'event',
   )
@@ -277,26 +330,50 @@ function selectEvent(
     // A non-anonymous log's topic0 IS the event's identity — validate it (and
     // disambiguate overloads) instead of matching by the name label alone.
     if (topic0) {
-      const matched = named.find(
-        (event) =>
-          !event.anonymous && toEventSelector(formatAbiItem(event)) === topic0,
-      )
-      if (matched) return matched
+      const matched = filterBySelector(named, topic0)
+      if (matched.length > 0) return matched
       // All-anonymous candidates: topic0 is the first indexed arg, not a
       // selector — the name match is all there is to go on.
-      if (named.every((event) => event.anonymous)) return named[0]!
+      if (named.every((event) => event.anonymous)) return [named[0]!]
       throw new AbiEventSignatureNotFoundError(topic0, { docsPath })
     }
-    return named[0]!
+    return [named[0]!]
   }
 
   if (!topic0) throw new AbiEventSignatureEmptyTopicsError({ docsPath })
-  const abiItem = events.find(
-    (event) =>
-      !event.anonymous && toEventSelector(formatAbiItem(event)) === topic0,
-  )
-  if (!abiItem) throw new AbiEventSignatureNotFoundError(topic0, { docsPath })
-  return abiItem
+  const matched = filterBySelector(events, topic0)
+  if (matched.length === 0)
+    throw new AbiEventSignatureNotFoundError(topic0, { docsPath })
+  return matched
+}
+
+/**
+ * The non-anonymous events of `events` whose selector is `selector`, in ABI
+ * order. Events sharing a selector share a name: up to the first match every
+ * event is compared, and past it only the events of that name are, one whose
+ * signature cannot be formed counting as no match.
+ */
+function filterBySelector(
+  events: readonly AbiEvent[],
+  selector: Hex,
+): readonly AbiEvent[] {
+  const matched: AbiEvent[] = []
+  for (const event of events) {
+    if (event.anonymous) continue
+    if (matched.length === 0) {
+      if (toEventSelector(formatAbiItem(event)) === selector)
+        matched.push(event)
+      continue
+    }
+    if (event.name !== matched[0]!.name) continue
+    try {
+      if (toEventSelector(formatAbiItem(event)) === selector)
+        matched.push(event)
+    } catch {
+      // No signature to compare — not an event of this selector.
+    }
+  }
+  return matched
 }
 
 /** Decodes a single indexed topic back to its value (or its hash hex). */

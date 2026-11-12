@@ -155,33 +155,26 @@ export function parseEventLogs<
 
   const parsedLogs: (EventLogData & DecodeEventLogReturnType)[] = []
   for (const log of logs) {
-    const candidates = decodable.filter(
-      ({ selector }) => selector === log.topics[0],
-    )
+    const candidates = decodable
+      .filter(({ selector }) => selector === log.topics[0])
+      .map(({ abiEvent }) => abiEvent)
     // A selector outside the considered events is dropped in both modes.
     if (candidates.length === 0) continue
 
-    // Try each candidate until one decodes exactly.
-    let decoded: DecodeEventLogReturnType | undefined
-    for (const { abiEvent } of candidates) {
-      try {
-        decoded = decodeEventLog({
-          abi: [abiEvent],
-          data: log.data,
-          topics: log.topics,
-        })
-        break
-      } catch {
-        // Mismatched `data` / `topics` — try the next candidate.
-      }
-    }
-
-    // No candidate decodes exactly: strict mode drops the log; otherwise fall
-    // back to a partial decode against the first candidate, so the arguments
-    // recoverable from the topics are still returned.
-    if (!decoded) {
+    let decoded: DecodeEventLogReturnType
+    try {
+      // `decodeEventLog` tries each candidate until one decodes exactly.
+      decoded = decodeEventLog({
+        abi: candidates,
+        data: log.data,
+        topics: log.topics,
+      })
+    } catch {
+      // No candidate decodes exactly: strict mode drops the log; otherwise
+      // fall back to a partial decode against the first candidate, so the
+      // arguments recoverable from the topics are still returned.
       if (strict) continue
-      const fallback = candidates[0]!.abiEvent
+      const fallback = candidates[0]!
       try {
         decoded = decodeEventLog({
           abi: [fallback],

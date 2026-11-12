@@ -5,7 +5,9 @@ import {
   DecodeLogDataMismatchError,
   DecodeLogTopicsMismatchError,
 } from '../../../src/errors/abi.js'
+import type { Hex } from '../../../src/types/misc.js'
 import { decodeEventLog } from '../../../src/utils/abi/decodeEventLog.js'
+import { parseEventLogs } from '../../../src/utils/abi/parseEventLogs.js'
 import { toEventSelector } from '../../../src/utils/hash/toEventSelector.js'
 import {
   type FixtureParameter,
@@ -398,5 +400,362 @@ describe('non-indexed parameters map by position, not object identity', () => {
     })
     expect((args as unknown[])[0]).toBe(11n)
     expect((args as unknown[])[2]).toBe(22n)
+  })
+})
+
+// Events that share one selector and differ only in which inputs are indexed
+// (TRC-20 vs TRC-721 `Transfer`): the event a log decodes against exactly is
+// the result, whatever the order of the events in the ABI.
+describe('events sharing one selector', () => {
+  const transfer = fixtures.find((f) => f.name === 'transfer')!
+  const from = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
+  const to = 'TDvSsdrNM5eeXNL3czpa6AxLDHZA9nwe9K'
+  const [selector, fromTopic, toTopic] = transfer.topics as [Hex, Hex, Hex]
+  const word = (n: number) => n.toString(16).padStart(64, '0')
+
+  const trc20Event = {
+    type: 'event',
+    name: 'Transfer',
+    inputs: [
+      { indexed: true, name: 'from', type: 'address' },
+      { indexed: true, name: 'to', type: 'address' },
+      { indexed: false, name: 'value', type: 'uint256' },
+    ],
+  } as const
+  const trc721Event = {
+    type: 'event',
+    name: 'Transfer',
+    inputs: [
+      { indexed: true, name: 'from', type: 'address' },
+      { indexed: true, name: 'to', type: 'address' },
+      { indexed: true, name: 'tokenId', type: 'uint256' },
+    ],
+  } as const
+  const approvalEvent = {
+    type: 'event',
+    name: 'Approval',
+    inputs: [
+      { indexed: true, name: 'owner', type: 'address' },
+      { indexed: true, name: 'spender', type: 'address' },
+      { indexed: false, name: 'value', type: 'uint256' },
+    ],
+  } as const
+
+  /** A TRC-20 transfer of 5: two argument topics, the amount in `data`. */
+  const trc20Log = {
+    topics: [selector, fromTopic, toTopic],
+    data: `0x${word(5)}`,
+  } as const
+  /** A TRC-721 transfer of token 5: three argument topics, no `data`. */
+  const trc721Log = {
+    topics: [selector, fromTopic, toTopic, `0x${word(5)}`],
+    data: '0x',
+  } as const
+  /** Only `from` has a topic: neither layout decodes it exactly. */
+  const shortLog = {
+    topics: [selector, fromTopic],
+    data: `${toTopic}${word(5)}`,
+  } as const
+
+  const trc20Decoded = {
+    eventName: 'Transfer',
+    args: { from, to, value: 5n },
+  }
+  const trc721Decoded = {
+    eventName: 'Transfer',
+    args: { from, to, tokenId: 5n },
+  }
+
+  /** The error `fn` throws, or `undefined` when it returns. */
+  const thrown = (fn: () => unknown): unknown => {
+    try {
+      fn()
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  const orders = [
+    ['TRC-20 first', [trc20Event, trc721Event]],
+    ['TRC-721 first', [trc721Event, trc20Event]],
+  ] as const
+  const modes = [undefined, true, false] as const
+
+  describe.each(orders)('%s', (_order, abi) => {
+    test.each(
+      modes,
+    )('strict: %s — each log decodes against its own layout', (strict) => {
+      expect(decodeEventLog({ abi, ...trc20Log, strict })).toStrictEqual(
+        trc20Decoded,
+      )
+      expect(decodeEventLog({ abi, ...trc721Log, strict })).toStrictEqual(
+        trc721Decoded,
+      )
+    })
+
+    test.each(
+      modes,
+    )('strict: %s — eventName selects among the events of that name', (strict) => {
+      const withApproval = [approvalEvent, ...abi] as const
+      expect(
+        decodeEventLog({
+          abi: withApproval,
+          eventName: 'Transfer',
+          ...trc20Log,
+          strict,
+        }),
+      ).toStrictEqual(trc20Decoded)
+      expect(
+        decodeEventLog({
+          abi: withApproval,
+          eventName: 'Transfer',
+          ...trc721Log,
+          strict,
+        }),
+      ).toStrictEqual(trc721Decoded)
+    })
+
+    test('trailing data after the last parameter does not change the layout picked', () => {
+      const padded = {
+        ...trc20Log,
+        data: `${trc20Log.data}${word(9)}`,
+      } as const
+      expect(decodeEventLog({ abi, ...padded })).toStrictEqual(trc20Decoded)
+      expect(decodeEventLog({ abi, ...padded, strict: false })).toStrictEqual(
+        trc20Decoded,
+      )
+    })
+
+    test('no layout decodes exactly: strict throws the mismatch of the first event', () => {
+      const first = abi[0]
+      const error = thrown(() => decodeEventLog({ abi, ...shortLog }))
+      expect(error).toBeInstanceOf(DecodeLogTopicsMismatchError)
+      expect((error as DecodeLogTopicsMismatchError).abiItem).toBe(first)
+      // The same error as decoding against the first event alone.
+      const alone = thrown(() => decodeEventLog({ abi: [first], ...shortLog }))
+      expect((error as Error).message).toBe((alone as Error).message)
+    })
+
+    test('no layout decodes exactly: strict: false decodes leniently against the first event', () => {
+      expect(decodeEventLog({ abi, ...shortLog, strict: false })).toStrictEqual(
+        decodeEventLog({ abi: [abi[0]], ...shortLog, strict: false }),
+      )
+    })
+
+    test('strict: false still throws for a malformed topic', () => {
+      const malformed = { topics: [selector, '0xdead'], data: '0x' } as const
+      expect(() => decodeEventLog({ abi, ...malformed })).toThrow()
+      expect(() =>
+        decodeEventLog({ abi, ...malformed, strict: false }),
+      ).toThrow()
+    })
+  })
+
+  test('TRC-721 first, TRC-20 log: the amount is decoded as `value` in both modes', () => {
+    const abi = [trc721Event, trc20Event] as const
+    expect(decodeEventLog({ abi, ...trc20Log })).toStrictEqual(trc20Decoded)
+    expect(decodeEventLog({ abi, ...trc20Log, strict: false })).toStrictEqual(
+      trc20Decoded,
+    )
+  })
+
+  test('TRC-20 first, TRC-721 log: the token is decoded as `tokenId` in both modes', () => {
+    const abi = [trc20Event, trc721Event] as const
+    expect(decodeEventLog({ abi, ...trc721Log })).toStrictEqual(trc721Decoded)
+    expect(decodeEventLog({ abi, ...trc721Log, strict: false })).toStrictEqual(
+      trc721Decoded,
+    )
+  })
+
+  test('the lenient fallback follows the ABI order', () => {
+    expect(
+      decodeEventLog({
+        abi: [trc20Event, trc721Event],
+        ...shortLog,
+        strict: false,
+      }).args,
+    ).toStrictEqual({ from, to, value: 5n })
+    expect(
+      decodeEventLog({
+        abi: [trc721Event, trc20Event],
+        ...shortLog,
+        strict: false,
+      }).args,
+    ).toStrictEqual({ from, to, tokenId: 5n })
+  })
+
+  test('a single event keeps its mismatch in strict mode and its partial decode otherwise', () => {
+    expect(() => decodeEventLog({ abi: [trc721Event], ...trc20Log })).toThrow(
+      DecodeLogTopicsMismatchError,
+    )
+    expect(
+      decodeEventLog({ abi: [trc721Event], ...trc20Log, strict: false }),
+    ).toStrictEqual(trc721Decoded)
+    expect(() => decodeEventLog({ abi: [trc20Event], ...trc721Log })).toThrow(
+      DecodeLogTopicsMismatchError,
+    )
+  })
+
+  test('eventName still validates topic0 against the events of that name', () => {
+    const abi = [trc721Event, trc20Event, approvalEvent] as const
+    expect(() =>
+      decodeEventLog({ abi, eventName: 'Approval', ...trc20Log }),
+    ).toThrow(AbiEventSignatureNotFoundError)
+    expect(() =>
+      decodeEventLog({
+        abi,
+        eventName: 'Approval',
+        ...trc20Log,
+        strict: false,
+      }),
+    ).toThrow(AbiEventSignatureNotFoundError)
+  })
+
+  test('events of one name with different selectors resolve by topic0', () => {
+    const shortTransfer = {
+      type: 'event',
+      name: 'Transfer',
+      inputs: [
+        { indexed: true, name: 'to', type: 'address' },
+        { indexed: false, name: 'value', type: 'uint256' },
+      ],
+    } as const
+    for (const abi of [
+      [shortTransfer, trc721Event, trc20Event],
+      [trc20Event, trc721Event, shortTransfer],
+    ] as const) {
+      expect(
+        decodeEventLog({ abi, eventName: 'Transfer', ...trc20Log }),
+      ).toStrictEqual(trc20Decoded)
+      expect(
+        decodeEventLog({
+          abi,
+          eventName: 'Transfer',
+          topics: [toEventSelector('Transfer(address,uint256)'), toTopic],
+          data: `0x${word(5)}`,
+        }),
+      ).toStrictEqual({ eventName: 'Transfer', args: { to, value: 5n } })
+    }
+  })
+
+  test('anonymous events sharing a name resolve to the first of them', () => {
+    const anonymous = (name: string, indexed: boolean) =>
+      ({
+        type: 'event',
+        name: 'Ping',
+        anonymous: true,
+        inputs: [{ indexed, name, type: 'uint256' }],
+      }) as const
+    const byTopic = anonymous('fromTopic', true)
+    const byData = anonymous('fromData', false)
+    const log = { topics: [`0x${word(5)}`], data: `0x${word(7)}` } as const
+    expect(
+      decodeEventLog({ abi: [byTopic, byData], eventName: 'Ping', ...log })
+        .args,
+    ).toStrictEqual({ fromTopic: 5n })
+    expect(() =>
+      decodeEventLog({ abi: [byData, byTopic], eventName: 'Ping', ...log }),
+    ).toThrow(DecodeLogTopicsMismatchError)
+  })
+
+  describe('the events compared past the first one of the selector', () => {
+    /** An event that counts how often its inputs are read. */
+    const counted = (name: string) => {
+      const event = {
+        type: 'event',
+        name,
+        reads: 0,
+        get inputs() {
+          event.reads++
+          return [{ indexed: false, name: 'a', type: 'uint256' }]
+        },
+      }
+      return event
+    }
+
+    test('only the events of its name are', () => {
+      const [before, between, after] = [
+        counted('Mint'),
+        counted('Approval'),
+        counted('Burn'),
+      ]
+      const abi = [
+        before,
+        trc20Event,
+        between,
+        trc721Event,
+        after,
+      ] as unknown as Abi
+      expect(decodeEventLog({ abi, ...trc20Log })).toStrictEqual(trc20Decoded)
+      expect(decodeEventLog({ abi, ...trc721Log })).toStrictEqual(trc721Decoded)
+      expect(before.reads).toBeGreaterThan(0)
+      expect(between.reads).toBe(0)
+      expect(after.reads).toBe(0)
+    })
+
+    test.each([
+      ['inputs that are not a list', { name: 'Bad', inputs: 'abc' }],
+      ['a name that forms no signature', { name: 'Bad(', inputs: [] }],
+      ['the same name, inputs not a list', { name: 'Transfer', inputs: 'abc' }],
+    ])('an item with %s is not one of them', (_label, item) => {
+      const malformed = { type: 'event', ...item }
+      for (const eventName of [undefined, 'Transfer']) {
+        expect(
+          decodeEventLog({
+            abi: [trc20Event, malformed] as unknown as Abi,
+            eventName,
+            ...trc20Log,
+          }),
+        ).toStrictEqual(trc20Decoded)
+        // The events after it are still compared.
+        expect(
+          decodeEventLog({
+            abi: [trc20Event, malformed, trc721Event] as unknown as Abi,
+            eventName,
+            ...trc721Log,
+          }),
+        ).toStrictEqual(trc721Decoded)
+      }
+    })
+  })
+
+  describe('parity with parseEventLogs', () => {
+    describe.each(orders)('%s', (_order, abi) => {
+      test.each([
+        true,
+        false,
+      ])('strict: %s — both give the same eventName / args', (strict) => {
+        for (const log of [trc20Log, trc721Log]) {
+          const [parsed] = parseEventLogs({ abi, logs: [log], strict })
+          const decoded = decodeEventLog({ abi, ...log, strict })
+          expect({
+            eventName: parsed?.eventName,
+            args: parsed?.args,
+          }).toStrictEqual(decoded)
+        }
+        expect(
+          parseEventLogs({ abi, logs: [trc20Log, trc721Log], strict }).map(
+            ({ eventName, args }) => ({ eventName, args }),
+          ),
+        ).toStrictEqual([trc20Decoded, trc721Decoded])
+      })
+
+      test('a log no layout decodes exactly: dropped / thrown in strict mode, the same partial decode otherwise', () => {
+        expect(parseEventLogs({ abi, logs: [shortLog] })).toEqual([])
+        expect(() => decodeEventLog({ abi, ...shortLog })).toThrow(
+          DecodeLogTopicsMismatchError,
+        )
+        const [parsed] = parseEventLogs({
+          abi,
+          logs: [shortLog],
+          strict: false,
+        })
+        expect({
+          eventName: parsed?.eventName,
+          args: parsed?.args,
+        }).toStrictEqual(decodeEventLog({ abi, ...shortLog, strict: false }))
+      })
+    })
   })
 })
