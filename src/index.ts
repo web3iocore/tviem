@@ -110,8 +110,6 @@ export {
   type GetChainParametersErrorType,
   type GetChainParametersReturnType,
   getChainParameters,
-  getEnergyFee,
-  getTransactionFee,
 } from './actions/public/getChainParameters.js'
 export {
   type BlockTag,

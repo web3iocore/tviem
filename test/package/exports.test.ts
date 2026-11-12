@@ -127,6 +127,15 @@ describe('package exports surface (freeze guard)', () => {
     }
   })
 
+  test('chain parameters are read from the getChainParameters result, with no getter exports', () => {
+    const entrypoints = { root, accounts, actions, chains, utils }
+    for (const name of ['getEnergyFee', 'getTransactionFee'])
+      for (const [entrypoint, mod] of Object.entries(entrypoints))
+        expect(name in mod, `${entrypoint} exports ${name}`).toBe(false)
+    expect('getChainParameters' in root).toBe(true)
+    expect('getChainParameters' in actions).toBe(true)
+  })
+
   test('root + subpath export names are frozen', () => {
     const names = (mod: object) => Object.keys(mod).sort()
     expect({

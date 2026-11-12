@@ -13,6 +13,6 @@ export type FormatTrxErrorType = FormatUnitsErrorType
  * formatTrx(1000000n)
  * // '1'
  */
-export function formatTrx(sun: bigint, unit: 'sun' = 'sun') {
-  return formatUnits(sun, trxUnits[unit])
+export function formatTrx(sun: bigint) {
+  return formatUnits(sun, trxUnits.sun)
 }

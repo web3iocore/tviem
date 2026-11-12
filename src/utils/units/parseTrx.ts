@@ -14,6 +14,6 @@ export type ParseTrxErrorType = ParseUnitsErrorType | ErrorType
  * parseTrx('420')
  * // 420000000n
  */
-export function parseTrx(trx: string, unit: 'sun' = 'sun') {
-  return parseUnits(trx, trxUnits[unit])
+export function parseTrx(trx: string) {
+  return parseUnits(trx, trxUnits.sun)
 }

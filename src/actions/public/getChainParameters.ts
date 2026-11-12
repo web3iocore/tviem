@@ -38,15 +38,3 @@ export async function getChainParameters(
     parameters[key] = BigInt(value ?? 0)
   return parameters
 }
-
-/** Convenience getter: the energy price (SUN per unit of energy), or `0n`. */
-export function getEnergyFee(parameters: GetChainParametersReturnType): bigint {
-  return parameters.getEnergyFee ?? 0n
-}
-
-/** Convenience getter: the bandwidth price (SUN per byte), or `0n`. */
-export function getTransactionFee(
-  parameters: GetChainParametersReturnType,
-): bigint {
-  return parameters.getTransactionFee ?? 0n
-}
