@@ -24,10 +24,10 @@ export type DecodeDeployDataParameters<
   data: Hex
 }
 
-/** Decoded constructor args in TRON flavor: `address` positions brand out to
- * Base58 `Address`, integers to `bigint`. `readonly unknown[]` when the ABI
- * carries no constructor. */
-type TronConstructorArgs<abi extends Abi | readonly unknown[]> =
+/** Decoded constructor args, in the TRON `outputs` mapping: `address`
+ * positions are the Base58 `Address`, integers `bigint`. `readonly unknown[]`
+ * when the ABI carries no constructor. */
+type DecodedConstructorArgs<abi extends Abi | readonly unknown[]> =
   TronAbiParametersToPrimitiveTypes<
     Extract<
       (abi extends Abi ? abi : Abi)[number],
@@ -43,7 +43,7 @@ type TronConstructorArgs<abi extends Abi | readonly unknown[]> =
 export type DecodeDeployDataReturnType<
   abi extends Abi | readonly unknown[] = Abi,
 > = {
-  args?: TronConstructorArgs<abi> | undefined
+  args?: DecodedConstructorArgs<abi> | undefined
   bytecode: Hex
 }
 

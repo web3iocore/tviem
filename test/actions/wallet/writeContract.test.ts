@@ -43,6 +43,12 @@ const trc20Abi = [
   },
 ] as const
 
+// The same function declared `payable`, for the calls that attach a call
+// value: the call value options are typed for payable functions only.
+const payableTrc20Abi = [
+  { ...trc20Abi[0], stateMutability: 'payable' },
+] as const
+
 const contract = 'TA5DvvvmYbS75o3DKtgy2ATAGVHhpFkRLe' as Address
 // The gold vectors encode transfer(410123456789…, 1000000) which resolves to
 // the same Base58 address as the contract here.
@@ -119,7 +125,7 @@ test('attaches callValue to the TriggerSmartContract byte-for-byte', async () =>
 
   const { txID } = await client.writeContract({
     address: contract,
-    abi: trc20Abi,
+    abi: payableTrc20Abi,
     functionName: 'transfer',
     args: [recipient, 1000000n],
     feeLimit: FEE_LIMIT,
@@ -141,7 +147,7 @@ test('attaches callTokenValue + tokenId to the TriggerSmartContract byte-for-byt
 
   const { txID } = await client.writeContract({
     address: contract,
-    abi: trc20Abi,
+    abi: payableTrc20Abi,
     functionName: 'transfer',
     args: [recipient, 1000000n],
     feeLimit: FEE_LIMIT,

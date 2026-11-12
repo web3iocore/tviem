@@ -6,12 +6,28 @@ import {
   signTypedData as signTypedDataWithKey,
 } from '../src/accounts/index.js'
 import type {
+  AbiEventParametersToPrimitiveTypes,
+  AbiEventParameterToPrimitiveType,
+  AbiEventTopicToPrimitiveType,
+  AbiItem,
+  AbiItemArgs,
+  AbiItemName,
   Address,
+  AddressInput,
   BaseError,
   ByteArray,
   Chain,
   Client,
+  ContractConstructorArgs,
+  ContractErrorArgs,
+  ContractErrorName,
+  ContractEventArgs,
+  ContractEventArgsFromTopics,
+  ContractEventName,
+  ContractFunctionArgs,
   ContractFunctionName,
+  ContractFunctionParameters,
+  ContractFunctionReturnType,
   ContractFunctionRevertedError,
   DecodeEventLogErrorType,
   DecodeLogDataMismatchError,
@@ -19,17 +35,28 @@ import type {
   DecodeLogTopicsMismatchError,
   DecodeLogTopicsMismatchErrorType,
   EncodePackedErrorType,
+  EventDefinition,
   EvmAddress,
+  ExtractAbiFunctionForArgs,
+  ExtractAbiItem,
+  ExtractAbiItemForArgs,
+  ExtractAbiItemNames,
+  GetEventArgs,
   Hex,
   InvalidAbiParameterValueErrorType,
+  LogTopicType,
+  MaybeAbiEventName,
+  MaybeExtractEventArgsFromAbi,
   PublicClient,
   RequestErrorType,
   Transport,
   TronHexAddress,
   TronNodeError,
   TronRequestFn,
+  UnionWiden,
   UnsupportedPackedAbiTypeError,
   UnsupportedPackedAbiTypeErrorType,
+  Widen,
 } from '../src/index.js'
 import {
   addressToHex,
@@ -207,4 +234,152 @@ test('root sign* exports are the client actions; ./accounts holds the key utilit
   expectTypeOf<
     Parameters<typeof signTransactionWithKey>[0]
   >().not.toHaveProperty('address')
+})
+
+test('the root entrypoint exports the contract helper types, on the TRON mapping', () => {
+  const abi = [
+    {
+      type: 'function',
+      name: 'owner',
+      stateMutability: 'view',
+      inputs: [],
+      outputs: [{ name: '', type: 'address' }],
+    },
+    {
+      type: 'function',
+      name: 'transfer',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'to', type: 'address' },
+        { name: 'amount', type: 'uint256' },
+      ],
+      outputs: [{ name: '', type: 'bool' }],
+    },
+    {
+      type: 'constructor',
+      stateMutability: 'nonpayable',
+      inputs: [{ name: 'owner', type: 'address' }],
+    },
+    {
+      type: 'event',
+      name: 'Transfer',
+      inputs: [
+        { name: 'from', type: 'address', indexed: true },
+        { name: 'value', type: 'uint256', indexed: false },
+      ],
+    },
+    {
+      type: 'error',
+      name: 'Denied',
+      inputs: [{ name: 'account', type: 'address' }],
+    },
+  ] as const
+  type TransferEvent = Extract<(typeof abi)[number], { type: 'event' }>
+  type AddressFilter = AddressInput | readonly AddressInput[] | null
+
+  // names
+  expectTypeOf<ContractErrorName<typeof abi>>().toEqualTypeOf<'Denied'>()
+  expectTypeOf<ContractEventName<typeof abi>>().toEqualTypeOf<'Transfer'>()
+  expectTypeOf<AbiItemName<typeof abi>>().toEqualTypeOf<
+    'owner' | 'transfer' | 'Transfer' | 'Denied'
+  >()
+  expectTypeOf<ExtractAbiItemNames<typeof abi>>().toEqualTypeOf<
+    AbiItemName<typeof abi>
+  >()
+  expectTypeOf<
+    ExtractAbiItem<typeof abi, 'Transfer'>
+  >().toEqualTypeOf<TransferEvent>()
+  expectTypeOf<(typeof abi)[number]>().toExtend<AbiItem>()
+  expectTypeOf<'Transfer(address,uint256)'>().toExtend<EventDefinition>()
+  expectTypeOf<MaybeAbiEventName<TransferEvent>>().toEqualTypeOf<'Transfer'>()
+
+  // arguments: the TRON `inputs` mapping
+  expectTypeOf<
+    ContractFunctionArgs<typeof abi, 'nonpayable', 'transfer'>
+  >().toEqualTypeOf<readonly [AddressInput, bigint | number]>()
+  expectTypeOf<ContractConstructorArgs<typeof abi>>().toEqualTypeOf<
+    readonly [AddressInput]
+  >()
+  expectTypeOf<ContractErrorArgs<typeof abi, 'Denied'>>().toEqualTypeOf<
+    readonly [AddressInput]
+  >()
+  expectTypeOf<AbiItemArgs<typeof abi, 'transfer'>>().toEqualTypeOf<
+    readonly [AddressInput, bigint | number]
+  >()
+  expectTypeOf<
+    ContractFunctionParameters<typeof abi, 'nonpayable', 'transfer'>['args']
+  >().toEqualTypeOf<readonly [AddressInput, bigint | number]>()
+  expectTypeOf<
+    ContractFunctionParameters<typeof abi, 'nonpayable', 'transfer'>['address']
+  >().toEqualTypeOf<Address>()
+  expectTypeOf<
+    ExtractAbiFunctionForArgs<
+      typeof abi,
+      'nonpayable',
+      'transfer',
+      readonly [Address, 1n]
+    >['name']
+  >().toEqualTypeOf<'transfer'>()
+  expectTypeOf<
+    ExtractAbiItemForArgs<typeof abi, 'Denied', readonly [Address]>['type']
+  >().toEqualTypeOf<'error'>()
+  expectTypeOf<
+    Widen<'TA5DvvvmYbS75o3DKtgy2ATAGVHhpFkRLe'>
+  >().toEqualTypeOf<Address>()
+  expectTypeOf<UnionWiden<1n | 'x'>>().toEqualTypeOf<bigint | string>()
+
+  // results: the TRON `outputs` mapping
+  expectTypeOf<
+    ContractFunctionReturnType<typeof abi, 'view', 'owner'>
+  >().toEqualTypeOf<Address>()
+  expectTypeOf<
+    ContractFunctionReturnType<typeof abi, 'nonpayable', 'transfer'>
+  >().toEqualTypeOf<boolean>()
+
+  // events: filters take the inputs mapping, decoded args the outputs one
+  expectTypeOf<ContractEventArgs<typeof abi, 'Transfer'>>().toEqualTypeOf<
+    | readonly [(AddressFilter | undefined)?]
+    | { from?: AddressFilter | undefined }
+  >()
+  expectTypeOf<
+    ContractEventArgsFromTopics<typeof abi, 'Transfer'>
+  >().toEqualTypeOf<{ from: Address; value: bigint }>()
+  expectTypeOf<GetEventArgs<typeof abi, 'Transfer'>>().toEqualTypeOf<{
+    from?: AddressFilter | undefined
+  }>()
+  expectTypeOf<
+    MaybeExtractEventArgsFromAbi<typeof abi, 'Transfer'>
+  >().toEqualTypeOf<GetEventArgs<typeof abi, 'Transfer'>>()
+  expectTypeOf<
+    AbiEventParametersToPrimitiveTypes<TransferEvent['inputs']>
+  >().toEqualTypeOf<GetEventArgs<typeof abi, 'Transfer'>>()
+  expectTypeOf<
+    AbiEventParameterToPrimitiveType<TransferEvent['inputs'][0]>
+  >().toEqualTypeOf<AddressFilter>()
+  expectTypeOf<
+    AbiEventTopicToPrimitiveType<TransferEvent['inputs'][0], Hex>
+  >().toEqualTypeOf<Address>()
+  // raw topics stay hex
+  expectTypeOf<LogTopicType>().toEqualTypeOf<Hex | readonly Hex[] | null>()
+})
+
+test('the root entrypoint exports no `Tron`-prefixed contract helper type', () => {
+  // @ts-expect-error not exported: `ContractFunctionArgs` is the one name
+  expectTypeOf<import('../src/index.js').TronContractFunctionArgs>()
+  // @ts-expect-error not exported: `ContractFunctionReturnType` is the one name
+  expectTypeOf<import('../src/index.js').TronContractFunctionReturnType>()
+  // @ts-expect-error not exported: `ExtractAbiFunctionForArgs` is the one name
+  expectTypeOf<import('../src/index.js').ExtractTronAbiFunctionForArgs>()
+  // @ts-expect-error not exported: `ContractConstructorArgs` is the one name
+  expectTypeOf<import('../src/index.js').TronContractConstructorArgs>()
+  // @ts-expect-error not exported: `ContractErrorArgs` is the one name
+  expectTypeOf<import('../src/index.js').TronContractErrorArgs>()
+  // @ts-expect-error not exported: `AbiItemArgs` is the one name
+  expectTypeOf<import('../src/index.js').TronAbiItemArgs>()
+  // @ts-expect-error not exported: `ExtractAbiItemForArgs` is the one name
+  expectTypeOf<import('../src/index.js').ExtractTronAbiItemForArgs>()
+  // @ts-expect-error not exported: the mapping stays internal
+  expectTypeOf<import('../src/index.js').TronAbiParametersToPrimitiveTypes>()
+  // @ts-expect-error not exported: the mapping stays internal
+  expectTypeOf<import('../src/index.js').TronAbiParameterToPrimitiveType>()
 })

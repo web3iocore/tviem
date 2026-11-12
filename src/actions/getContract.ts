@@ -12,7 +12,7 @@ import { AbiEventNotFoundError, AbiEventOverloadError } from '../errors/abi.js'
 import { InvalidParameterError } from '../errors/parameter.js'
 import type { ErrorType } from '../errors/utils.js'
 import type { Address } from '../types/address.js'
-import type { ContractFunctionName } from '../types/contract.js'
+import type { ContractFunctionName, IsPayable } from '../types/contract.js'
 import type { EventFilterArgs, WideEventFilterArgs } from '../types/log.js'
 import type { Hex } from '../types/misc.js'
 import type {
@@ -69,18 +69,42 @@ type ReadOptions = Prettify<
   Omit<ReadContractParameters, 'abi' | 'address' | 'functionName' | 'args'>
 >
 /** The `write.<fn>` per-call options: {@link WriteContractParameters} minus the
- * facade-supplied fields. */
-type WriteOptions = Prettify<
-  Omit<WriteContractParameters, 'abi' | 'address' | 'functionName' | 'args'>
+ * facade-supplied fields. The call value options take a value when the
+ * function is `payable`. */
+type WriteOptions<payable extends boolean = boolean> = Prettify<
+  PayableOptions<
+    Omit<WriteContractParameters, 'abi' | 'address' | 'functionName' | 'args'>,
+    payable
+  >
 >
-/** The `estimateEnergy.<fn>` per-call options. */
-type EstimateOptions = Prettify<
-  Omit<EstimateEnergyParameters, 'abi' | 'address' | 'functionName' | 'args'>
+/** The `estimateEnergy.<fn>` per-call options. The call value options take a
+ * value when the function is `payable`. */
+type EstimateOptions<payable extends boolean = boolean> = Prettify<
+  PayableOptions<
+    Omit<EstimateEnergyParameters, 'abi' | 'address' | 'functionName' | 'args'>,
+    payable
+  >
 >
 
-/** ABI input args in TRON flavor: `address` positions accept any TRON form
- * (Base58 `T…`, `41…` hex, `0x…` EVM); integers accept `bigint | number`. */
-type TronArgs<abiFunction extends AbiFunction> =
+/** `options` as they are when `payable`, otherwise with `callValue`,
+ * `callTokenValue` and `tokenId` typed `undefined`. */
+type PayableOptions<options, payable extends boolean> = [payable] extends [
+  false,
+]
+  ? {
+      [key in keyof options]: key extends
+        | 'callValue'
+        | 'callTokenValue'
+        | 'tokenId'
+        ? undefined
+        : options[key]
+    }
+  : options
+
+/** The argument tuple of one ABI function, in the TRON `inputs` mapping:
+ * `address` positions accept any TRON form (Base58 `T…`, `41…` hex, `0x…`
+ * EVM); integers accept `bigint | number`. */
+type FunctionArgs<abiFunction extends AbiFunction> =
   TronAbiParametersToPrimitiveTypes<abiFunction['inputs'], 'inputs'>
 
 /** Collapses a mapped outputs tuple like the decode layer: `[]` → `void`,
@@ -91,9 +115,9 @@ type CollapseOutputs<outputs> = outputs extends readonly []
     ? output
     : outputs
 
-/** ABI outputs in TRON flavor: `address` positions brand out to Base58
- * `Address`; integers to `bigint`. */
-type TronReturn<abiFunction extends AbiFunction> = CollapseOutputs<
+/** The return type of one ABI function, in the TRON `outputs` mapping:
+ * `address` positions are the Base58 `Address`; integers `bigint`. */
+type FunctionReturnType<abiFunction extends AbiFunction> = CollapseOutputs<
   TronAbiParametersToPrimitiveTypes<abiFunction['outputs'], 'outputs'>
 >
 
@@ -103,37 +127,57 @@ type GetReadFunction<
   abiFunction extends AbiFunction = abi extends Abi
     ? ExtractAbiFunction<abi, functionName, 'pure' | 'view'>
     : AbiFunction,
-  _args = TronArgs<abiFunction>,
+  _args = FunctionArgs<abiFunction>,
 > = (
   ...parameters: _args extends readonly []
     ? [options?: ReadOptions]
     : [args: _args, options?: ReadOptions]
-) => Promise<TronReturn<abiFunction>>
+) => Promise<FunctionReturnType<abiFunction>>
+
+/** The `nonpayable` / `payable` functions `functionName` names in `abi` (one
+ * per overload), or the wide `AbiFunction` when the abi type does not list
+ * the name (a wide abi). */
+type WriteAbiFunction<
+  abi extends Abi | readonly unknown[],
+  functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+> = abi extends Abi
+  ? [ExtractAbiFunction<abi, functionName, 'nonpayable' | 'payable'>] extends [
+      never,
+    ]
+    ? AbiFunction
+    : ExtractAbiFunction<abi, functionName, 'nonpayable' | 'payable'>
+  : AbiFunction
 
 type GetWriteFunction<
   abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
-  abiFunction extends AbiFunction = abi extends Abi
-    ? ExtractAbiFunction<abi, functionName, 'nonpayable' | 'payable'>
-    : AbiFunction,
-  _args = TronArgs<abiFunction>,
+  abiFunction extends AbiFunction = WriteAbiFunction<abi, functionName>,
 > = (
-  ...parameters: _args extends readonly []
-    ? [options?: WriteOptions]
-    : [args: _args, options?: WriteOptions]
+  // one parameter list per overload: its options follow its mutability
+  ...parameters: abiFunction extends AbiFunction
+    ? FunctionArgs<abiFunction> extends readonly []
+      ? [options?: WriteOptions<IsPayable<abiFunction>>]
+      : [
+          args: FunctionArgs<abiFunction>,
+          options?: WriteOptions<IsPayable<abiFunction>>,
+        ]
+    : never
 ) => Promise<WriteContractReturnType>
 
 type GetEstimateFunction<
   abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
-  abiFunction extends AbiFunction = abi extends Abi
-    ? ExtractAbiFunction<abi, functionName, 'nonpayable' | 'payable'>
-    : AbiFunction,
-  _args = TronArgs<abiFunction>,
+  abiFunction extends AbiFunction = WriteAbiFunction<abi, functionName>,
 > = (
-  ...parameters: _args extends readonly []
-    ? [options?: EstimateOptions]
-    : [args: _args, options?: EstimateOptions]
+  // one parameter list per overload: its options follow its mutability
+  ...parameters: abiFunction extends AbiFunction
+    ? FunctionArgs<abiFunction> extends readonly []
+      ? [options?: EstimateOptions<IsPayable<abiFunction>>]
+      : [
+          args: FunctionArgs<abiFunction>,
+          options?: EstimateOptions<IsPayable<abiFunction>>,
+        ]
+    : never
 ) => Promise<bigint>
 
 /** Facade `getEvents.<Event>(options?)` filters — everything `getLogs` takes

@@ -42,6 +42,14 @@ const call = {
   args: [contract, 1000000n],
 } as const
 
+// The same call against the function declared `payable`, for the tests that
+// attach a call value: the call value options are typed for payable functions
+// only.
+const payableCall = {
+  ...call,
+  abi: [{ ...trc20Abi[0], stateMutability: 'payable' }],
+} as const
+
 function energyMock() {
   return createMockTransport({
     responses: { estimateenergy: { response: okResponse } },
@@ -90,7 +98,11 @@ test('forwards callValue as call_value', async () => {
   const { transport, calls } = energyMock()
   const client = createPublicClient({ transport })
 
-  await client.estimateEnergy({ ...call, account: caller, callValue: 5n })
+  await client.estimateEnergy({
+    ...payableCall,
+    account: caller,
+    callValue: 5n,
+  })
   expect((calls[0]?.body as { call_value?: number }).call_value).toBe(5)
 })
 
@@ -102,7 +114,7 @@ test('accepts callValue at the JSON-safe integer boundary (K2)', async () => {
   const client = createPublicClient({ transport })
 
   await client.estimateEnergy({
-    ...call,
+    ...payableCall,
     account: caller,
     callValue: BigInt(Number.MAX_SAFE_INTEGER),
   })
@@ -117,7 +129,7 @@ test('rejects a callValue beyond the JSON-safe integer range (K2)', async () => 
 
   await expect(
     client.estimateEnergy({
-      ...call,
+      ...payableCall,
       account: caller,
       callValue: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
     }),
@@ -142,7 +154,7 @@ test('forwards callTokenValue + tokenId as call_token_value + token_id', async (
   const client = createPublicClient({ transport })
 
   await client.estimateEnergy({
-    ...call,
+    ...payableCall,
     account: caller,
     callTokenValue: 5n,
     tokenId: 1002000n,
@@ -161,7 +173,7 @@ test('rejects a callTokenValue beyond the JSON-safe integer range (K2)', async (
 
   await expect(
     client.estimateEnergy({
-      ...call,
+      ...payableCall,
       account: caller,
       callTokenValue: BigInt(Number.MAX_SAFE_INTEGER) + 1n,
       tokenId: 1002000n,
@@ -175,7 +187,7 @@ test('rejects a tokenId beyond the JSON-safe integer range (K2)', async () => {
 
   await expect(
     client.estimateEnergy({
-      ...call,
+      ...payableCall,
       account: caller,
       callTokenValue: 5n,
       tokenId: BigInt(Number.MAX_SAFE_INTEGER) + 1n,

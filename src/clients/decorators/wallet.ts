@@ -296,7 +296,10 @@ import {
 } from '../../actions/wallet/writeContract.js'
 import { AccountNotFoundError } from '../../errors/rpc.js'
 import type { Address } from '../../types/address.js'
-import type { ContractFunctionName } from '../../types/contract.js'
+import type {
+  ContractFunctionArgs,
+  ContractFunctionName,
+} from '../../types/contract.js'
 import { getAction } from '../../utils/getAction.js'
 import type { Client } from '../createClient.js'
 
@@ -311,15 +314,25 @@ export type WalletActions = {
   writeContract: <
     const abi extends Abi | readonly unknown[],
     functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+    const args extends ContractFunctionArgs<
+      abi,
+      'nonpayable' | 'payable',
+      functionName
+    > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
   >(
-    parameters: WriteContractParameters<abi, functionName>,
+    parameters: WriteContractParameters<abi, functionName, args>,
   ) => Promise<WriteContractReturnType>
   /** Builds an unsigned contract write in TronWeb JSON shape (no sign/broadcast). */
   buildWriteContract: <
     const abi extends Abi | readonly unknown[],
     functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+    const args extends ContractFunctionArgs<
+      abi,
+      'nonpayable' | 'payable',
+      functionName
+    > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
   >(
-    parameters: BuildWriteContractParameters<abi, functionName>,
+    parameters: BuildWriteContractParameters<abi, functionName, args>,
   ) => Promise<BuildWriteContractReturnType>
   /** Deploys a smart contract (local build → sign → broadcast). */
   deployContract: <const abi extends Abi | readonly unknown[]>(
@@ -631,8 +644,13 @@ export function walletActions(client: Client): WalletActions {
     writeContract: async <
       const abi extends Abi | readonly unknown[],
       functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+      const args extends ContractFunctionArgs<
+        abi,
+        'nonpayable' | 'payable',
+        functionName
+      > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
     >(
-      parameters: WriteContractParameters<abi, functionName>,
+      parameters: WriteContractParameters<abi, functionName, args>,
     ) =>
       getAction(
         client,
@@ -642,8 +660,13 @@ export function walletActions(client: Client): WalletActions {
     buildWriteContract: async <
       const abi extends Abi | readonly unknown[],
       functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+      const args extends ContractFunctionArgs<
+        abi,
+        'nonpayable' | 'payable',
+        functionName
+      > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
     >(
-      parameters: BuildWriteContractParameters<abi, functionName>,
+      parameters: BuildWriteContractParameters<abi, functionName, args>,
     ) =>
       getAction(
         client,

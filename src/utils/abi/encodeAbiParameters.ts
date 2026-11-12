@@ -56,7 +56,8 @@ import { arrayRegex, bytesRegex, integerRegex } from '../regex.js'
  * - `trcToken` behaves exactly like `uint256` (bigint).
  * - all integer widths decode to bigint; encoding also accepts number.
  * - tuples map to objects when every component is named, otherwise to
- *   positional tuples.
+ *   positional tuples: `readonly` as an input (a mutable or a `readonly`
+ *   tuple is accepted), mutable as an output.
  */
 export type TronAbiParameterToPrimitiveType<
   param extends { type: string },
@@ -73,13 +74,9 @@ export type TronAbiParameterToPrimitiveType<
         components: infer components extends readonly { type: string }[]
       }
       ? _HasUnnamedComponent<components> extends true
-        ? {
-            -readonly [key in keyof components]: components[key] extends {
-              type: string
-            }
-              ? TronAbiParameterToPrimitiveType<components[key], kind>
-              : unknown
-          }
+        ? kind extends 'outputs'
+          ? _PositionalTuple<components, kind>
+          : Readonly<_PositionalTuple<components, kind>>
         : Prettify<{
             [component in components[number] as component extends {
               name: infer name extends string
@@ -106,6 +103,18 @@ export type TronAbiParameterToPrimitiveType<
                 ? bigint
                 : bigint | number
               : unknown
+
+/** The positional (mutable) tuple of a tuple's components. */
+type _PositionalTuple<
+  components extends readonly { type: string }[],
+  kind extends AbiParameterKind,
+> = {
+  -readonly [key in keyof components]: components[key] extends {
+    type: string
+  }
+    ? TronAbiParameterToPrimitiveType<components[key], kind>
+    : unknown
+}
 
 type _HasUnnamedComponent<components extends readonly { type: string }[]> =
   components extends readonly [

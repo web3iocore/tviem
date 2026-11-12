@@ -25,7 +25,11 @@ import type {
   AddressInput,
   TronHexAddress,
 } from '../../types/address.js'
-import type { ContractConstructorArgs } from '../../types/contract.js'
+import type {
+  CallValue,
+  ContractConstructorArgs,
+  IsContractConstructorPayable,
+} from '../../types/contract.js'
 import type { Hex } from '../../types/misc.js'
 import {
   type EncodeDeployDataErrorType,
@@ -143,6 +147,9 @@ export type DeployContractParameters<
   // the constructor cannot be extracted (wide abi), keeping the wide call
   // shape working.
   allArgs = ContractConstructorArgs<abi>,
+  // Whether the constructor is `payable` (an abi without one is not): the
+  // call value options below take a value only then.
+  payable extends boolean = IsContractConstructorPayable<abi>,
 > = {
   /**
    * The owner account (falls back to `client.account`). Signing needs
@@ -156,8 +163,11 @@ export type DeployContractParameters<
   bytecode: Hex
   /** Contract name stored on-chain (`SmartContract.name`). */
   name?: string | undefined
-  /** TRX sent with the deployment, in SUN (`SmartContract.call_value`). */
-  callValue?: bigint | undefined
+  /**
+   * TRX sent with the deployment, in SUN (`SmartContract.call_value`). Takes
+   * a value when the constructor is `payable`.
+   */
+  callValue?: CallValue<payable> | undefined
   /**
    * Percent of each call's energy paid by the caller
    * (`consume_user_resource_percent`); the deployer's account covers the
@@ -172,10 +182,16 @@ export type DeployContractParameters<
    * @default 10_000_000n (TronWeb's default)
    */
   originEnergyLimit?: bigint | undefined
-  /** TRC10 amount sent with the deployment (`call_token_value`). */
-  callTokenValue?: bigint | undefined
-  /** TRC10 token id (`CreateSmartContract.token_id`). */
-  tokenId?: bigint | undefined
+  /**
+   * TRC10 amount sent with the deployment (`call_token_value`). Takes a value
+   * when the constructor is `payable`.
+   */
+  callTokenValue?: CallValue<payable> | undefined
+  /**
+   * TRC10 token id (`CreateSmartContract.token_id`). Takes a value when the
+   * constructor is `payable`.
+   */
+  tokenId?: CallValue<payable> | undefined
   /** Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`). */
   feeLimit?: bigint | undefined
   /**

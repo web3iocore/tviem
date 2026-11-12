@@ -20,7 +20,15 @@ import {
   parseAccount,
 } from '../../types/account.js'
 import type { Address } from '../../types/address.js'
-import type { ContractFunctionName } from '../../types/contract.js'
+import type {
+  CallValue,
+  CallValueOptions,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  IsAbiFunctionPayable,
+  IsContractFunctionPayable,
+} from '../../types/contract.js'
+import type { IsUnion } from '../../types/utils.js'
 import type { TronAbiParametersToPrimitiveTypes } from '../../utils/abi/encodeAbiParameters.js'
 import {
   type EncodeFunctionDataErrorType,
@@ -38,6 +46,11 @@ export type EstimateEnergyParameters<
     abi,
     'nonpayable' | 'payable'
   > = ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+  args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
   ///
   allFunctionNames = ContractFunctionName<abi, 'nonpayable' | 'payable'>,
   abiFunction extends AbiFunction = abi extends Abi
@@ -48,6 +61,18 @@ export type EstimateEnergyParameters<
   allArgs = [abiFunction] extends [never]
     ? readonly unknown[]
     : TronAbiParametersToPrimitiveTypes<abiFunction['inputs'], 'inputs'>,
+  // Whether `functionName` names several overloads.
+  overloaded extends boolean = [abiFunction] extends [never]
+    ? false
+    : IsUnion<abiFunction>,
+  // Whether the function `args` select is `payable`: the call value options
+  // below take a value only then.
+  payable extends boolean = IsContractFunctionPayable<
+    abi,
+    'nonpayable' | 'payable',
+    functionName,
+    args
+  >,
 > = {
   /**
    * The caller the estimate is computed for — sent as `owner_address`. Accepts
@@ -69,12 +94,21 @@ export type EstimateEnergyParameters<
   functionName:
     | allFunctionNames // show all options
     | (functionName extends allFunctionNames ? functionName : never) // infer value
-  /** TRX value (in SUN) attached to the call. */
-  callValue?: bigint | undefined
-  /** TRC10 amount attached to the call (`call_token_value`). */
-  callTokenValue?: bigint | undefined
-  /** TRC10 token id (`token_id`). */
-  tokenId?: bigint | undefined
+  /**
+   * TRX value (in SUN) attached to the call. Takes a value when the function
+   * is `payable`.
+   */
+  callValue?: CallValue<payable> | undefined
+  /**
+   * TRC10 amount attached to the call (`call_token_value`). Takes a value
+   * when the function is `payable`.
+   */
+  callTokenValue?: CallValue<payable> | undefined
+  /**
+   * TRC10 token id (`token_id`). Takes a value when the function is
+   * `payable`.
+   */
+  tokenId?: CallValue<payable> | undefined
   /**
    * Estimate against confirmed (solidified) state on the SolidityNode instead
    * of the FullNode's latest state. `vm.estimateEnergy` is a per-node setting,
@@ -83,13 +117,26 @@ export type EstimateEnergyParameters<
    */
   confirmed?: boolean | undefined
 } & (readonly [] extends allArgs
-  ? {
-      /** The function arguments. */
-      args?: allArgs | undefined
-    }
+  ? overloaded extends true
+    ? // An overloaded name with an overload without inputs. A call without
+      // `args` selects that overload, and takes its call value options; a call
+      // with `args` captures the tuple so the overloads narrow by it.
+        | ({
+            /** The function arguments. */
+            args?: readonly [] | undefined
+          } & CallValueOptions<IsAbiFunctionPayable<abiFunction, readonly []>>)
+        | {
+            /** The function arguments. */
+            args: args
+          }
+    : {
+        /** The function arguments. */
+        args?: allArgs | undefined
+      }
   : {
       /** The function arguments. */
-      args: allArgs
+      // captures the literal tuple so overloads narrow by their args
+      args: overloaded extends true ? args : allArgs
     })
 export type EstimateEnergyReturnType = bigint
 
@@ -138,9 +185,14 @@ type EstimateEnergyResponse = {
 export async function estimateEnergy<
   const abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+  const args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
 >(
   client: Client,
-  parameters: EstimateEnergyParameters<abi, functionName>,
+  parameters: EstimateEnergyParameters<abi, functionName, args>,
 ): Promise<EstimateEnergyReturnType> {
   const {
     abi,

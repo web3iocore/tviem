@@ -74,8 +74,8 @@ import {
   waitForTransactionReceipt,
 } from '../../actions/public/waitForTransactionReceipt.js'
 import type {
+  ContractFunctionArgs,
   ContractFunctionName,
-  TronContractFunctionArgs,
 } from '../../types/contract.js'
 import { getAction } from '../../utils/getAction.js'
 import type { Client } from '../createClient.js'
@@ -124,11 +124,11 @@ export type PublicActions = {
   readContract: <
     const abi extends Abi | readonly unknown[],
     functionName extends ContractFunctionName<abi, 'pure' | 'view'>,
-    const args extends TronContractFunctionArgs<
+    const args extends ContractFunctionArgs<
       abi,
       'pure' | 'view',
       functionName
-    > = TronContractFunctionArgs<abi, 'pure' | 'view', functionName>,
+    > = ContractFunctionArgs<abi, 'pure' | 'view', functionName>,
   >(
     parameters: ReadContractParameters<abi, functionName, args>,
   ) => Promise<ReadContractReturnType<abi, functionName, args>>
@@ -136,18 +136,23 @@ export type PublicActions = {
   estimateEnergy: <
     const abi extends Abi | readonly unknown[],
     functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+    const args extends ContractFunctionArgs<
+      abi,
+      'nonpayable' | 'payable',
+      functionName
+    > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
   >(
-    parameters: EstimateEnergyParameters<abi, functionName>,
+    parameters: EstimateEnergyParameters<abi, functionName, args>,
   ) => Promise<EstimateEnergyReturnType>
   /** Constant-calls (simulates) a contract function of any mutability. */
   triggerConstantContract: <
     const abi extends Abi | readonly unknown[],
     functionName extends ContractFunctionName<abi>,
-    const args extends TronContractFunctionArgs<
+    const args extends ContractFunctionArgs<
       abi,
       AbiStateMutability,
       functionName
-    > = TronContractFunctionArgs<abi, AbiStateMutability, functionName>,
+    > = ContractFunctionArgs<abi, AbiStateMutability, functionName>,
   >(
     parameters: TriggerConstantContractParameters<abi, functionName, args>,
   ) => Promise<TriggerConstantContractReturnType<abi, functionName, args>>
@@ -209,11 +214,11 @@ export function publicActions(client: Client): PublicActions {
     readContract: <
       const abi extends Abi | readonly unknown[],
       functionName extends ContractFunctionName<abi, 'pure' | 'view'>,
-      const args extends TronContractFunctionArgs<
+      const args extends ContractFunctionArgs<
         abi,
         'pure' | 'view',
         functionName
-      > = TronContractFunctionArgs<abi, 'pure' | 'view', functionName>,
+      > = ContractFunctionArgs<abi, 'pure' | 'view', functionName>,
     >(
       parameters: ReadContractParameters<abi, functionName, args>,
     ) =>
@@ -227,8 +232,13 @@ export function publicActions(client: Client): PublicActions {
     estimateEnergy: <
       const abi extends Abi | readonly unknown[],
       functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+      const args extends ContractFunctionArgs<
+        abi,
+        'nonpayable' | 'payable',
+        functionName
+      > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
     >(
-      parameters: EstimateEnergyParameters<abi, functionName>,
+      parameters: EstimateEnergyParameters<abi, functionName, args>,
     ) =>
       getAction(
         client,
@@ -238,11 +248,11 @@ export function publicActions(client: Client): PublicActions {
     triggerConstantContract: <
       const abi extends Abi | readonly unknown[],
       functionName extends ContractFunctionName<abi>,
-      const args extends TronContractFunctionArgs<
+      const args extends ContractFunctionArgs<
         abi,
         AbiStateMutability,
         functionName
-      > = TronContractFunctionArgs<abi, AbiStateMutability, functionName>,
+      > = ContractFunctionArgs<abi, AbiStateMutability, functionName>,
     >(
       parameters: TriggerConstantContractParameters<abi, functionName, args>,
     ) =>

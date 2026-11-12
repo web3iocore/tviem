@@ -12,7 +12,15 @@ import {
   parseAccount,
 } from '../../types/account.js'
 import type { Address } from '../../types/address.js'
-import type { ContractFunctionName } from '../../types/contract.js'
+import type {
+  CallValue,
+  CallValueOptions,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  IsAbiFunctionPayable,
+  IsContractFunctionPayable,
+} from '../../types/contract.js'
+import type { IsUnion } from '../../types/utils.js'
 import type { TronAbiParametersToPrimitiveTypes } from '../../utils/abi/encodeAbiParameters.js'
 import {
   type EncodeFunctionDataErrorType,
@@ -47,6 +55,11 @@ export type WriteContractParameters<
     abi,
     'nonpayable' | 'payable'
   > = ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+  args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
   ///
   allFunctionNames = ContractFunctionName<abi, 'nonpayable' | 'payable'>,
   abiFunction extends AbiFunction = abi extends Abi
@@ -57,6 +70,18 @@ export type WriteContractParameters<
   allArgs = [abiFunction] extends [never]
     ? readonly unknown[]
     : TronAbiParametersToPrimitiveTypes<abiFunction['inputs'], 'inputs'>,
+  // Whether `functionName` names several overloads.
+  overloaded extends boolean = [abiFunction] extends [never]
+    ? false
+    : IsUnion<abiFunction>,
+  // Whether the function `args` select is `payable`: the call value options
+  // below take a value only then.
+  payable extends boolean = IsContractFunctionPayable<
+    abi,
+    'nonpayable' | 'payable',
+    functionName,
+    args
+  >,
 > = {
   /**
    * The owner account (falls back to `client.account`). Signing needs
@@ -74,12 +99,21 @@ export type WriteContractParameters<
     | (functionName extends allFunctionNames ? functionName : never) // infer value
   /** Fee limit (in SUN) written into `raw_data` (defaults to `defaultFeeLimit`). */
   feeLimit?: bigint | undefined
-  /** TRX value (in SUN) to attach to the call. */
-  callValue?: bigint | undefined
-  /** TRC10 amount sent with the call (`call_token_value`). */
-  callTokenValue?: bigint | undefined
-  /** TRC10 token id (`TriggerSmartContract.token_id`). */
-  tokenId?: bigint | undefined
+  /**
+   * TRX value (in SUN) to attach to the call. Takes a value when the function
+   * is `payable`.
+   */
+  callValue?: CallValue<payable> | undefined
+  /**
+   * TRC10 amount sent with the call (`call_token_value`). Takes a value when
+   * the function is `payable`.
+   */
+  callTokenValue?: CallValue<payable> | undefined
+  /**
+   * TRC10 token id (`TriggerSmartContract.token_id`). Takes a value when the
+   * function is `payable`.
+   */
+  tokenId?: CallValue<payable> | undefined
   /**
    * A pre-derived TaPoS + timing header. When supplied the transaction is built
    * fully offline against it; otherwise it is derived from the latest block.
@@ -99,13 +133,26 @@ export type WriteContractParameters<
    */
   memo?: MemoInput | undefined
 } & (readonly [] extends allArgs
-  ? {
-      /** The function arguments. */
-      args?: allArgs | undefined
-    }
+  ? overloaded extends true
+    ? // An overloaded name with an overload without inputs. A call without
+      // `args` selects that overload, and takes its call value options; a call
+      // with `args` captures the tuple so the overloads narrow by it.
+        | ({
+            /** The function arguments. */
+            args?: readonly [] | undefined
+          } & CallValueOptions<IsAbiFunctionPayable<abiFunction, readonly []>>)
+        | {
+            /** The function arguments. */
+            args: args
+          }
+    : {
+        /** The function arguments. */
+        args?: allArgs | undefined
+      }
   : {
       /** The function arguments. */
-      args: allArgs
+      // captures the literal tuple so overloads narrow by their args
+      args: overloaded extends true ? args : allArgs
     })
 export type WriteContractReturnType = BuildAndBroadcastReturnType
 
@@ -123,7 +170,12 @@ export type BuildWriteContractParameters<
     abi,
     'nonpayable' | 'payable'
   > = ContractFunctionName<abi, 'nonpayable' | 'payable'>,
-> = WriteContractParameters<abi, functionName> & {
+  args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
+> = WriteContractParameters<abi, functionName, args> & {
   /** Multi-sig permission id (`Contract.Permission_id`). */
   permissionId?: number | undefined
 }
@@ -201,9 +253,14 @@ function assemble(
 export async function buildWriteContract<
   const abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+  const args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
 >(
   client: Client,
-  parameters: BuildWriteContractParameters<abi, functionName>,
+  parameters: BuildWriteContractParameters<abi, functionName, args>,
 ): Promise<BuildWriteContractReturnType> {
   const parameters_ = parameters as BuildWriteContractParameters
   const { contract, feeLimit } = assemble(client, parameters_)
@@ -238,9 +295,14 @@ export async function buildWriteContract<
 export async function writeContract<
   const abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'nonpayable' | 'payable'>,
+  const args extends ContractFunctionArgs<
+    abi,
+    'nonpayable' | 'payable',
+    functionName
+  > = ContractFunctionArgs<abi, 'nonpayable' | 'payable', functionName>,
 >(
   client: Client,
-  parameters: WriteContractParameters<abi, functionName>,
+  parameters: WriteContractParameters<abi, functionName, args>,
 ): Promise<WriteContractReturnType> {
   const parameters_ = parameters as WriteContractParameters
   const { account, contract, feeLimit } = assemble(client, parameters_)

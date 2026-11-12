@@ -23,9 +23,9 @@ import {
 } from '../../types/account.js'
 import type { Address } from '../../types/address.js'
 import type {
+  ContractFunctionArgs,
   ContractFunctionName,
-  TronContractFunctionArgs,
-  TronContractFunctionReturnType,
+  ContractFunctionReturnType,
 } from '../../types/contract.js'
 import type { IsUnion } from '../../types/utils.js'
 import type { DecodeAbiParametersErrorType } from '../../utils/abi/decodeAbiParameters.js'
@@ -48,11 +48,11 @@ import { decodeRevert } from '../utils/decodeRevert.js'
 export type TriggerConstantContractParameters<
   abi extends Abi | readonly unknown[] = Abi,
   functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
-  args extends TronContractFunctionArgs<
+  args extends ContractFunctionArgs<
     abi,
     AbiStateMutability,
     functionName
-  > = TronContractFunctionArgs<abi, AbiStateMutability, functionName>,
+  > = ContractFunctionArgs<abi, AbiStateMutability, functionName>,
   ///
   allFunctionNames = ContractFunctionName<abi>,
   abiFunction extends AbiFunction = abi extends Abi
@@ -115,14 +115,14 @@ export type TriggerConstantContractParameters<
 export type TriggerConstantContractReturnType<
   abi extends Abi | readonly unknown[] = Abi,
   functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
-  args extends TronContractFunctionArgs<
+  args extends ContractFunctionArgs<
     abi,
     AbiStateMutability,
     functionName
-  > = TronContractFunctionArgs<abi, AbiStateMutability, functionName>,
+  > = ContractFunctionArgs<abi, AbiStateMutability, functionName>,
 > = {
   /** ABI-decoded return value (`undefined` when the function has no outputs). */
-  result: TronContractFunctionReturnType<
+  result: ContractFunctionReturnType<
     abi,
     AbiStateMutability,
     functionName,
@@ -184,11 +184,11 @@ type TriggerConstantContractResponse = {
 export async function triggerConstantContract<
   const abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi>,
-  const args extends TronContractFunctionArgs<
+  const args extends ContractFunctionArgs<
     abi,
     AbiStateMutability,
     functionName
-  > = TronContractFunctionArgs<abi, AbiStateMutability, functionName>,
+  > = ContractFunctionArgs<abi, AbiStateMutability, functionName>,
 >(
   client: Client,
   parameters: TriggerConstantContractParameters<abi, functionName, args>,

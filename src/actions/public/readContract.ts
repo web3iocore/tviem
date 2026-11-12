@@ -14,9 +14,9 @@ import {
 } from '../../types/account.js'
 import type { Address } from '../../types/address.js'
 import type {
+  ContractFunctionArgs,
   ContractFunctionName,
-  TronContractFunctionArgs,
-  TronContractFunctionReturnType,
+  ContractFunctionReturnType,
 } from '../../types/contract.js'
 import type { IsUnion } from '../../types/utils.js'
 import type { DecodeAbiParametersErrorType } from '../../utils/abi/decodeAbiParameters.js'
@@ -42,11 +42,11 @@ export type ReadContractParameters<
     abi,
     'pure' | 'view'
   > = ContractFunctionName<abi, 'pure' | 'view'>,
-  args extends TronContractFunctionArgs<
+  args extends ContractFunctionArgs<
     abi,
     'pure' | 'view',
     functionName
-  > = TronContractFunctionArgs<abi, 'pure' | 'view', functionName>,
+  > = ContractFunctionArgs<abi, 'pure' | 'view', functionName>,
   ///
   allFunctionNames = ContractFunctionName<abi, 'pure' | 'view'>,
   abiFunction extends AbiFunction = abi extends Abi
@@ -106,12 +106,12 @@ export type ReadContractReturnType<
     abi,
     'pure' | 'view'
   > = ContractFunctionName<abi, 'pure' | 'view'>,
-  args extends TronContractFunctionArgs<
+  args extends ContractFunctionArgs<
     abi,
     'pure' | 'view',
     functionName
-  > = TronContractFunctionArgs<abi, 'pure' | 'view', functionName>,
-> = TronContractFunctionReturnType<abi, 'pure' | 'view', functionName, args>
+  > = ContractFunctionArgs<abi, 'pure' | 'view', functionName>,
+> = ContractFunctionReturnType<abi, 'pure' | 'view', functionName, args>
 
 export type ReadContractErrorType =
   | AccountNotFoundErrorType
@@ -158,11 +158,11 @@ type TriggerConstantContractResponse = {
 export async function readContract<
   const abi extends Abi | readonly unknown[],
   functionName extends ContractFunctionName<abi, 'pure' | 'view'>,
-  const args extends TronContractFunctionArgs<
+  const args extends ContractFunctionArgs<
     abi,
     'pure' | 'view',
     functionName
-  > = TronContractFunctionArgs<abi, 'pure' | 'view', functionName>,
+  > = ContractFunctionArgs<abi, 'pure' | 'view', functionName>,
 >(
   client: Client,
   parameters: ReadContractParameters<abi, functionName, args>,

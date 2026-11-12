@@ -49,6 +49,12 @@ const trc20Abi = [
   },
 ] as const
 
+// The same function declared `payable`, for the calls that attach a call
+// value: the call value options are typed for payable functions only.
+const payableTrc20Abi = [
+  { ...trc20Abi[0], stateMutability: 'payable' },
+] as const
+
 // Contract + recipient resolve to the same Base58 the gold data encodes
 // (410123456789…01234567 → its 20-byte body 0123456789…01234567 inside the
 // calldata).
@@ -163,7 +169,7 @@ test.each(
 
   const { txID } = await client.writeContract({
     address: trc20Contract,
-    abi: trc20Abi,
+    abi: payableTrc20Abi,
     functionName: 'transfer',
     args: [trc20Recipient, 1000000n],
     feeLimit,

@@ -16,7 +16,7 @@ import type { ErrorType } from '../../errors/utils.js'
 import type {
   ContractFunctionArgs,
   ContractFunctionName,
-  ExtractAbiFunctionForArgs,
+  ContractFunctionReturnType,
 } from '../../types/contract.js'
 import type { ByteArray, Hex } from '../../types/misc.js'
 import { isHex } from '../data/isHex.js'
@@ -26,7 +26,6 @@ import {
   type DecodeAbiParametersErrorType,
   decodeAbiParameters,
 } from './decodeAbiParameters.js'
-import type { TronAbiParametersToPrimitiveTypes } from './encodeAbiParameters.js'
 import { type GetAbiItemErrorType, getAbiItem } from './getAbiItem.js'
 
 const docsPath = '/docs/contract/decodeFunctionResult'
@@ -74,27 +73,14 @@ export type DecodeFunctionResultReturnType<
       ? functionName
       : ContractFunctionName<abi>
   >,
-> = abi extends Abi
-  ? Abi extends abi
-    ? unknown
-    : TronAbiParametersToPrimitiveTypes<
-          ExtractAbiFunctionForArgs<
-            abi,
-            'nonpayable' | 'payable' | 'pure' | 'view',
-            functionName extends ContractFunctionName<abi>
-              ? functionName
-              : ContractFunctionName<abi>,
-            args
-          >['outputs'],
-          'outputs'
-        > extends infer types
-      ? types extends readonly []
-        ? void
-        : types extends readonly [infer type]
-          ? type
-          : types
-      : never
-  : unknown
+> = ContractFunctionReturnType<
+  abi,
+  'nonpayable' | 'payable' | 'pure' | 'view',
+  functionName extends ContractFunctionName<abi>
+    ? functionName
+    : ContractFunctionName<abi>,
+  args
+>
 
 export type DecodeFunctionResultErrorType =
   | AbiDecodingDataSizeInvalidErrorType

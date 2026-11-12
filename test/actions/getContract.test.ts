@@ -207,6 +207,7 @@ describe('getContract', () => {
 
       const result = await contract.write.transfer([holder, 1000n], {
         feeLimit: 10_000_000n,
+        // @ts-expect-error `transfer` is nonpayable: `callValue` is typed for payable functions only
         callValue: 5n,
       })
       expect(result).toEqual({ txID: 'deadbeef' })
@@ -236,6 +237,7 @@ describe('getContract', () => {
       })
 
       const energy = await contract.estimateEnergy.transfer([holder, 1000n], {
+        // @ts-expect-error `transfer` is nonpayable: `callValue` is typed for payable functions only
         callValue: 5n,
       })
       expect(energy).toBe(31_895n)

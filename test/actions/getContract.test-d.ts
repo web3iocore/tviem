@@ -10,8 +10,19 @@ import type { Client } from '../../src/clients/createClient.js'
 import type { PublicClient } from '../../src/clients/createPublicClient.js'
 import type { WalletClient } from '../../src/clients/createWalletClient.js'
 import type { Address, AddressInput } from '../../src/types/address.js'
+import type {
+  ContractFunctionArgs,
+  ContractFunctionReturnType,
+} from '../../src/types/contract.js'
 import type { EventFilterArgs } from '../../src/types/log.js'
 import type { Hex } from '../../src/types/misc.js'
+import {
+  base58Address,
+  evmAddress,
+  hexAddress,
+  largeAbi,
+  vaultAbi,
+} from '../fixtures/abi/contractTypes.js'
 
 const trc20Abi = [
   {
@@ -473,4 +484,321 @@ test('GetEventsOptions stays usable without type arguments', () => {
   expectTypeOf<GetEventsOptions<Transfer, true>['strict']>().toEqualTypeOf<
     true | undefined
   >()
+})
+
+//////////////////////////////////////////////////////////////////////
+// Helper types and call value options
+
+test('read.<fn> agrees with ContractFunctionArgs / ContractFunctionReturnType', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as PublicClient,
+  })
+
+  expectTypeOf(contract.read.balanceOf)
+    .parameter(0)
+    .toEqualTypeOf<ContractFunctionArgs<typeof vaultAbi, 'view', 'balanceOf'>>()
+  expectTypeOf(contract.read.balanceOf).returns.resolves.toEqualTypeOf<
+    ContractFunctionReturnType<typeof vaultAbi, 'view', 'balanceOf'>
+  >()
+  expectTypeOf(contract.read.owner).returns.resolves.toEqualTypeOf<
+    ContractFunctionReturnType<typeof vaultAbi, 'view', 'owner'>
+  >()
+  expectTypeOf(contract.read.owner).returns.resolves.toEqualTypeOf<Address>()
+  expectTypeOf(contract.read.decimals).returns.resolves.toEqualTypeOf<bigint>()
+  expectTypeOf(contract.read.holders).returns.resolves.toEqualTypeOf<
+    ContractFunctionReturnType<typeof vaultAbi, 'view', 'holders'>
+  >()
+  expectTypeOf(contract.read.position).returns.resolves.toEqualTypeOf<
+    ContractFunctionReturnType<typeof vaultAbi, 'view', 'position'>
+  >()
+  expectTypeOf(contract.read.pair).returns.resolves.toEqualTypeOf<
+    ContractFunctionReturnType<typeof vaultAbi, 'view', 'pair'>
+  >()
+
+  const args: ContractFunctionArgs<typeof vaultAbi, 'view', 'balanceOf'> = [
+    hexAddress,
+  ]
+  contract.read.balanceOf(args)
+  contract.read.balanceOf([base58Address])
+  contract.read.balanceOf([evmAddress])
+  // overloads take each overload's args
+  contract.read.lookup()
+  contract.read.lookup([hexAddress])
+  contract.read.lookup([evmAddress, 1])
+})
+
+test('write.<fn> / estimateEnergy.<fn> args are ContractFunctionArgs', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as WalletClient,
+  })
+
+  expectTypeOf(contract.write.transfer)
+    .parameter(0)
+    .toEqualTypeOf<
+      ContractFunctionArgs<typeof vaultAbi, 'nonpayable', 'transfer'>
+    >()
+  expectTypeOf(contract.estimateEnergy.transfer)
+    .parameter(0)
+    .toEqualTypeOf<
+      ContractFunctionArgs<typeof vaultAbi, 'nonpayable', 'transfer'>
+    >()
+  expectTypeOf(contract.write.batch)
+    .parameter(0)
+    .toEqualTypeOf<
+      ContractFunctionArgs<typeof vaultAbi, 'nonpayable', 'batch'>
+    >()
+  expectTypeOf(contract.write.depositFor)
+    .parameter(0)
+    .toEqualTypeOf<
+      ContractFunctionArgs<typeof vaultAbi, 'payable', 'depositFor'>
+    >()
+
+  const args: ContractFunctionArgs<typeof vaultAbi, 'nonpayable', 'transfer'> =
+    [hexAddress, 1]
+  contract.write.transfer(args)
+  contract.estimateEnergy.transfer(args)
+  contract.write.transfer([base58Address, 1n])
+  contract.write.transfer([evmAddress, 1n])
+})
+
+test('write.<fn>: call value options follow the function mutability', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as WalletClient,
+  })
+
+  // payable
+  contract.write.deposit({
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+  contract.write.depositFor([hexAddress], {
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+  contract.write.deposit()
+  contract.write.deposit({ feeLimit: 1n })
+  contract.write.depositFor([hexAddress])
+  contract.write.deposit({ callValue: undefined })
+
+  // nonpayable
+  contract.write.transfer([base58Address, 1n])
+  contract.write.transfer([base58Address, 1n], { feeLimit: 1n })
+  contract.write.transfer([base58Address, 1n], { callValue: undefined })
+  contract.write.burn()
+  contract.write.burn({ feeLimit: 1n })
+  // @ts-expect-error `transfer` is not payable
+  contract.write.transfer([base58Address, 1n], { callValue: 1n })
+  // @ts-expect-error `transfer` is not payable
+  contract.write.transfer([base58Address, 1n], { callTokenValue: 1n })
+  // @ts-expect-error `transfer` is not payable
+  contract.write.transfer([base58Address, 1n], { tokenId: 1000001n })
+  // @ts-expect-error `burn` is not payable
+  contract.write.burn({ callValue: 1n })
+
+  type DepositOptions = NonNullable<
+    Parameters<typeof contract.write.deposit>[0]
+  >
+  expectTypeOf<DepositOptions['callValue']>().toEqualTypeOf<
+    bigint | undefined
+  >()
+  expectTypeOf<DepositOptions['callTokenValue']>().toEqualTypeOf<
+    bigint | undefined
+  >()
+  expectTypeOf<DepositOptions['tokenId']>().toEqualTypeOf<bigint | undefined>()
+  type BurnOptions = NonNullable<Parameters<typeof contract.write.burn>[0]>
+  expectTypeOf<BurnOptions['callValue']>().toEqualTypeOf<undefined>()
+  expectTypeOf<BurnOptions['callTokenValue']>().toEqualTypeOf<undefined>()
+  expectTypeOf<BurnOptions['tokenId']>().toEqualTypeOf<undefined>()
+  // the other options are the same either way
+  expectTypeOf<
+    Omit<BurnOptions, 'callValue' | 'callTokenValue' | 'tokenId'>
+  >().toEqualTypeOf<
+    Omit<DepositOptions, 'callValue' | 'callTokenValue' | 'tokenId'>
+  >()
+})
+
+test('estimateEnergy.<fn>: call value options follow the function mutability', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as WalletClient,
+  })
+
+  // payable
+  contract.estimateEnergy.deposit({
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+  contract.estimateEnergy.depositFor([evmAddress], { callValue: 1n })
+  contract.estimateEnergy.deposit()
+  contract.estimateEnergy.depositFor([evmAddress])
+
+  // nonpayable
+  contract.estimateEnergy.transfer([base58Address, 1n])
+  contract.estimateEnergy.transfer([base58Address, 1n], { confirmed: true })
+  contract.estimateEnergy.burn()
+  // @ts-expect-error `transfer` is not payable
+  contract.estimateEnergy.transfer([base58Address, 1n], { callValue: 1n })
+  // @ts-expect-error `transfer` is not payable
+  contract.estimateEnergy.transfer([base58Address, 1n], { callTokenValue: 1n })
+  // @ts-expect-error `transfer` is not payable
+  contract.estimateEnergy.transfer([base58Address, 1n], { tokenId: 1000001n })
+  // @ts-expect-error `burn` is not payable
+  contract.estimateEnergy.burn({ callValue: 1n })
+})
+
+test('write.<fn> / estimateEnergy.<fn>: each overload has its own options', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as WalletClient,
+  })
+
+  // `send(address)` is payable, `send(address,uint256)` is not
+  contract.write.send([base58Address], { callValue: 1n })
+  contract.write.send([hexAddress], { callTokenValue: 1n, tokenId: 1000001n })
+  contract.write.send([evmAddress, 1n])
+  contract.write.send([evmAddress, 1n], { feeLimit: 1n })
+  // @ts-expect-error `send(address,uint256)` is not payable
+  contract.write.send([evmAddress, 1n], { callValue: 1n })
+  contract.estimateEnergy.send([base58Address], { callValue: 1n })
+  // @ts-expect-error `send(address,uint256)` is not payable
+  contract.estimateEnergy.send([evmAddress, 1n], { callValue: 1n })
+
+  // `stake()` is not payable, `stake(address)` is
+  contract.write.stake()
+  contract.write.stake({ feeLimit: 1n })
+  contract.write.stake([hexAddress], { callValue: 1n })
+  // @ts-expect-error `stake()` is not payable
+  contract.write.stake({ callValue: 1n })
+
+  // no overload of `move` is payable
+  contract.write.move([base58Address])
+  // @ts-expect-error `move(address)` is not payable
+  contract.write.move([base58Address], { callValue: 1n })
+  // @ts-expect-error `move(address,address)` is not payable
+  contract.write.move([base58Address, hexAddress], { callValue: 1n })
+})
+
+test('a readonly unknown[] abi keeps the call value options', () => {
+  const contract = getContract({
+    abi: [] as readonly unknown[],
+    address,
+    client: {} as WalletClient,
+  })
+  contract.write.anything?.(['x', 1n], {
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+  contract.estimateEnergy.anything?.(['x', 1n], {
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+})
+
+test('a wide Abi keeps write / estimateEnergy callable, with the call value options', () => {
+  const contract = getContract({
+    abi: [] as unknown as Abi,
+    address,
+    client: {} as WalletClient,
+  })
+  contract.write.anything?.(['x', 1n])
+  contract.write.anything?.(['x', 1n], {
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+  contract.estimateEnergy.anything?.([])
+  contract.estimateEnergy.anything?.(['x', 1n], {
+    callValue: 1n,
+    callTokenValue: 2n,
+    tokenId: 1000001n,
+  })
+
+  // the same functions as a `readonly unknown[]` abi gives
+  const untyped = getContract({
+    abi: [] as readonly unknown[],
+    address,
+    client: {} as WalletClient,
+  })
+  expectTypeOf(contract.write).toEqualTypeOf<typeof untyped.write>()
+  expectTypeOf(contract.estimateEnergy).toEqualTypeOf<
+    typeof untyped.estimateEnergy
+  >()
+  type WriteAnything = NonNullable<typeof contract.write.anything>
+  expectTypeOf<Parameters<WriteAnything>[0]>().toEqualTypeOf<
+    readonly unknown[]
+  >()
+  expectTypeOf<
+    NonNullable<Parameters<WriteAnything>[1]>['callValue']
+  >().toEqualTypeOf<bigint | undefined>()
+  type EstimateAnything = NonNullable<typeof contract.estimateEnergy.anything>
+  expectTypeOf<Parameters<EstimateAnything>[0]>().toEqualTypeOf<
+    readonly unknown[]
+  >()
+  expectTypeOf<
+    NonNullable<Parameters<EstimateAnything>[1]>['tokenId']
+  >().toEqualTypeOf<bigint | undefined>()
+})
+
+test('write.<fn>: a tuple argument with unnamed components', () => {
+  const contract = getContract({
+    abi: vaultAbi,
+    address,
+    client: {} as WalletClient,
+  })
+  // a `readonly` or a mutable tuple
+  const raw = [evmAddress, true] as const
+  const mutableRaw: [AddressInput, boolean] = [hexAddress, false]
+  contract.write.batch([
+    [hexAddress],
+    [1, 2n],
+    { to: base58Address, amount: 1n },
+    raw,
+  ])
+  contract.estimateEnergy.batch([
+    [hexAddress],
+    [1, 2n],
+    { to: base58Address, amount: 1n },
+    mutableRaw,
+  ])
+})
+
+test('a thirty-function abi resolves through the facade', () => {
+  const contract = getContract({
+    abi: largeAbi,
+    address,
+    client: {} as PublicClient & WalletClient,
+  })
+
+  expectTypeOf(contract.read.owner).returns.resolves.toEqualTypeOf<Address>()
+  expectTypeOf(contract.read.getReserves).returns.resolves.toEqualTypeOf<
+    readonly [bigint, bigint, bigint]
+  >()
+  expectTypeOf(contract.read.allowance)
+    .parameter(0)
+    .toEqualTypeOf<readonly [AddressInput, AddressInput]>()
+  contract.read.quote([1n, [base58Address, hexAddress]])
+  contract.write.permit([base58Address, hexAddress, 1n, 2, 27, '0x', '0x'])
+  contract.write.deposit({ callValue: 1n })
+  contract.write.multicall([['0x']], { callValue: 1n })
+  contract.write.safeTransfer([evmAddress, 1n, '0x'], { callValue: 1n })
+  // @ts-expect-error `safeTransfer(address,uint256)` is not payable
+  contract.write.safeTransfer([evmAddress, 1n], { callValue: 1n })
+  // @ts-expect-error `mint` is not payable
+  contract.estimateEnergy.mint([evmAddress, 1n], { callValue: 1n })
+  contract.getEvents.OwnershipTransferred({
+    args: { previousOwner: hexAddress },
+  })
 })
