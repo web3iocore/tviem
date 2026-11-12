@@ -12,7 +12,6 @@ import {
 function makeClient(overrides: Record<string, unknown>): Client {
   return {
     account: undefined,
-    cacheTime: 1000,
     chain: undefined,
     key: 'public',
     name: 'Public Client',

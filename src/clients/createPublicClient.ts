@@ -19,7 +19,7 @@ export type PublicClientConfig<
 > = Prettify<
   Pick<
     ClientConfig<transport, chain>,
-    'cacheTime' | 'chain' | 'key' | 'name' | 'pollingInterval' | 'transport'
+    'chain' | 'key' | 'name' | 'pollingInterval' | 'transport'
   >
 >
 

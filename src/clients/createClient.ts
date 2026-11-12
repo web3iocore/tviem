@@ -26,11 +26,6 @@ export type ClientConfig<
    * Actions that require an account.
    */
   account?: accountOrAddress | TronAccount | Address | undefined
-  /**
-   * Time (in ms) that cached data will remain in memory.
-   * @default pollingInterval
-   */
-  cacheTime?: number | undefined
   /** Chain for the client. */
   chain?: Chain | undefined | chain
   /** A key for the client. */
@@ -72,8 +67,6 @@ type Client_Base<
 > = {
   /** The Account of the Client. */
   account: account
-  /** Time (in ms) that cached data will remain in memory. */
-  cacheTime: number
   /** Chain for the client. */
   chain: chain
   /** A key for the client. */
@@ -132,7 +125,6 @@ export function createClient(parameters: ClientConfig): Client {
     3_000,
   )
   const pollingInterval = parameters.pollingInterval ?? defaultPollingInterval
-  const cacheTime = parameters.cacheTime ?? pollingInterval
 
   const account = parameters.account
     ? parseAccount(parameters.account)
@@ -146,7 +138,6 @@ export function createClient(parameters: ClientConfig): Client {
 
   const client = {
     account,
-    cacheTime,
     chain,
     key,
     name,

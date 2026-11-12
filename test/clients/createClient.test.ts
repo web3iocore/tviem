@@ -34,7 +34,6 @@ test('default fields', () => {
   expect(typeof client.request).toBe('function')
   // no chain → blockTime 3000 → ⌊1500⌋ clamped to [500, 3000] = 1500
   expect(client.pollingInterval).toBe(1500)
-  expect(client.cacheTime).toBe(1500)
 })
 
 test('pollingInterval clamps around ⌊blockTime / 2⌋', () => {
@@ -52,19 +51,21 @@ test('pollingInterval clamps around ⌊blockTime / 2⌋', () => {
   ).toBe(3000)
 })
 
-test('explicit pollingInterval / cacheTime override defaults', () => {
-  const client = createClient({
-    cacheTime: 111,
-    pollingInterval: 222,
-    transport,
-  })
+test('an explicit pollingInterval overrides the default', () => {
+  const client = createClient({ pollingInterval: 222, transport })
   expect(client.pollingInterval).toBe(222)
-  expect(client.cacheTime).toBe(111)
 })
 
-test('cacheTime defaults to pollingInterval', () => {
-  const client = createClient({ pollingInterval: 777, transport })
-  expect(client.cacheTime).toBe(777)
+test('the client has no cacheTime option or property', () => {
+  const client = createClient({
+    pollingInterval: 777,
+    transport,
+    // @ts-expect-error — `cacheTime` is not a client option
+    cacheTime: 111,
+  })
+  expect('cacheTime' in client).toBe(false)
+  // @ts-expect-error — `cacheTime` is not a client property
+  expect(client.cacheTime).toBeUndefined()
 })
 
 test('account is parsed from an address string', () => {

@@ -49,7 +49,11 @@ export type HttpTransportConfig = {
    * (public TronGrid hosts serve `/wallet` and `/v1` alike).
    */
   eventUrl?: string | undefined
-  /** Return the raw node body without error normalization. */
+  /**
+   * Return the node's response body as received, without error
+   * normalization. The built-in actions read normalized responses; this
+   * option is for calling `client.request` directly.
+   */
   raw?: boolean | undefined
   /** The max number of times to retry. Defaults to `0` (no retries). */
   retryCount?: TransportConfig['retryCount'] | undefined
