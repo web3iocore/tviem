@@ -305,6 +305,13 @@ test('validation errors carry their class and the parameter they refer to', asyn
     [{ memo: 5 as never }, 'memo', 'type'],
     [{ memo: '0x' }, 'memo', 'range'],
     [{ memo: '0xabc' }, 'memo', 'format'],
+    // A string without the `0x` prefix is not read as hex, even when every
+    // character is a hex digit.
+    [{ memo: '2024' as never }, 'memo', 'format'],
+    [{ memo: 'cafe' as never }, 'memo', 'format'],
+    [{ memo: 'hello' as never }, 'memo', 'format'],
+    [{ memo: '' as never }, 'memo', 'format'],
+    [{ memo: '0X2024' as never }, 'memo', 'format'],
     [
       { blockHeader: { ...goodHeader, ref_block_bytes: '123' } },
       'blockHeader.ref_block_bytes',

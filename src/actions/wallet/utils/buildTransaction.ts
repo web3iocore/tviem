@@ -151,15 +151,21 @@ export async function buildTransaction(
   // Normalize and validate the memo once, here (single choke point for every
   // action) and BEFORE any node call. Zero bytes are refused: proto3 drops an
   // empty `data` from the wire, so an "empty memo" would silently build a
-  // transaction carrying no memo at all. Non-hex or odd-nibble strings are
-  // refused too — the serializer would otherwise left-pad a stray nibble and
-  // quietly rewrite the memo's bytes.
+  // transaction carrying no memo at all. A string is read as hex only with
+  // its `0x` prefix; text is the caller's to encode (`stringToHex`). Non-hex
+  // or odd-nibble strings are refused too — the serializer would otherwise
+  // left-pad a stray nibble and quietly rewrite the memo's bytes.
   let data: string | undefined
   if (memo !== undefined) {
     if (typeof memo !== 'string' && !(memo instanceof Uint8Array))
       throw new InvalidParameterError(
         'Invalid memo: expected `0x`-prefixed hex or raw bytes (Uint8Array).',
         { param: 'memo', reason: 'type' },
+      )
+    if (typeof memo === 'string' && !memo.startsWith('0x'))
+      throw new InvalidParameterError(
+        'Invalid memo: a string memo must be `0x`-prefixed hex. Encode a text memo with `stringToHex`.',
+        { param: 'memo', reason: 'format' },
       )
     data = bareHex(memo)
     if (data === '')
