@@ -17,6 +17,7 @@ import type {
   TronRequestArgs,
   TronRequestFn,
 } from '../../../src/types/transport.js'
+import { encodeErrorResult } from '../../../src/utils/abi/encodeErrorResult.js'
 import { rpc, rpcReq } from '../../fixtures/rpc/loader.js'
 
 const trc20Abi = [
@@ -294,7 +295,7 @@ describe('triggerConstantContract', () => {
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
     expect(err.reason).toBe('INSUFFICIENT_BALANCE')
-    expect(err.signature).toBe('Error(string)')
+    expect(err.data?.errorName).toBe('Error')
   })
 
   // The shape a real java-tron node emits: `result: true` with a `message`.
@@ -321,6 +322,55 @@ describe('triggerConstantContract', () => {
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
     expect(err.reason).toBe('INSUFFICIENT_BALANCE')
-    expect(err.signature).toBe('Error(string)')
+    expect(err.data?.errorName).toBe('Error')
+  })
+
+  test('throws a custom error decoded against the ABI', async () => {
+    const errorAbi = [
+      {
+        type: 'error',
+        name: 'ERC20InsufficientBalance',
+        inputs: [
+          { name: 'sender', type: 'address' },
+          { name: 'balance', type: 'uint256' },
+          { name: 'needed', type: 'uint256' },
+        ],
+      },
+    ] as const
+    const data = encodeErrorResult({
+      abi: errorAbi,
+      errorName: 'ERC20InsufficientBalance',
+      args: [holder, 30n, 100n],
+    })
+    const { client } = mockClient({
+      result: {
+        result: true,
+        message: '524556455254206f70636f6465206578656375746564',
+      },
+      constant_result: [data.slice(2)],
+    })
+    const err = (await triggerConstantContract(client, {
+      address: contract,
+      abi: [...trc20Abi, ...errorAbi],
+      functionName: 'transfer',
+      args: [holder, 1n],
+      account: holder,
+    }).catch((e) => e)) as ContractFunctionRevertedError
+    expect(err).toBeInstanceOf(ContractFunctionRevertedError)
+    expect(err.data?.errorName).toBe('ERC20InsufficientBalance')
+    expect(err.data?.args).toEqual([holder, 30n, 100n])
+    expect(err.raw).toBe(data)
+
+    // The same payload against an ABI without the error item.
+    const missing = (await triggerConstantContract(client, {
+      address: contract,
+      abi: trc20Abi,
+      functionName: 'transfer',
+      args: [holder, 1n],
+      account: holder,
+    }).catch((e) => e)) as ContractFunctionRevertedError
+    expect(missing.signature).toBe(data.slice(0, 10))
+    expect(missing.raw).toBe(data)
+    expect(missing.data).toBeUndefined()
   })
 })

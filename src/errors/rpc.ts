@@ -1,4 +1,14 @@
+import type { Abi } from 'abitype'
+import { panicReasons } from '../constants/solidity.js'
+import type { Hex } from '../types/misc.js'
 import type { TransactionInfo } from '../types/transaction.js'
+import {
+  type DecodeErrorResultReturnType,
+  decodeErrorResult,
+} from '../utils/abi/decodeErrorResult.js'
+import { formatAbiItem } from '../utils/abi/formatAbiItem.js'
+import { formatAbiItemWithArgs } from '../utils/abi/formatAbiItemWithArgs.js'
+import { AbiErrorSignatureNotFoundError } from './abi.js'
 import { BaseError } from './base.js'
 
 /**
@@ -135,61 +145,105 @@ export class TronRpcError extends BaseError {
 }
 
 /**
- * A contract read (`triggerconstantcontract`) that reverted on-chain. RD-5
- * decodes the revert payload: `Error(string)` (selector `0x08c379a0`) yields a
- * human-readable `reason`; `Panic(uint256)` (selector `0x4e487b71`) yields a
- * numeric `panicCode`; any other payload is surfaced as raw `data`.
+ * A contract call (`triggerconstantcontract`, `estimateenergy`) that the node
+ * reported as reverted. The revert payload is decoded against the built-in
+ * `Error(string)` and `Panic(uint256)` errors and the `error` items of `abi`:
+ * `data` is the decoded error, `raw` the payload as received, `reason` the
+ * `Error(string)` text or the description of the panic code, and `signature`
+ * the 4-byte selector when it is not found on the ABI. Without a payload
+ * (always the case for `estimateenergy`, which reports a message only),
+ * `reason` is `message`.
  */
 export type ContractFunctionRevertedErrorType =
   ContractFunctionRevertedError & {
     name: 'ContractFunctionRevertedError'
   }
 export class ContractFunctionRevertedError extends BaseError {
-  /** The decoded `Error(string)` revert reason, if present. */
+  data?: DecodeErrorResultReturnType | undefined
+  raw?: Hex | undefined
   reason?: string | undefined
-  /** The decoded `Panic(uint256)` code, if the revert was a panic. */
-  panicCode?: bigint | undefined
-  /** The ABI signature of the decoded revert payload (e.g. `Error(string)`). */
-  signature?: string | undefined
-  /** The raw revert payload (`0x`-prefixed), if it could not be decoded. */
-  data?: `0x${string}` | undefined
+  signature?: Hex | undefined
 
   constructor({
+    abi,
     data,
-    docsPath,
     functionName,
     message,
-    metaMessages,
-    panicCode,
-    reason,
-    signature,
   }: {
-    data?: `0x${string}` | undefined
-    docsPath?: string | undefined
-    functionName?: string | undefined
+    abi: Abi
+    data?: Hex | undefined
+    functionName: string
     message?: string | undefined
-    metaMessages?: string[] | undefined
-    panicCode?: bigint | undefined
-    reason?: string | undefined
-    signature?: string | undefined
-  } = {}) {
-    const target = functionName
-      ? `The contract function "${functionName}" reverted`
-      : 'The contract function reverted'
-    const shortMessage = (() => {
-      if (message) return message
-      if (reason) return `${target} with the following reason:\n${reason}`
-      if (panicCode !== undefined)
-        return `${target} with the following panic code: ${panicCode}`
-      return `${target}.`
-    })()
-    super(shortMessage, {
-      docsPath,
-      metaMessages,
-      name: 'ContractFunctionRevertedError',
-    })
-    this.data = data
-    this.panicCode = panicCode
+  }) {
+    let cause: Error | undefined
+    let decodedData: DecodeErrorResultReturnType | undefined
+    let metaMessages: string[] | undefined
+    let reason: string | undefined
+    if (data && data !== '0x') {
+      try {
+        decodedData = decodeErrorResult({ abi, data })
+        const { abiItem, errorName, args: errorArgs } = decodedData
+        if (errorName === 'Error') {
+          reason = (errorArgs as [string])[0]
+        } else if (errorName === 'Panic') {
+          const [firstArg] = errorArgs as [bigint]
+          reason = panicReasons[Number(firstArg) as keyof typeof panicReasons]
+        } else {
+          const errorWithParams = abiItem
+            ? formatAbiItem(abiItem, { includeName: true })
+            : undefined
+          const formattedArgs =
+            abiItem && errorArgs
+              ? formatAbiItemWithArgs({
+                  abiItem,
+                  args: errorArgs,
+                  includeFunctionName: false,
+                  includeName: false,
+                })
+              : undefined
+
+          metaMessages = [
+            errorWithParams ? `Error: ${errorWithParams}` : '',
+            formattedArgs && formattedArgs !== '()'
+              ? `       ${[...Array(errorName?.length ?? 0).keys()]
+                  .map(() => ' ')
+                  .join('')}${formattedArgs}`
+              : '',
+          ]
+        }
+      } catch (err) {
+        cause = err as Error
+      }
+    } else if (message) reason = message
+
+    let signature: Hex | undefined
+    if (cause instanceof AbiErrorSignatureNotFoundError) {
+      signature = cause.signature
+      metaMessages = [
+        `Unable to decode signature "${signature}" as it was not found on the provided ABI.`,
+        'Make sure you are using the correct ABI and that the error exists on it.',
+        `You can look up the decoded signature here: https://4byte.sourcify.dev/?q=${signature}.`,
+      ]
+    }
+
+    super(
+      reason || signature
+        ? [
+            `The contract function "${functionName}" reverted with the following ${
+              signature ? 'signature' : 'reason'
+            }:`,
+            reason || signature,
+          ].join('\n')
+        : `The contract function "${functionName}" reverted.`,
+      {
+        cause,
+        metaMessages,
+        name: 'ContractFunctionRevertedError',
+      },
+    )
+
+    this.data = decodedData
+    this.raw = data
     this.reason = reason
     this.signature = signature
   }

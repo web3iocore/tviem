@@ -16,6 +16,7 @@ import type {
   TronRequestArgs,
   TronRequestFn,
 } from '../../../src/types/transport.js'
+import { encodeErrorResult } from '../../../src/utils/abi/encodeErrorResult.js'
 import { rpc, rpcReq } from '../../fixtures/rpc/loader.js'
 
 const balanceOfAbi = [
@@ -25,6 +26,18 @@ const balanceOfAbi = [
     stateMutability: 'view',
     inputs: [{ name: 'owner', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const
+
+const insufficientBalanceAbi = [
+  {
+    type: 'error',
+    name: 'ERC20InsufficientBalance',
+    inputs: [
+      { name: 'sender', type: 'address' },
+      { name: 'balance', type: 'uint256' },
+      { name: 'needed', type: 'uint256' },
+    ],
   },
 ] as const
 
@@ -202,7 +215,7 @@ describe('readContract', () => {
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
     expect(err.reason).toBe('INSUFFICIENT_BALANCE')
-    expect(err.signature).toBe('Error(string)')
+    expect(err.data?.errorName).toBe('Error')
     expect(err.shortMessage).toContain('INSUFFICIENT_BALANCE')
   })
 
@@ -229,7 +242,7 @@ describe('readContract', () => {
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
     expect(err.reason).toBe('INSUFFICIENT_BALANCE')
-    expect(err.signature).toBe('Error(string)')
+    expect(err.data?.errorName).toBe('Error')
   })
 
   test('throws on a real-node revert carrying no payload', async () => {
@@ -264,7 +277,59 @@ describe('readContract', () => {
       account: holder,
     }).catch((e) => e)) as ContractFunctionRevertedError
     expect(err).toBeInstanceOf(ContractFunctionRevertedError)
-    expect(err.panicCode).toBe(17n)
-    expect(err.signature).toBe('Panic(uint256)')
+    expect(err.reason).toBe(
+      'Arithmetic operation resulted in underflow or overflow.',
+    )
+    expect(err.data?.errorName).toBe('Panic')
+    expect(err.data?.args).toEqual([17n])
+  })
+
+  test('throws a custom error decoded against the ABI', async () => {
+    const data = encodeErrorResult({
+      abi: insufficientBalanceAbi,
+      errorName: 'ERC20InsufficientBalance',
+      args: [holder, 30n, 100n],
+    })
+    const { client } = mockClient({
+      result: { result: true, message: revertMessageHex },
+      constant_result: [data.slice(2)],
+    })
+    const err = (await readContract(client, {
+      address: contract,
+      abi: [...balanceOfAbi, ...insufficientBalanceAbi],
+      functionName: 'balanceOf',
+      args: [holder],
+      account: holder,
+    }).catch((e) => e)) as ContractFunctionRevertedError
+    expect(err).toBeInstanceOf(ContractFunctionRevertedError)
+    expect(err.data?.errorName).toBe('ERC20InsufficientBalance')
+    expect(err.data?.args).toEqual([holder, 30n, 100n])
+    expect(err.raw).toBe(data)
+    expect(err.message).toContain(
+      'Error: ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
+    )
+  })
+
+  test('reports the selector of a custom error missing from the ABI', async () => {
+    const data = encodeErrorResult({
+      abi: insufficientBalanceAbi,
+      errorName: 'ERC20InsufficientBalance',
+      args: [holder, 30n, 100n],
+    })
+    const { client } = mockClient({
+      result: { result: true, message: revertMessageHex },
+      constant_result: [data.slice(2)],
+    })
+    const err = (await readContract(client, {
+      address: contract,
+      abi: balanceOfAbi,
+      functionName: 'balanceOf',
+      args: [holder],
+      account: holder,
+    }).catch((e) => e)) as ContractFunctionRevertedError
+    expect(err).toBeInstanceOf(ContractFunctionRevertedError)
+    expect(err.signature).toBe(data.slice(0, 10))
+    expect(err.raw).toBe(data)
+    expect(err.data).toBeUndefined()
   })
 })

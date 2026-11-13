@@ -25,6 +25,7 @@ import type {
   ContractFunctionName,
   ContractFunctionReturnType,
   ContractFunctionRevertedError,
+  DecodeErrorResultReturnType,
   DecodeEventLogErrorType,
   DecodeLogDataMismatchError,
   DecodeLogDataMismatchErrorType,
@@ -192,17 +193,24 @@ test('BaseError.details is `string | undefined`', () => {
   >()
 })
 
-test('ContractFunctionRevertedError carries the panic code as `panicCode`', () => {
-  expectTypeOf<ContractFunctionRevertedError['panicCode']>().toEqualTypeOf<
-    bigint | undefined
+test('ContractFunctionRevertedError carries the decoded error in `data` and the payload in `raw`', () => {
+  expectTypeOf<ContractFunctionRevertedError['data']>().toEqualTypeOf<
+    DecodeErrorResultReturnType | undefined
   >()
+  expectTypeOf<ContractFunctionRevertedError['raw']>().toEqualTypeOf<
+    Hex | undefined
+  >()
+  expectTypeOf<ContractFunctionRevertedError['reason']>().toEqualTypeOf<
+    string | undefined
+  >()
+  expectTypeOf<ContractFunctionRevertedError['signature']>().toEqualTypeOf<
+    Hex | undefined
+  >()
+  expectTypeOf<ContractFunctionRevertedError>().not.toHaveProperty('panicCode')
   expectTypeOf<ContractFunctionRevertedError>().not.toHaveProperty('code')
   expectTypeOf<
-    NonNullable<ConstructorParameters<typeof ContractFunctionRevertedError>[0]>
-  >().toHaveProperty('panicCode')
-  expectTypeOf<
-    NonNullable<ConstructorParameters<typeof ContractFunctionRevertedError>[0]>
-  >().not.toHaveProperty('code')
+    ConstructorParameters<typeof ContractFunctionRevertedError>[0]
+  >().toHaveProperty('abi')
   // The node errors keep their string `code`.
   expectTypeOf<TronNodeError['code']>().toEqualTypeOf<string | undefined>()
 })

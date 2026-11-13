@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import {
   decodeNodeMessage,
-  decodeRevertData,
+  decodeRevert,
+  decodeRevertReason,
 } from '../../../src/actions/utils/decodeRevert.js'
 import { encodeAbiParameters } from '../../../src/utils/abi/encodeAbiParameters.js'
 
@@ -10,34 +11,61 @@ const errorString = (reason: string) =>
 const panic = (code: bigint) =>
   `4e487b71${encodeAbiParameters([{ type: 'uint256' }], [code]).slice(2)}`
 
-describe('decodeRevertData', () => {
-  test('decodes Error(string), with or without a 0x prefix', () => {
+describe('decodeRevertReason', () => {
+  test('decodes Error(string), with or without a 0x prefix, in either case', () => {
     const payload = errorString('ERC20: insufficient balance')
-    expect(decodeRevertData(payload)).toEqual({
-      reason: 'ERC20: insufficient balance',
-      signature: 'Error(string)',
-    })
-    expect(decodeRevertData(`0x${payload}`)).toEqual(decodeRevertData(payload))
-    expect(decodeRevertData(payload.toUpperCase())).toEqual(
-      decodeRevertData(payload),
-    )
-  })
-
-  test('decodes Panic(uint256)', () => {
-    expect(decodeRevertData(panic(0x11n))).toEqual({
-      panicCode: 0x11n,
-      signature: 'Panic(uint256)',
-    })
+    expect(decodeRevertReason(payload)).toBe('ERC20: insufficient balance')
+    for (const variant of [
+      `0x${payload}`,
+      `0X${payload.toUpperCase()}`,
+      payload.toUpperCase(),
+    ])
+      expect(decodeRevertReason(variant)).toBe('ERC20: insufficient balance')
   })
 
   test.each([
     ['undefined', undefined],
     ['empty', ''],
     ['a bare selector', '08c379a0'],
+    ['Panic(uint256)', panic(0x11n)],
     ['a custom error', `deadbeef${'00'.repeat(32)}`],
     ['a truncated Error(string)', errorString('x').slice(0, 20)],
-  ])('returns {} for %s', (_, payload) => {
-    expect(decodeRevertData(payload)).toEqual({})
+  ])('returns undefined for %s', (_, payload) => {
+    expect(decodeRevertReason(payload)).toBeUndefined()
+  })
+})
+
+describe('decodeRevert', () => {
+  const options = { abi: [], functionName: 'transfer' } as const
+
+  test('decodes a bare, 0x-prefixed or upper-case payload to the same error', () => {
+    const payload = errorString('boom')
+    for (const variant of [
+      payload,
+      `0x${payload}`,
+      `0X${payload.toUpperCase()}`,
+      payload.toUpperCase(),
+    ]) {
+      const err = decodeRevert(variant, 'ignored', options)
+      expect(err.raw).toBe(`0x${payload}`)
+      expect(err.reason).toBe('boom')
+      expect(err.data?.errorName).toBe('Error')
+    }
+  })
+
+  test.each([
+    ['undefined', undefined],
+    ['empty', ''],
+  ])('uses the decoded node message when the payload is %s', (_, payload) => {
+    // "REVERT opcode executed", hex-encoded as java-tron sends it.
+    const err = decodeRevert(
+      payload,
+      '524556455254206f70636f6465206578656375746564',
+      options,
+    )
+    expect(err.reason).toBe('REVERT opcode executed')
+    expect(err.raw).toBeUndefined()
+    expect(err.data).toBeUndefined()
   })
 })
 

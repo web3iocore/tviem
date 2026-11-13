@@ -234,6 +234,10 @@ test('a confirmation-run failure ({ result: { message } }) throws ContractFuncti
   expect(err).toBeInstanceOf(ContractFunctionRevertedError)
   expect(err.reason).toBe('REVERT opcode executed')
   expect(err.shortMessage).toContain('"transfer"')
+  // `estimateenergy` reports a message only, so there is no payload to decode.
+  expect(err.data).toBeUndefined()
+  expect(err.raw).toBeUndefined()
+  expect(err.signature).toBeUndefined()
 })
 
 test('a first-run failure ({ result: { code: CONTRACT_EXE_ERROR, message } }) throws ContractFunctionRevertedError', async () => {

@@ -162,8 +162,8 @@ type TriggerConstantContractResponse = {
  * The calldata is built locally with {@link encodeFunctionData} and sent as the
  * bare `data` field (no `0x`). If the node reports the call reverted
  * (`result.result === false`), the revert payload in `constant_result[0]` is
- * decoded (`Error(string)` / `Panic(uint256)`) and thrown as a
- * `ContractFunctionRevertedError`; otherwise `constant_result[0]` is
+ * decoded (`Error(string)`, `Panic(uint256)`, the `error` items of `abi`) and
+ * thrown as a `ContractFunctionRevertedError`; otherwise `constant_result[0]` is
  * ABI-decoded against the function outputs.
  *
  * This never affects what is signed or broadcast — it is a read-only
@@ -249,6 +249,7 @@ export async function triggerConstantContract<
   // against a real node.
   if (response?.result?.message || response?.result?.result === false)
     throw decodeRevert(response.constant_result?.[0], response.result.message, {
+      abi: abi as Abi,
       functionName,
     })
 

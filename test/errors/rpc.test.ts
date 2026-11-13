@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
+import { AbiErrorSignatureNotFoundError } from '../../src/errors/abi.js'
 import { BaseError } from '../../src/errors/base.js'
 import {
   AccountNotFoundError,
@@ -14,6 +15,7 @@ import {
   WaitForTransactionReceiptTimeoutError,
 } from '../../src/errors/rpc.js'
 import type { TransactionInfo } from '../../src/types/transaction.js'
+import { encodeErrorResult } from '../../src/utils/abi/encodeErrorResult.js'
 
 test('AccountNotFoundError is a BaseError with the expected name / message', () => {
   const err = new AccountNotFoundError()
@@ -75,61 +77,151 @@ test('TronRpcError surfaces standalone details when there is no cause', () => {
   expect(err.message).toContain('Details: the raw detail')
 })
 
-test('ContractFunctionRevertedError decodes the Error(string) revert-reason path', () => {
+const insufficientBalanceAbi = [
+  {
+    type: 'error',
+    name: 'ERC20InsufficientBalance',
+    inputs: [
+      { name: 'sender', type: 'address' },
+      { name: 'balance', type: 'uint256' },
+      { name: 'needed', type: 'uint256' },
+    ],
+  },
+] as const
+const sender = 'TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'
+
+test('ContractFunctionRevertedError decodes an Error(string) payload into reason and data', () => {
+  const data = encodeErrorResult({
+    errorName: 'Error',
+    args: ['insufficient balance'],
+  })
   const err = new ContractFunctionRevertedError({
+    abi: [],
+    data,
     functionName: 'transfer',
-    reason: 'insufficient balance',
-    signature: 'Error(string)',
   })
   expect(err).toBeInstanceOf(BaseError)
   expect(err.name).toBe('ContractFunctionRevertedError')
   expect(err.reason).toBe('insufficient balance')
-  expect(err.signature).toBe('Error(string)')
-  expect(err.panicCode).toBeUndefined()
-  expect(err.data).toBeUndefined()
+  expect(err.data?.errorName).toBe('Error')
+  expect(err.data?.args).toEqual(['insufficient balance'])
+  expect(err.raw).toBe(data)
+  expect(err.signature).toBeUndefined()
   expect(err.shortMessage).toBe(
     'The contract function "transfer" reverted with the following reason:\ninsufficient balance',
   )
 })
 
-test('ContractFunctionRevertedError carries the Panic(uint256) code as panicCode (bigint)', () => {
+test('ContractFunctionRevertedError describes a Panic(uint256) code in reason', () => {
+  const data = encodeErrorResult({ errorName: 'Panic', args: [0x11n] })
   const err = new ContractFunctionRevertedError({
+    abi: [],
+    data,
     functionName: 'transfer',
-    panicCode: 0x11n,
-    signature: 'Panic(uint256)',
   })
-  expect(err.name).toBe('ContractFunctionRevertedError')
-  expect(typeof err.panicCode).toBe('bigint')
-  expect(err.panicCode).toBe(0x11n)
-  // The panic code lives on `panicCode` only; the class has no `code` field.
+  expect(err.reason).toBe(
+    'Arithmetic operation resulted in underflow or overflow.',
+  )
+  expect(err.data?.errorName).toBe('Panic')
+  expect(err.data?.args).toEqual([0x11n])
+  expect(err.raw).toBe(data)
+  expect('panicCode' in err).toBe(false)
   expect('code' in err).toBe(false)
-  expect(err.signature).toBe('Panic(uint256)')
-  expect(err.reason).toBeUndefined()
   expect(err.shortMessage).toBe(
-    'The contract function "transfer" reverted with the following panic code: 17',
+    'The contract function "transfer" reverted with the following reason:\nArithmetic operation resulted in underflow or overflow.',
   )
 })
 
-test('ContractFunctionRevertedError surfaces raw data when it cannot decode', () => {
+test('ContractFunctionRevertedError leaves reason empty for a panic code without a description', () => {
   const err = new ContractFunctionRevertedError({
-    data: '0xdeadbeef',
+    abi: [],
+    data: encodeErrorResult({ errorName: 'Panic', args: [0x99n] }),
+    functionName: 'transfer',
   })
-  expect(err.data).toBe('0xdeadbeef')
   expect(err.reason).toBeUndefined()
-  expect(err.panicCode).toBeUndefined()
-  // With no functionName / reason / panicCode / message, the generic form is used.
-  expect(err.shortMessage).toBe('The contract function reverted.')
+  expect(err.data?.args).toEqual([0x99n])
+  expect(err.shortMessage).toBe('The contract function "transfer" reverted.')
 })
 
-test('ContractFunctionRevertedError prefers an explicit message over decoded fields', () => {
-  const err = new ContractFunctionRevertedError({
-    functionName: 'transfer',
-    reason: 'ignored',
-    message: 'a fully custom message',
+test('ContractFunctionRevertedError decodes a custom error found on the ABI', () => {
+  const data = encodeErrorResult({
+    abi: insufficientBalanceAbi,
+    errorName: 'ERC20InsufficientBalance',
+    args: [sender, 30n, 100n],
   })
-  expect(err.shortMessage).toBe('a fully custom message')
-  // The decoded field is still retained even when a message overrides it.
-  expect(err.reason).toBe('ignored')
+  const err = new ContractFunctionRevertedError({
+    abi: insufficientBalanceAbi,
+    data,
+    functionName: 'transfer',
+  })
+  expect(err.data?.errorName).toBe('ERC20InsufficientBalance')
+  expect(err.data?.args).toEqual([sender, 30n, 100n])
+  expect(err.data?.abiItem).toEqual(insufficientBalanceAbi[0])
+  expect(err.raw).toBe(data)
+  expect(err.reason).toBeUndefined()
+  expect(err.signature).toBeUndefined()
+  expect(err.shortMessage).toBe('The contract function "transfer" reverted.')
+  expect(err.metaMessages).toEqual([
+    'Error: ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
+    `                               (${sender}, 30, 100)`,
+  ])
+})
+
+test('ContractFunctionRevertedError reports the selector of an error missing from the ABI', () => {
+  const data = `0xdeadbeef${'00'.repeat(32)}` as const
+  const err = new ContractFunctionRevertedError({
+    abi: insufficientBalanceAbi,
+    data,
+    functionName: 'transfer',
+  })
+  expect(err.signature).toBe('0xdeadbeef')
+  expect(err.raw).toBe(data)
+  expect(err.data).toBeUndefined()
+  expect(err.reason).toBeUndefined()
+  expect(err.cause).toBeInstanceOf(AbiErrorSignatureNotFoundError)
+  expect(err.shortMessage).toBe(
+    'The contract function "transfer" reverted with the following signature:\n0xdeadbeef',
+  )
+  expect(err.metaMessages?.[0]).toBe(
+    'Unable to decode signature "0xdeadbeef" as it was not found on the provided ABI.',
+  )
+})
+
+test('ContractFunctionRevertedError keeps the payload in raw when it does not decode', () => {
+  const data = encodeErrorResult({ errorName: 'Error', args: ['x'] }).slice(
+    0,
+    20,
+  ) as `0x${string}`
+  const err = new ContractFunctionRevertedError({
+    abi: [],
+    data,
+    functionName: 'transfer',
+    message: 'REVERT opcode executed',
+  })
+  expect(err.raw).toBe(data)
+  expect(err.data).toBeUndefined()
+  expect(err.reason).toBeUndefined()
+  expect(err.signature).toBeUndefined()
+  expect(err.cause).toBeInstanceOf(Error)
+  expect(err.shortMessage).toBe('The contract function "transfer" reverted.')
+})
+
+test.each([
+  ['no payload', undefined],
+  ['an empty payload', '0x'],
+] as const)('ContractFunctionRevertedError uses message as the reason with %s', (_, data) => {
+  const err = new ContractFunctionRevertedError({
+    abi: [],
+    data,
+    functionName: 'transfer',
+    message: 'REVERT opcode executed',
+  })
+  expect(err.reason).toBe('REVERT opcode executed')
+  expect(err.data).toBeUndefined()
+  expect(err.raw).toBe(data)
+  expect(err.shortMessage).toBe(
+    'The contract function "transfer" reverted with the following reason:\nREVERT opcode executed',
+  )
 })
 
 test('WaitForTransactionReceiptTimeoutError names the hash when provided', () => {

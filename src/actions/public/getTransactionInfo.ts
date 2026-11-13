@@ -15,7 +15,7 @@ import {
   toBase58,
 } from '../../utils/address/toBase58.js'
 import { bareHex } from '../../utils/encoding/bareHex.js'
-import { decodeNodeMessage, decodeRevertData } from '../utils/decodeRevert.js'
+import { decodeNodeMessage, decodeRevertReason } from '../utils/decodeRevert.js'
 import { isEmptyResponse } from './getNowBlock.js'
 
 export type GetTransactionInfoParameters = {
@@ -241,7 +241,7 @@ function revertReasonOf(response: RawTransactionInfo): {
   const result = response.receipt?.result
   if (result === undefined || result === 'SUCCESS') return {}
   const reason =
-    decodeRevertData(response.contractResult?.[0]).reason ??
+    decodeRevertReason(response.contractResult?.[0]) ??
     decodeNodeMessage(response.resMessage)
   return reason !== undefined ? { revertReason: reason } : {}
 }

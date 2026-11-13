@@ -268,13 +268,16 @@ export async function estimateEnergy<
       throw decodeRevert(
         undefined,
         (err.response as EstimateEnergyResponse | undefined)?.result?.message,
-        { functionName },
+        { abi: abi as Abi, functionName },
       )
     throw err
   }
 
   if (response?.result?.message || response?.result?.result === false)
-    throw decodeRevert(undefined, response.result.message, { functionName })
+    throw decodeRevert(undefined, response.result.message, {
+      abi: abi as Abi,
+      functionName,
+    })
 
   // A success body always says `result: true`; `energy_required` is omitted
   // only when it is 0 (proto3 default). A body with neither is not an
