@@ -70,7 +70,18 @@ export function hashMessage<to extends 'hex' | 'bytes' = 'hex'>(
       assertHexBytes(raw)
       return hexToBytes(raw)
     }
-    return raw
+    if (
+      typeof raw !== 'object' ||
+      raw === null ||
+      typeof (raw as { length?: unknown }).length !== 'number'
+    )
+      throw new InvalidParameterError(
+        'Invalid raw message: expected a 0x-prefixed hex string or bytes.',
+        { param: 'message.raw', reason: 'type' },
+      )
+    // Copy the bytes: the length prefix and the hashed bytes are both taken
+    // from this one array.
+    return Uint8Array.from(raw)
   })()
   const prefixBytes = stringToBytes(
     `${presignMessagePrefix}${messageBytes.length}`,

@@ -104,3 +104,88 @@ test('an unprefixed raw hex string throws an InvalidParameterError', () => {
     'Invalid raw message: expected a 0x-prefixed hex string, got "abcd".',
   )
 })
+
+describe('hashMessage with { raw } bytes', () => {
+  const bytes = new Uint8Array([1, 2, 3, 250, 255])
+  const expected = hashMessage({ raw: bytes })
+
+  test('the digest is keccak256(prefix ++ length ++ bytes)', () => {
+    const prefix = stringToBytes(`${presignMessagePrefix}${bytes.length}`)
+    const whole = new Uint8Array(prefix.length + bytes.length)
+    whole.set(prefix)
+    whole.set(bytes, prefix.length)
+    expect(expected).toBe(keccak256(whole))
+    // The same bytes as hex give the same digest.
+    expect(hashMessage({ raw: '0x010203faff' })).toBe(expected)
+  })
+
+  test('a number array, a Buffer and other typed arrays hash like the same Uint8Array', () => {
+    for (const raw of [
+      [1, 2, 3, 250, 255],
+      Buffer.from(bytes),
+      new Uint16Array([1, 2, 3, 250, 255]),
+      { length: 5, 0: 1, 1: 2, 2: 3, 3: 250, 4: 255 },
+    ])
+      expect(hashMessage({ raw: raw as never })).toBe(expected)
+  })
+
+  test('an empty byte array hashes as the empty message', () => {
+    expect(hashMessage({ raw: new Uint8Array(0) })).toBe(hashMessage(''))
+  })
+
+  test("the caller's array is not modified and later changes to it do not matter", () => {
+    const raw = new Uint8Array([1, 2, 3, 250, 255])
+    const before = hashMessage({ raw })
+    expect([...raw]).toEqual([1, 2, 3, 250, 255])
+    raw[0] = 9
+    expect(hashMessage({ raw })).not.toBe(before)
+    expect(before).toBe(expected)
+  })
+
+  // The length written into the prefix and the number of bytes hashed come
+  // from one copy of the input, whatever `length` reports on each read.
+  test('the prefixed length always equals the number of bytes hashed', () => {
+    const content = [0x32, ...new Uint8Array(32).fill(7)]
+    const digestOfFirst = (count: number) =>
+      hashMessage({ raw: Uint8Array.from(content.slice(0, count)) })
+    for (let switchAfter = 0; switchAfter <= 6; switchAfter++) {
+      let reads = 0
+      const raw: Record<string | number, unknown> = {
+        get length() {
+          return reads++ < switchAfter ? 3 : 33
+        },
+      }
+      content.forEach((byte, index) => {
+        raw[index] = byte
+      })
+      const digest = hashMessage({ raw: raw as never })
+      // Either reading is acceptable; a mix of the two is not.
+      expect([switchAfter, [digestOfFirst(3), digestOfFirst(33)]]).toEqual([
+        switchAfter,
+        expect.arrayContaining([digest]),
+      ])
+      // "…\n3" ++ "2" ++ m is byte-identical to "…\n32" ++ m.
+      expect(digest).not.toBe(hashMessage({ raw: new Uint8Array(32).fill(7) }))
+    }
+  })
+
+  test.each([
+    ['a number', 5],
+    ['null', null],
+    ['undefined', undefined],
+    ['a plain object', {}],
+    ['an ArrayBuffer', new ArrayBuffer(4)],
+    ['a DataView', new DataView(new ArrayBuffer(4))],
+    ['a boolean', true],
+    ['an object with a non-numeric length', { length: '3' }],
+  ])('rejects %s as raw with an InvalidParameterError', (_, raw) => {
+    let err: unknown
+    try {
+      hashMessage({ raw: raw as never })
+    } catch (e) {
+      err = e
+    }
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect((err as InvalidParameterError).param).toBe('message.raw')
+  })
+})
