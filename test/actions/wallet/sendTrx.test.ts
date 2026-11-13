@@ -17,6 +17,7 @@ import {
 } from '../../../src/errors/rpc.js'
 import type { Address } from '../../../src/types/address.js'
 import { addressToHex } from '../../../src/utils/address/addressToHex.js'
+import { stringToHex } from '../../../src/utils/encoding/toHex.js'
 import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
 import {
   type RawData,
@@ -113,6 +114,17 @@ test('writes a memo into raw_data.data', async () => {
   expect(body.raw_data.data).toBe('6f6d6e69')
 })
 
+test('writes a text memo encoded with stringToHex', async () => {
+  const { transport, bodyOf } = writeMock()
+  const client = createWalletClient({ account, transport })
+  await client.sendTrx({ to, amount: 1000000n, memo: stringToHex('2024') })
+  const body = parseBroadcast(bodyOf('broadcasttransaction')) as {
+    raw_data: { data?: string }
+  }
+  // The UTF-8 bytes of "2024", not the two bytes 0x20 0x24.
+  expect(body.raw_data.data).toBe('32303234')
+})
+
 test('accepts a memo as raw bytes (Uint8Array)', async () => {
   const { transport, bodyOf } = writeMock()
   const client = createWalletClient({ account, transport })
@@ -138,12 +150,12 @@ test('rejects an empty memo before any request', async () => {
   expect(calls).toHaveLength(0)
 })
 
-// Malformed memos must fail loud, typed and BEFORE any node call — the
-// serializer would otherwise left-pad an odd nibble (silently rewriting the
-// memo's bytes) or explode much later with a cryptic byte-sequence error.
+// A malformed memo is rejected with a typed error before any node call.
 test.each([
   ['odd-nibble hex', '0x6f6'],
-  ['non-hex text', 'hello'],
+  ['non-hex digits after the prefix', '0xzz'],
+  ['a string without the 0x prefix', 'hello'],
+  ['hex digits without the 0x prefix', '2024'],
   ['empty bytes', new Uint8Array(0)],
   ['null', null],
 ])('rejects a malformed memo (%s) before any request', async (_, memo) => {

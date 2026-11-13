@@ -61,7 +61,7 @@ export type UnfreezeBalanceV2Parameters = {
    */
   expirationMs?: bigint | number | undefined
   /**
-   * Optional memo written to `raw_data.data` (hex or raw bytes). Enters the
+   * Optional memo written to `raw_data.data` (`0x` hex or bytes). Enters the
    * signed bytes; the chain charges a memo fee (`getMemoFee`, 1 TRX on
    * mainnet and Nile) on top of the transaction's normal costs.
    */

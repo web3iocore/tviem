@@ -61,8 +61,7 @@ export type TransactionHeader = {
 
 /**
  * Memo input: `0x`-prefixed hex or raw bytes. Written to `raw_data.data`
- * verbatim — a UTF-8 text memo is the caller's bytes to produce (e.g.
- * `stringToBytes`/`toHex`), never guessed from a plain string.
+ * verbatim. A text memo is encoded by the caller with `stringToHex`.
  */
 export type MemoInput = Hex | ByteArray
 
@@ -72,7 +71,7 @@ export type BuildTransactionParameters = {
   /** Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`). */
   feeLimit?: bigint | undefined
   /**
-   * Optional memo, written to `raw_data.data` (hex or raw bytes). Enters the
+   * Optional memo, written to `raw_data.data` (`0x` hex or bytes). Enters the
    * signed bytes. The chain charges a memo fee on top of the transaction's
    * normal costs (`getMemoFee` chain parameter — 1 TRX on mainnet and Nile).
    * An empty memo is rejected: zero bytes serialize to no field at all, which
@@ -148,13 +147,11 @@ export async function buildTransaction(
   const { contract, feeLimit, memo, permissionId, blockHeader, expirationMs } =
     parameters
 
-  // Normalize and validate the memo once, here (single choke point for every
-  // action) and BEFORE any node call. Zero bytes are refused: proto3 drops an
-  // empty `data` from the wire, so an "empty memo" would silently build a
-  // transaction carrying no memo at all. A string is read as hex only with
-  // its `0x` prefix; text is the caller's to encode (`stringToHex`). Non-hex
-  // or odd-nibble strings are refused too — the serializer would otherwise
-  // left-pad a stray nibble and quietly rewrite the memo's bytes.
+  // The memo is normalized and validated here, for every action, before any
+  // node call. It carries at least one byte: proto3 omits an empty `data`
+  // field, so zero bytes would serialize as a transaction without a memo. A
+  // string is read as hex only with its `0x` prefix and must be whole-byte
+  // hex; text is encoded by the caller (`stringToHex`).
   let data: string | undefined
   if (memo !== undefined) {
     if (typeof memo !== 'string' && !(memo instanceof Uint8Array))
@@ -175,7 +172,7 @@ export async function buildTransaction(
       )
     if (!/^(?:[0-9a-f]{2})+$/.test(data))
       throw new InvalidParameterError(
-        'Invalid memo: not whole-byte hex (odd length or non-hex characters). Encode text memos to hex first (e.g. via `toHex`).',
+        'Invalid memo: not whole-byte hex (odd length or non-hex characters).',
         { param: 'memo', reason: 'format' },
       )
   }

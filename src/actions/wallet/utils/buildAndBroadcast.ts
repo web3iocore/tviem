@@ -40,7 +40,7 @@ export type BuildAndBroadcastParameters = {
   /** Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`). */
   feeLimit?: bigint | undefined
   /**
-   * Optional memo written to `raw_data.data` (hex or raw bytes). Enters the
+   * Optional memo written to `raw_data.data` (`0x` hex or bytes). Enters the
    * signed bytes; the chain charges a memo fee (`getMemoFee`, 1 TRX).
    *
    * If provided, the memo must not be empty; empty memos are rejected in
