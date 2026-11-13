@@ -134,6 +134,48 @@ test('accepts an address list and numeric blocks', async () => {
   })
 })
 
+test.each([
+  ['alone', {}],
+  ['with a block range', { fromBlock: 100, toBlock: 200 }],
+  ['with a block hash', { blockHash }],
+  ['with an event and args', { event: transferEvent, args: { to } }],
+  ['with an events list', { events: [transferEvent, approvalEvent] }],
+])('rejects an empty address list %s, before any request', async (_, rest) => {
+  const { client, calls } = mock([rawLog])
+  const err = await getLogs(client, { address: [], ...rest } as never).catch(
+    (e) => e,
+  )
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.param).toBe('address')
+  expect(err.reason).toBe('range')
+  expect(calls).toHaveLength(0)
+})
+
+test('without an address the filter has no address key', async () => {
+  for (const parameters of [{}, { address: undefined }, { fromBlock: 100 }]) {
+    const { client, calls } = mock([])
+    await getLogs(client, parameters)
+    const [filter] = (calls[0]?.body as { params: unknown[] }).params
+    expect(filter).not.toHaveProperty('address')
+  }
+})
+
+test('a single address and a one-entry list are sent as given', async () => {
+  const single = mock([])
+  await getLogs(single.client, { address: usdt })
+  expect(
+    (single.calls[0]?.body as { params: { address: unknown }[] }).params[0]
+      ?.address,
+  ).toBe(usdtEvm)
+
+  const list = mock([])
+  await getLogs(list.client, { address: [usdt] })
+  expect(
+    (list.calls[0]?.body as { params: { address: unknown }[] }).params[0]
+      ?.address,
+  ).toEqual([usdtEvm])
+})
+
 test('event + args: encodes the topic filter and decodes the logs', async () => {
   const { client, calls } = mock([rawLog])
 

@@ -124,6 +124,7 @@ export type GetLogsParameters<
 > = {
   /**
    * Restrict to logs emitted by these contract(s) — any accepted address form.
+   * A list has at least one entry; omit `address` to query every contract.
    * Public nodes cap the list at 1000 entries.
    */
   address?: AddressInput | readonly AddressInput[] | undefined
@@ -346,6 +347,12 @@ export async function getLogs(
     throw new InvalidParameterError(
       '`blockHash` cannot be used together with `fromBlock` / `toBlock`.',
       { param: 'blockHash', reason: 'conflict' },
+    )
+
+  if (Array.isArray(address) && address.length === 0)
+    throw new InvalidParameterError(
+      'Invalid address: the list is empty. Omit `address` to query the logs of every contract.',
+      { param: 'address', reason: 'range' },
     )
 
   const events = events_ ?? (event ? [event] : undefined)
