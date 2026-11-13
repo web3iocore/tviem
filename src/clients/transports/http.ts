@@ -71,9 +71,16 @@ export type HttpTransportConfig = {
 export type HttpTransport = Transport<
   'http',
   {
+    /** FullNode base URL, as configured. */
     fullUrl: string
+    /** SolidityNode base URL, as configured. */
     solidityUrl: string
+    /** Event index base URL, as configured. */
     eventUrl: string
+    /**
+     * The fetch options shared by every node. An `Authorization` header
+     * derived from a node URL's credentials is not part of them.
+     */
     fetchOptions?: HttpTransportConfig['fetchOptions'] | undefined
   }
 >
@@ -85,6 +92,42 @@ function resolveUrl(base: string, node: TronNode, path: string): string {
   if (path.startsWith('/')) return `${b}${path}`
   const prefix = node === 'solidity' ? '/walletsolidity/' : '/wallet/'
   return `${b}${prefix}${path}`
+}
+
+/** Percent-decodes a URL user name or password; text that does not decode is used as written. */
+function decodeCredential(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * Splits Basic credentials out of a node URL (`https://user:password@host`):
+ * returns the URL without them and the matching `Authorization` header value
+ * (the credentials as UTF-8, base64-encoded). A URL without credentials, or
+ * one that does not parse, is returned as given.
+ */
+function parseUrl(url_: string): {
+  url: string
+  authorization?: string | undefined
+} {
+  let url: URL
+  try {
+    url = new URL(url_)
+  } catch {
+    return { url: url_ }
+  }
+  if (!url.username && !url.password) return { url: url_ }
+  const credentials = new TextEncoder().encode(
+    `${decodeCredential(url.username)}:${decodeCredential(url.password)}`,
+  )
+  let binary = ''
+  for (const byte of credentials) binary += String.fromCharCode(byte)
+  url.username = ''
+  url.password = ''
+  return { url: url.toString(), authorization: `Basic ${btoa(binary)}` }
 }
 
 /** Whether `JSON.parse` exposes the raw source text to its reviver (V8). */
@@ -236,6 +279,11 @@ export function normalizeTronError(
  * Each node role resolves its base URL as `config.<role>Url` → the explicit
  * `url` → the chain's host for that role → the full host.
  *
+ * Basic credentials in a node URL (`https://user:password@host`) are sent as
+ * that node's `Authorization` header; the request itself goes to the URL
+ * without them. An `Authorization` header in `fetchOptions.headers` takes
+ * precedence.
+ *
  * @param url FullNode base URL. Defaults to the chain's `full` RPC URL.
  */
 export function http(
@@ -290,6 +338,15 @@ export function http(
       headers,
     }
 
+    // Credentials in a node URL are sent as that node's `Authorization`
+    // header, and the request goes to the URL without them. A caller's own
+    // `Authorization` header takes precedence.
+    const targets = {
+      full: parseUrl(fullUrl),
+      solidity: parseUrl(solidityUrl),
+      event: parseUrl(eventUrl),
+    }
+
     return createTransport(
       {
         key,
@@ -297,13 +354,14 @@ export function http(
         async request(args: TronRequestArgs, options) {
           const node: TronNode = args.node ?? 'full'
           const method = args.method ?? 'POST'
-          const base =
-            node === 'solidity'
-              ? solidityUrl
-              : node === 'event'
-                ? eventUrl
-                : fullUrl
+          const { url: base, authorization } = targets[node]
           const requestUrl = resolveUrl(base, node, args.path)
+          let requestOptions: typeof mergedFetchOptions = mergedFetchOptions
+          if (authorization && !headers.has('Authorization')) {
+            const authorized = new Headers(headers)
+            authorized.set('Authorization', authorization)
+            requestOptions = { ...mergedFetchOptions, headers: authorized }
+          }
           const requestBody =
             method === 'POST' ? stringify(args.body ?? {}) : undefined
 
@@ -357,7 +415,7 @@ export function http(
             let response: Response
             try {
               response = await fetchImpl(requestUrl, {
-                ...mergedFetchOptions,
+                ...requestOptions,
                 method,
                 ...(requestBody !== undefined ? { body: requestBody } : {}),
                 signal: controller.signal,

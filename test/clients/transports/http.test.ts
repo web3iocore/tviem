@@ -635,3 +635,237 @@ test('requests refuse redirects by default (redirect: "error")', async () => {
 test("a caller's explicit fetchOptions.redirect is honored as an opt-in", async () => {
   expect(await capturedRedirect({ redirect: 'follow' })).toBe('follow')
 })
+
+// ── Basic credentials in a node URL ────────────────────────────────────────
+
+const basic = (credentials: string) =>
+  `Basic ${Buffer.from(credentials, 'utf8').toString('base64')}`
+
+/** The URL and headers of the n-th fetch call. */
+function fetched(n = 0) {
+  const [url, init] = fetchMock.mock.calls[n] as [string, RequestInit]
+  return { url, headers: new Headers(init.headers), init }
+}
+
+test('URL credentials are sent as an Authorization header, to the URL without them', async () => {
+  const t = http('https://user:s3cretpw@node.example', { apiKey: API_KEY })({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url, headers } = fetched()
+  expect(url).toBe('https://node.example/wallet/getnowblock')
+  expect(headers.get('Authorization')).toBe(basic('user:s3cretpw'))
+  // The other headers are unchanged.
+  expect(headers.get('Content-Type')).toBe('application/json')
+  expect(headers.get('TRON-PRO-API-KEY')).toBe(API_KEY)
+})
+
+test('a URL with credentials is usable with a fetch that refuses credentials in URLs', async () => {
+  // The platform `Request` constructor throws for a URL with credentials, as
+  // the platform `fetch` does.
+  fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+    new Request(url, init)
+    return jsonResponse({ ok: true })
+  })
+  expect(() => new Request('https://user:pw@node.example/x')).toThrow()
+  const t = http('https://user:pw@node.example')({})
+  await expect(
+    t.config.request({ path: 'getnowblock', body: {} }),
+  ).resolves.toEqual({ ok: true })
+})
+
+test.each([
+  [
+    'percent-encoded characters',
+    'https://us%40er:p%3Ass%2Fw%23rd@node.example',
+    'us@er:p:ss/w#rd',
+  ],
+  ['a user name only', 'https://token@node.example', 'token:'],
+  ['a password only', 'https://:onlypw@node.example', ':onlypw'],
+  [
+    'non-Latin-1 characters',
+    'https://user:%E5%AF%86%E7%A0%81@node.example',
+    'user:密码',
+  ],
+])('URL credentials with %s', async (_, url, credentials) => {
+  const t = http(url)({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url: requested, headers } = fetched()
+  expect(requested).toBe('https://node.example/wallet/getnowblock')
+  expect(headers.get('Authorization')).toBe(basic(credentials))
+})
+
+test('URL credentials keep the port, path prefix and every node path form', async () => {
+  const t = http('https://user:pw@node.example:8443/prefix/')({})
+  await t.config.request({ node: 'full', path: 'getaccount', body: {} })
+  await t.config.request({ node: 'solidity', path: 'getaccount', body: {} })
+  await t.config.request({ path: '/jsonrpc', body: {} })
+  expect(fetched(0).url).toBe(
+    'https://node.example:8443/prefix/wallet/getaccount',
+  )
+  expect(fetched(1).url).toBe(
+    'https://node.example:8443/prefix/walletsolidity/getaccount',
+  )
+  expect(fetched(2).url).toBe('https://node.example:8443/prefix/jsonrpc')
+  for (const n of [0, 1, 2])
+    expect(fetched(n).headers.get('Authorization')).toBe(basic('user:pw'))
+})
+
+test('each node sends only the credentials of its own URL', async () => {
+  const t = http('https://full:fullpw@full.example', {
+    solidityUrl: 'https://sol:solpw@solidity.example',
+    eventUrl: 'https://event.example',
+  })({})
+  await t.config.request({ node: 'full', path: 'getnowblock', body: {} })
+  await t.config.request({ node: 'solidity', path: 'getnowblock', body: {} })
+  await t.config.request({ node: 'event', path: '/v1/x', method: 'GET' })
+  expect(fetched(0).url).toBe('https://full.example/wallet/getnowblock')
+  expect(fetched(0).headers.get('Authorization')).toBe(basic('full:fullpw'))
+  expect(fetched(1).url).toBe(
+    'https://solidity.example/walletsolidity/getnowblock',
+  )
+  expect(fetched(1).headers.get('Authorization')).toBe(basic('sol:solpw'))
+  // A node whose URL has no credentials gets no Authorization header.
+  expect(fetched(2).url).toBe('https://event.example/v1/x')
+  expect(fetched(2).headers.has('Authorization')).toBe(false)
+})
+
+test('credentials in a chain-derived URL are handled the same way', async () => {
+  const withCredentials = defineChain({
+    ...chain,
+    rpcUrls: {
+      default: {
+        full: { http: ['https://user:pw@full.chain'] },
+        solidity: { http: ['https://solidity.chain'] },
+      },
+    },
+  })
+  const t = http()({ chain: withCredentials })
+  await t.config.request({ node: 'full', path: 'getnowblock', body: {} })
+  await t.config.request({ node: 'solidity', path: 'getnowblock', body: {} })
+  expect(fetched(0).url).toBe('https://full.chain/wallet/getnowblock')
+  expect(fetched(0).headers.get('Authorization')).toBe(basic('user:pw'))
+  expect(fetched(1).headers.has('Authorization')).toBe(false)
+})
+
+test('the event node uses the credentials of its own URL', async () => {
+  const t = http('https://full.example', {
+    eventUrl: 'https://ev:evpw@event.example',
+  })({})
+  await t.config.request({ node: 'event', path: '/v1/x', method: 'GET' })
+  await t.config.request({ node: 'full', path: 'getnowblock', body: {} })
+  expect(fetched(0).url).toBe('https://event.example/v1/x')
+  expect(fetched(0).headers.get('Authorization')).toBe(basic('ev:evpw'))
+  expect(fetched(1).url).toBe('https://full.example/wallet/getnowblock')
+  expect(fetched(1).headers.has('Authorization')).toBe(false)
+})
+
+// Credentials that are not valid percent-encoding are used as written; the
+// request still goes to the URL without them.
+test.each([
+  ['a literal %', 'https://user:S3cr3tPw%@node.example', 'user:S3cr3tPw%'],
+  ['a literal % in the user name', 'https://us%er:pw@node.example', 'us%er:pw'],
+  [
+    'an escape that is not UTF-8',
+    'https://user:%E9pw@node.example',
+    'user:%E9pw',
+  ],
+])('URL credentials with %s', async (_, url, credentials) => {
+  const t = http(url)({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url: requested, headers } = fetched()
+  expect(requested).toBe('https://node.example/wallet/getnowblock')
+  expect(headers.get('Authorization')).toBe(basic(credentials))
+})
+
+test('long URL credentials are encoded in full', async () => {
+  const password = 'a'.repeat(200_000)
+  const t = http(`https://user:${password}@node.example`)({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url, headers } = fetched()
+  expect(url).toBe('https://node.example/wallet/getnowblock')
+  expect(headers.get('Authorization')).toBe(basic(`user:${password}`))
+})
+
+test('a base URL that does not parse is requested as given', async () => {
+  const t = http('node.example')({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url, headers } = fetched()
+  expect(url).toBe('node.example/wallet/getnowblock')
+  expect(headers.has('Authorization')).toBe(false)
+})
+
+test('headers set on the transport value later apply to every node', async () => {
+  const t = http('https://user:pw@full.example', {
+    solidityUrl: 'https://solidity.example',
+  })({})
+  ;(t.value?.fetchOptions?.headers as Headers).set('X-Later', 'yes')
+  await t.config.request({ node: 'full', path: 'getnowblock', body: {} })
+  await t.config.request({ node: 'solidity', path: 'getnowblock', body: {} })
+  expect(fetched(0).headers.get('X-Later')).toBe('yes')
+  expect(fetched(0).headers.get('Authorization')).toBe(basic('user:pw'))
+  expect(fetched(1).headers.get('X-Later')).toBe('yes')
+  expect(fetched(1).headers.has('Authorization')).toBe(false)
+})
+
+test("a caller's Authorization header takes precedence over URL credentials", async () => {
+  const t = http('https://user:pw@node.example', {
+    fetchOptions: { headers: { authorization: 'Bearer caller-token' } },
+  })({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url, headers } = fetched()
+  expect(url).toBe('https://node.example/wallet/getnowblock')
+  expect(headers.get('Authorization')).toBe('Bearer caller-token')
+})
+
+test('a URL without credentials is requested as given, with no Authorization header', async () => {
+  // Spelled so that re-serializing it through `URL` would change it.
+  const t = http('HTTPS://Node.Example:443/prefix')({})
+  await t.config.request({ path: 'getnowblock', body: {} })
+  const { url, headers } = fetched()
+  expect(url).toBe('HTTPS://Node.Example:443/prefix/wallet/getnowblock')
+  expect(headers.has('Authorization')).toBe(false)
+})
+
+test('request errors for a URL with credentials do not contain them', async () => {
+  const t = http('https://user:s3cretpw@node.example')({})
+  const texts = async (run: () => void) => {
+    run()
+    const err: any = await t.config
+      .request({ path: 'getnowblock', body: {} })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(HttpRequestError)
+    return [
+      err.message,
+      String(err.details),
+      String(err.url),
+      String(err.cause?.message),
+      JSON.stringify(err),
+    ].join('\n')
+  }
+
+  const status = await texts(() =>
+    fetchMock.mockResolvedValueOnce(
+      new Response('unauthorized', { status: 401 }),
+    ),
+  )
+  // A fetch failure whose message quotes the URL it was given.
+  const network = await texts(() =>
+    fetchMock.mockImplementationOnce(async (url: string) => {
+      throw new TypeError(`fetch failed for ${url}`)
+    }),
+  )
+  for (const text of [status, network]) {
+    expect(text).not.toContain('s3cretpw')
+    expect(text).not.toContain(basic('user:s3cretpw'))
+    expect(text).toContain('https://node.example/wallet/getnowblock')
+  }
+})
+
+test('the transport value keeps the URLs as configured and has no Authorization header', () => {
+  const t = http('https://user:pw@node.example', { apiKey: API_KEY })({})
+  expect(t.value?.fullUrl).toBe('https://user:pw@node.example')
+  expect(t.value?.solidityUrl).toBe('https://user:pw@node.example')
+  expect(t.value?.eventUrl).toBe('https://user:pw@node.example')
+  expect((t.value?.fetchOptions?.headers as Headers).has('Authorization')).toBe(
+    false,
+  )
+})
