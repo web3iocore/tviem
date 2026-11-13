@@ -2,7 +2,10 @@
 import { expect, test } from 'vitest'
 
 import { BaseError } from '../../src/errors/base.js'
-import { InvalidDecimalNumberError } from '../../src/errors/unit.js'
+import {
+  InvalidDecimalNumberError,
+  InvalidDecimalsError,
+} from '../../src/errors/unit.js'
 
 test('InvalidDecimalNumberError', () => {
   const error = new InvalidDecimalNumberError({ value: '1.0.0' })
@@ -10,5 +13,14 @@ test('InvalidDecimalNumberError', () => {
   expect(error.name).toBe('InvalidDecimalNumberError')
   expect(error.shortMessage).toBe(
     'Number `1.0.0` is not a valid decimal number.',
+  )
+})
+
+test('InvalidDecimalsError', () => {
+  const error = new InvalidDecimalsError({ decimals: -1 })
+  expect(error).toBeInstanceOf(BaseError)
+  expect(error.name).toBe('InvalidDecimalsError')
+  expect(error.shortMessage).toBe(
+    '`decimals` must be a non-negative integer. Got `-1`.',
   )
 })

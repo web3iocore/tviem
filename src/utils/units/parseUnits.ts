@@ -1,55 +1,47 @@
-import { InvalidDecimalNumberError } from '../../errors/unit.js'
+import {
+  InvalidDecimalNumberError,
+  type InvalidDecimalNumberErrorType,
+  InvalidDecimalsError,
+  type InvalidDecimalsErrorType,
+} from '../../errors/unit.js'
 import type { ErrorType } from '../../errors/utils.js'
 
-export type ParseUnitsErrorType = ErrorType
+export type ParseUnitsErrorType =
+  | InvalidDecimalNumberErrorType
+  | InvalidDecimalsErrorType
+  | ErrorType
 
 /**
  * Multiplies a string representation of a number by a given exponent of base 10 (10exponent).
+ *
+ * `value` has at least one digit, with an optional leading `-` and an
+ * optional fraction. Fraction digits past `decimals` are dropped (the result
+ * is truncated toward zero, not rounded). `decimals` is a non-negative
+ * integer.
  *
  * @example
  * import { parseUnits } from '@tronweb3/tviem'
  *
  * parseUnits('420', 9)
  * // 420000000000n
+ *
+ * parseUnits('1.9999999', 6)
+ * // 1999999n
  */
 export function parseUnits(value: string, decimals: number) {
-  if (!/^(-?)([0-9]*)\.?([0-9]*)$/.test(value))
+  if (!Number.isInteger(decimals) || decimals < 0)
+    throw new InvalidDecimalsError({ decimals })
+
+  if (!/^-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/.test(value))
     throw new InvalidDecimalNumberError({ value })
 
-  let [integer = '', fraction = '0'] = value.split('.')
+  let [integer = '', fraction = ''] = value.split('.')
 
   const negative = integer.startsWith('-')
   if (negative) integer = integer.slice(1)
+  if (integer === '') integer = '0'
 
-  // trim trailing zeros.
-  fraction = fraction.replace(/(0+)$/, '')
-
-  // round off if the fraction is larger than the number of decimals.
-  if (decimals === 0) {
-    if (Math.round(Number(`.${fraction}`)) === 1)
-      integer = `${BigInt(integer) + 1n}`
-    fraction = ''
-  } else if (fraction.length > decimals) {
-    const [left, unit, right] = [
-      fraction.slice(0, decimals - 1),
-      fraction.slice(decimals - 1, decimals),
-      fraction.slice(decimals),
-    ]
-
-    const rounded = Math.round(Number(`${unit}.${right}`))
-    if (rounded > 9)
-      fraction = `${BigInt(left) + BigInt(1)}0`.padStart(left.length + 1, '0')
-    else fraction = `${left}${rounded}`
-
-    if (fraction.length > decimals) {
-      fraction = fraction.slice(1)
-      integer = `${BigInt(integer) + 1n}`
-    }
-
-    fraction = fraction.slice(0, decimals)
-  } else {
-    fraction = fraction.padEnd(decimals, '0')
-  }
+  fraction = fraction.slice(0, decimals).padEnd(decimals, '0')
 
   return BigInt(`${negative ? '-' : ''}${integer}${fraction}`)
 }

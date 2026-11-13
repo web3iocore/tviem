@@ -160,6 +160,7 @@ exports[`package exports surface (freeze guard) > root + subpath export names ar
     "InvalidBytesBooleanError",
     "InvalidBytesLengthError",
     "InvalidDecimalNumberError",
+    "InvalidDecimalsError",
     "InvalidDefinitionTypeError",
     "InvalidDomainError",
     "InvalidHashError",

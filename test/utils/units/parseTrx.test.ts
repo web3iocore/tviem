@@ -29,17 +29,17 @@ test('converts trx to sun', () => {
   expect(parseTrx('-0.000001')).toMatchInlineSnapshot('-1n')
 })
 
-test('converts to rounded sun', () => {
+test('drops digits past six decimals', () => {
   expect(parseTrx('0.0000001')).toMatchInlineSnapshot('0n')
-  expect(parseTrx('0.00000059')).toMatchInlineSnapshot('1n')
-  expect(parseTrx('1.00000059')).toMatchInlineSnapshot('1000001n')
-  expect(parseTrx('69.59000059')).toMatchInlineSnapshot('69590001n')
-  expect(parseTrx('1.23456791234522')).toMatchInlineSnapshot('1234568n')
+  expect(parseTrx('0.00000059')).toMatchInlineSnapshot(`0n`)
+  expect(parseTrx('1.00000059')).toMatchInlineSnapshot(`1000000n`)
+  expect(parseTrx('69.59000059')).toMatchInlineSnapshot(`69590000n`)
+  expect(parseTrx('1.23456791234522')).toMatchInlineSnapshot(`1234567n`)
   expect(parseTrx('-0.0000001')).toMatchInlineSnapshot('0n')
-  expect(parseTrx('-0.00000059')).toMatchInlineSnapshot('-1n')
-  expect(parseTrx('-1.00000059')).toMatchInlineSnapshot('-1000001n')
-  expect(parseTrx('-69.59000059')).toMatchInlineSnapshot('-69590001n')
-  expect(parseTrx('-1.23456791234522')).toMatchInlineSnapshot('-1234568n')
+  expect(parseTrx('-0.00000059')).toMatchInlineSnapshot(`0n`)
+  expect(parseTrx('-1.00000059')).toMatchInlineSnapshot(`-1000000n`)
+  expect(parseTrx('-69.59000059')).toMatchInlineSnapshot(`-69590000n`)
+  expect(parseTrx('-1.23456791234522')).toMatchInlineSnapshot(`-1234567n`)
 })
 
 // .claude/docs/02-v0.1a-任务清单.md §2.4 units vectors, asserted verbatim.
@@ -75,4 +75,15 @@ test('round-trip: formatTrx(parseTrx(x)) === normalized x', () => {
   ]
   for (const [input, normalized] of vectors)
     expect(formatTrx(parseTrx(input))).toBe(normalized)
+})
+
+test('rejects input without a digit', () => {
+  for (const value of ['', '.', '-', '-.'])
+    expect(() => parseTrx(value)).toThrow(InvalidDecimalNumberError)
+})
+
+test('truncates toward zero: the magnitude is never more than the amount typed', () => {
+  expect(parseTrx('1.9999999')).toBe(1999999n)
+  expect(parseTrx('1.0000005')).toBe(1000000n)
+  expect(parseTrx('-1.9999999')).toBe(-1999999n)
 })

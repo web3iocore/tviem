@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest'
 
+import { InvalidDecimalsError } from '../../../src/errors/unit.js'
+
 import { formatUnits } from '../../../src/utils/units/formatUnits.js'
 import { parseUnits } from '../../../src/utils/units/parseUnits.js'
 
@@ -70,4 +72,20 @@ test('round-trip: parseUnits(formatUnits(v, 6), 6) === v (integer sun)', () => {
     115792089237316195423570985008687907853269984665640564039457584007913129639936n, // 2^256
   ]
   for (const v of vectors) expect(parseUnits(formatUnits(v, 6), 6)).toBe(v)
+})
+
+test('rejects decimals that are not a non-negative integer', () => {
+  for (const decimals of [
+    -1,
+    1.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    undefined,
+    null,
+    '6',
+  ])
+    expect(() => formatUnits(1500000n, decimals as never)).toThrow(
+      InvalidDecimalsError,
+    )
+  expect(formatUnits(1500000n, 0)).toBe('1500000')
 })

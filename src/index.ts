@@ -784,6 +784,8 @@ export {
 export {
   InvalidDecimalNumberError,
   type InvalidDecimalNumberErrorType,
+  InvalidDecimalsError,
+  type InvalidDecimalsErrorType,
 } from './errors/unit.js'
 export {
   type ParseAccount,

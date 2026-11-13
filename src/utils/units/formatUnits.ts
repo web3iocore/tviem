@@ -1,9 +1,15 @@
+import {
+  InvalidDecimalsError,
+  type InvalidDecimalsErrorType,
+} from '../../errors/unit.js'
 import type { ErrorType } from '../../errors/utils.js'
 
-export type FormatUnitsErrorType = ErrorType
+export type FormatUnitsErrorType = InvalidDecimalsErrorType | ErrorType
 
 /**
  *  Divides a number by a given exponent of base 10 (10exponent), and formats it into a string representation of the number..
+ *
+ * `decimals` is a non-negative integer.
  *
  * @example
  * import { formatUnits } from '@tronweb3/tviem'
@@ -12,6 +18,9 @@ export type FormatUnitsErrorType = ErrorType
  * // '420'
  */
 export function formatUnits(value: bigint, decimals: number) {
+  if (!Number.isInteger(decimals) || decimals < 0)
+    throw new InvalidDecimalsError({ decimals })
+
   let display = value.toString()
 
   const negative = display.startsWith('-')

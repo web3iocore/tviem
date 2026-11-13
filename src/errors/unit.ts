@@ -10,3 +10,14 @@ export class InvalidDecimalNumberError extends BaseError {
     })
   }
 }
+
+export type InvalidDecimalsErrorType = InvalidDecimalsError & {
+  name: 'InvalidDecimalsError'
+}
+export class InvalidDecimalsError extends BaseError {
+  constructor({ decimals }: { decimals: number }) {
+    super(`\`decimals\` must be a non-negative integer. Got \`${decimals}\`.`, {
+      name: 'InvalidDecimalsError',
+    })
+  }
+}
