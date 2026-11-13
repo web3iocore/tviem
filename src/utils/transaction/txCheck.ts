@@ -5,8 +5,8 @@ import {
 } from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import { bareHex } from '../encoding/bareHex.js'
-import { getTransactionId } from './getTransactionId.js'
-import { type RawData, toRawDataHex } from './serializeRawData.js'
+import { sha256 } from '../hash/sha256.js'
+import { type RawData, serializeRawData } from './serializeRawData.js'
 
 export type TxCheckErrorType = InvalidParameterErrorType | ErrorType
 
@@ -21,6 +21,9 @@ export type TxCheckErrorType = InvalidParameterErrorType | ErrorType
  * (a contract-less shell is not a transaction). The one exception is API
  * misuse: a non-object argument (e.g. a legacy `(rawDataHex, txId)` call)
  * throws immediately.
+ *
+ * `raw_data` is serialized once, and both `raw_data_hex` and `txID` are
+ * compared against those bytes.
  *
  * The bytes are what a signature covers, so the bytes are authoritative:
  * model content the serializer never encodes (proto3-default field values
@@ -53,11 +56,13 @@ export function txCheck(transaction: {
   if (!Array.isArray(raw_data.contract) || raw_data.contract.length === 0)
     return false
   try {
-    const hex = toRawDataHex(raw_data)
-    if (hex === '') return false
+    // One serialization: `raw_data_hex` and `txID` are both compared against
+    // these bytes.
+    const bytes = serializeRawData(raw_data)
+    if (bytes.length === 0) return false
     return (
-      hex === bareHex(raw_data_hex) &&
-      getTransactionId(raw_data) === bareHex(txID)
+      bareHex(bytes) === bareHex(raw_data_hex) &&
+      sha256(bytes, 'hex').slice(2) === bareHex(txID)
     )
   } catch {
     return false

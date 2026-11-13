@@ -1,6 +1,10 @@
 import { expect, test } from 'vitest'
 import { InvalidParameterError } from '../../../src/errors/parameter.js'
-import type { RawData } from '../../../src/utils/transaction/serializeRawData.js'
+import { getTransactionId } from '../../../src/utils/transaction/getTransactionId.js'
+import {
+  type RawData,
+  toRawDataHex,
+} from '../../../src/utils/transaction/serializeRawData.js'
 import { txCheck } from '../../../src/utils/transaction/txCheck.js'
 import { loadTxFixtures } from '../../fixtures/tx/loader.js'
 
@@ -150,4 +154,92 @@ test('txCheck throws an InvalidParameterError for a non-object argument', () => 
       reason: 'type',
     }),
   )
+})
+
+// `raw_data_hex` and `txID` are compared against one serialization of
+// `raw_data`. The model below returns a different `amount` after a number of
+// reads, so a second serialization would see different content than the first.
+test('raw_data_hex and txID are checked against the same serialized bytes', () => {
+  const first = canonicalTx().raw_data
+  const second = canonicalTx().raw_data
+  const amountOf = (rawData: RawData) =>
+    (rawData.contract[0]?.parameter.value as { amount: number }).amount
+  ;(second.contract[0]?.parameter.value as { amount: number }).amount =
+    amountOf(first) * 1000
+  const hexOfFirst = toRawDataHex(first)
+  const idOfSecond = getTransactionId(second)
+  expect(idOfSecond).not.toBe(getTransactionId(first))
+
+  /** A model whose `amount` reads as `first`'s for `switchAfter` reads, then as `second`'s. */
+  const changing = (switchAfter: number) => {
+    const rawData = canonicalTx().raw_data
+    let reads = 0
+    Object.defineProperty(rawData.contract[0]?.parameter.value, 'amount', {
+      enumerable: true,
+      get: () => (reads++ < switchAfter ? amountOf(first) : amountOf(second)),
+    })
+    return rawData
+  }
+
+  // How many times one serialization reads `amount`.
+  let readsPerSerialization = 0
+  const counted = canonicalTx().raw_data
+  const amount = amountOf(counted)
+  Object.defineProperty(counted.contract[0]?.parameter.value, 'amount', {
+    enumerable: true,
+    get: () => {
+      readsPerSerialization++
+      return amount
+    },
+  })
+  toRawDataHex(counted)
+  expect(readsPerSerialization).toBeGreaterThan(0)
+
+  // Wherever the value changes, hex-of-first with id-of-second never passes.
+  for (
+    let switchAfter = 0;
+    switchAfter <= readsPerSerialization * 3;
+    switchAfter++
+  )
+    expect([
+      switchAfter,
+      txCheck({
+        txID: idOfSecond,
+        raw_data: changing(switchAfter),
+        raw_data_hex: hexOfFirst,
+      }),
+    ]).toEqual([switchAfter, false])
+})
+
+test('a model with accessor properties passes when its content is stable', () => {
+  const rawData = canonicalTx().raw_data
+  const value = rawData.contract[0]?.parameter.value as { amount: number }
+  const amount = value.amount
+  Object.defineProperty(value, 'amount', {
+    enumerable: true,
+    get: () => amount,
+  })
+  expect(
+    txCheck({
+      txID: canonical.txID,
+      raw_data: rawData,
+      raw_data_hex: canonical.rawDataHex,
+    }),
+  ).toBe(true)
+})
+
+test('txID agrees with getTransactionId for every gold vector', () => {
+  for (const fixture of loadTxFixtures()) {
+    const rawData = fixture.rawData as RawData
+    expect(getTransactionId(rawData)).toBe(fixture.txID)
+    // A txID that is not the hash of the bytes fails, with raw_data_hex intact.
+    const other = `${fixture.txID.slice(0, -1)}${fixture.txID.endsWith('0') ? '1' : '0'}`
+    expect(
+      txCheck({
+        txID: other,
+        raw_data: rawData,
+        raw_data_hex: fixture.rawDataHex,
+      }),
+    ).toBe(false)
+  }
 })
