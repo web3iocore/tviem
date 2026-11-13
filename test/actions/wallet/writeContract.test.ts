@@ -10,6 +10,7 @@ import { writeContract } from '../../../src/actions/wallet/writeContract.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
 import { defaultFeeLimit } from '../../../src/constants/transaction.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   AccountNotFoundError,
   TransactionMismatchError,
@@ -162,6 +163,26 @@ test('attaches callTokenValue + tokenId to the TriggerSmartContract byte-for-byt
   }
   expect(body.raw_data_hex).toBe(RAW_TOKEN)
   expect(body.signature).toEqual([SIG_TOKEN])
+})
+
+test.each([
+  0n,
+  -1n,
+])('rejects feeLimit %s before any request', async (feeLimit) => {
+  const { transport, calls } = writeMock()
+  const client = createWalletClient({ account, transport })
+  const err = await client
+    .writeContract({
+      address: contract,
+      abi: trc20Abi,
+      functionName: 'transfer',
+      args: [recipient, 1000000n],
+      feeLimit,
+    })
+    .catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.param).toBe('feeLimit')
+  expect(calls).toHaveLength(0)
 })
 
 test('defaults feeLimit to defaultFeeLimit when omitted', async () => {

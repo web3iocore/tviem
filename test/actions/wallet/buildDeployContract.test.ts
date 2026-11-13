@@ -133,7 +133,7 @@ test('throws AccountNotFoundError when no account is available (bare action)', a
 // A contract deployment needs an energy budget — fee_limit defaults like
 // writeContract (150 TRX) rather than being omitted (fee_limit 0, which
 // java-tron rejects for a CreateSmartContract). An explicit 0n is honored.
-test('defaults feeLimit when omitted; honors an explicit 0n', async () => {
+test('defaults feeLimit when omitted; rejects a feeLimit of 0 or less', async () => {
   const { transport } = buildMock()
   const client = createWalletClient({ account, transport })
   const value = deployValueOf(basic!)
@@ -148,8 +148,13 @@ test('defaults feeLimit when omitted; honors an explicit 0n', async () => {
   const tx = await buildDeployContract(client, noFee)
   expect((tx.raw_data as { fee_limit?: number }).fee_limit).toBe(150_000_000)
 
-  const zero = await buildDeployContract(client, { ...noFee, feeLimit: 0n })
-  expect((zero.raw_data as { fee_limit?: number }).fee_limit).toBeUndefined()
+  for (const feeLimit of [0n, -1n]) {
+    const err = await buildDeployContract(client, { ...noFee, feeLimit }).catch(
+      (e) => e,
+    )
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err.param).toBe('feeLimit')
+  }
 })
 
 // `CreateSmartContractActuator.validate()` rejects a percent outside

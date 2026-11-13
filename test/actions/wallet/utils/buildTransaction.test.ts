@@ -85,6 +85,40 @@ test('rejects a negative or non-integer permission id', async () => {
   )
 })
 
+test('writes a positive feeLimit to fee_limit, and no field when it is omitted', async () => {
+  const { transport } = buildMock()
+  const client = createPublicClient({ transport })
+
+  // A system contract passes no feeLimit: the transaction has no fee_limit.
+  const system = await buildTransaction(client, { contract: freezeContract() })
+  expect('fee_limit' in system.raw_data).toBe(false)
+
+  for (const feeLimit of [1n, 150_000_000n]) {
+    const tx = await buildTransaction(client, {
+      contract: freezeContract(),
+      feeLimit,
+    })
+    expect((tx.raw_data as { fee_limit?: number }).fee_limit).toBe(
+      Number(feeLimit),
+    )
+  }
+})
+
+test('rejects a feeLimit of 0 or less before any node call', async () => {
+  const { transport, calls } = buildMock()
+  const client = createPublicClient({ transport })
+  for (const feeLimit of [0n, -1n, -150_000_000n]) {
+    const err = await buildTransaction(client, {
+      contract: freezeContract(),
+      feeLimit,
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(InvalidParameterError)
+    expect(err.param).toBe('feeLimit')
+    expect(err.reason).toBe('range')
+  }
+  expect(calls).toHaveLength(0)
+})
+
 test('rejects the permission id before any node call', async () => {
   const { transport, calls } = buildMock()
   const client = createPublicClient({ transport })
@@ -302,6 +336,13 @@ test('validation errors carry their class and the parameter they refer to', asyn
     }).catch((e) => e)
 
   for (const [parameters, param, reason] of [
+    [{ feeLimit: 0n }, 'feeLimit', 'range'],
+    [{ feeLimit: -1n }, 'feeLimit', 'range'],
+    [{ feeLimit: 0 as never }, 'feeLimit', 'range'],
+    [{ feeLimit: '0' as never }, 'feeLimit', 'range'],
+    [{ feeLimit: 1.5 as never }, 'feeLimit', 'range'],
+    [{ feeLimit: {} as never }, 'feeLimit', 'type'],
+    [{ feeLimit: null as never }, 'feeLimit', 'type'],
     [{ memo: 5 as never }, 'memo', 'type'],
     [{ memo: '0x' }, 'memo', 'range'],
     [{ memo: '0xabc' }, 'memo', 'format'],

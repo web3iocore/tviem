@@ -279,7 +279,7 @@ function assemble(
 
   // A contract deployment needs an energy budget — default the fee limit like
   // writeContract so the natural no-feeLimit call is not rejected on-chain for
-  // fee_limit 0. An explicit `0n` is still honored (nullish-coalesced).
+  // fee_limit 0.
   const feeLimit = parameters.feeLimit ?? defaultFeeLimit
 
   // The two on-chain economics fields default to the ecosystem-standard

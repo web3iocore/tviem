@@ -10,6 +10,7 @@ import type {
 import { deployContract } from '../../../src/actions/wallet/deployContract.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
 import { createWalletClient } from '../../../src/clients/createWalletClient.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   AccountNotFoundError,
   TransactionMismatchError,
@@ -58,6 +59,26 @@ function writeMock() {
     },
   })
 }
+
+test.each([
+  0n,
+  -1n,
+])('rejects feeLimit %s before any request', async (feeLimit) => {
+  const { transport, calls } = writeMock()
+  const client = createWalletClient({ account, transport })
+  const value = deployValueOf(basic!)
+  const err = await deployContract(client, {
+    abi: value.abi,
+    bytecode: `0x${value.bytecode}` as Hex,
+    name: value.name,
+    consumeUserResourcePercent: BigInt(value.consume_user_resource_percent),
+    originEnergyLimit: BigInt(value.origin_energy_limit),
+    feeLimit,
+  }).catch((e) => e)
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.param).toBe('feeLimit')
+  expect(calls).toHaveLength(0)
+})
 
 test('deploys byte-for-byte against the gold vector + backfills the address', async () => {
   const { transport, calls, bodyOf } = writeMock()

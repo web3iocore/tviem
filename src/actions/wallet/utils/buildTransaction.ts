@@ -68,7 +68,10 @@ export type MemoInput = Hex | ByteArray
 export type BuildTransactionParameters = {
   /** The single `Transaction.Contract` to wrap in the transaction. */
   contract: RawContractInput
-  /** Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`). */
+  /**
+   * Energy/bandwidth fee ceiling in SUN (`raw_data.fee_limit`), greater than
+   * 0. Used by contract calls and deployments; omit it for system contracts.
+   */
   feeLimit?: bigint | undefined
   /**
    * Optional memo, written to `raw_data.data` (`0x` hex or bytes). Enters the
@@ -176,6 +179,15 @@ export async function buildTransaction(
         { param: 'memo', reason: 'format' },
       )
   }
+
+  // A fee limit is given only for contract calls and deployments; when given
+  // it is a positive amount of SUN. System contracts pass none and carry no
+  // `fee_limit` field.
+  if (feeLimit !== undefined && int64InputToBigInt('feeLimit', feeLimit) <= 0n)
+    throw new InvalidParameterError(
+      `Invalid feeLimit: ${feeLimit}. Expected a positive amount of SUN.`,
+      { param: 'feeLimit', reason: 'range' },
+    )
 
   // Reject a malformed permission id here, before any node call — the same
   // guard `multiSignTransaction` applies. This is the canonical place to bind
