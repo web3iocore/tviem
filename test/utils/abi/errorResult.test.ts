@@ -159,25 +159,17 @@ test('decodeErrorResult: throws when the selector matches no error', () => {
   )
 })
 
-// Overload resolution (via getAbiItem): among same-name overloads that all
-// structurally accept `args` WITHOUT being ambiguous, the LAST match wins
-// (reference semantics). An empty array matches string[] and bytes[] alike,
-// and the empty-array ambiguity probe deliberately leaves arg-dependent
-// pairs like string/bytes unambiguous — no element exists to overlap on.
-test('encodeErrorResult: the last structural overload wins', () => {
+// Empty arrays cannot distinguish overloads for errors either. The shared
+// resolver must reject the call regardless of ABI order.
+test('encodeErrorResult: an empty array overload pair throws in either order', () => {
   const overloaded = [
     { type: 'error', name: 'E', inputs: [{ type: 'string[]' }] },
     { type: 'error', name: 'E', inputs: [{ type: 'bytes[]' }] },
   ] as const satisfies Abi
-  expect(
-    encodeErrorResult({ abi: overloaded, errorName: 'E', args: [[]] }),
-  ).toBe(
-    encodeErrorResult({
-      abi: [overloaded[1]] as const satisfies Abi,
-      errorName: 'E',
-      args: [[]],
-    }),
-  )
+  for (const abi of [overloaded, [...overloaded].reverse()])
+    expect(() =>
+      encodeErrorResult({ abi, errorName: 'E', args: [[]] }),
+    ).toThrowError(AbiItemAmbiguityError)
 })
 
 // string/bytes overloads are NOT resolved by last-match-wins: a string arg
