@@ -76,9 +76,9 @@ export function toAccount(
   // The account surface is listed member by member rather than spread from
   // the source. A spread copies own enumerable properties only, so a class
   // instance — state on the instance, signing methods on its prototype —
-  // would come out with no signing methods at all; it would also carry along
-  // whatever else the source holds (a key, a transport) into an object that
-  // gets passed around as "the account". Each member is read exactly once.
+  // would come out with no signing methods at all. Listing the members also
+  // keeps the account to exactly these properties, whatever else the source
+  // holds. Each member is read exactly once.
   const multiSign = bindTo(source, source.multiSign)
   return {
     address,

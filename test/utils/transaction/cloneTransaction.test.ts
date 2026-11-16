@@ -134,7 +134,7 @@ describe('cloneTransaction', () => {
     // Shared references are duplicated by design (see the diamond test), so
     // a chain of levels that each point at the next one TWICE — 60 objects in
     // all, no cycle, well inside the depth cap — expands to 2^60 copies. It
-    // must be refused like the other hostile shapes, not cloned until the
+    // is refused like the other oversized shapes, not cloned until the
     // process runs out of memory.
     let node: Record<string, unknown> = { leaf: 1 }
     for (let i = 0; i < LEVELS; i++) node = { a: node, b: node }

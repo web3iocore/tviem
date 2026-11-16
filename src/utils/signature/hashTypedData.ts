@@ -217,9 +217,9 @@ function hashStruct(
 }
 
 /**
- * A struct name that also reads as a primitive type would win the struct
- * branch of `encodeField`, silently hijacking every field of that type —
- * the TRON-specific `trcToken` included.
+ * Throws for a struct name that is also a primitive type name (including the
+ * TRON-specific `trcToken`): `encodeField` checks for a struct first, so such
+ * a struct would be used for every field of that type.
  */
 function assertStructNotShadowing(type: string): void {
   if (

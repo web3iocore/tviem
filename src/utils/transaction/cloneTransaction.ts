@@ -7,10 +7,10 @@ import type { ErrorType } from '../../errors/utils.js'
 export type CloneTransactionErrorType = InvalidParameterErrorType | ErrorType
 
 /**
- * Transactions nest shallowly (a contract message stays under ~10 levels);
- * anything deeper is hostile or broken. A getter can mint a fresh object on
- * every read, so cycle detection alone cannot bound the recursion — the
- * depth cap does.
+ * Maximum nesting depth of a cloned transaction. Transactions nest shallowly
+ * (a contract message stays under ~10 levels). A getter can return a new
+ * object on every read, so the recursion is bounded by this depth as well as
+ * by cycle detection.
  */
 const maxDepth = 64
 
@@ -41,7 +41,7 @@ function paramAt(path: string, name: string): string {
  * getters or a `Proxy`. The value captured here is the one both checked and
  * signed.
  *
- * The copy is hardened accordingly:
+ * The copy works as follows:
  * - accessors are evaluated once and pinned as plain, writable data
  *   properties — the clone carries no getters, setters or `Proxy` traps;
  * - an own `__proto__` key is copied as an ordinary data property (via
@@ -54,8 +54,8 @@ function paramAt(path: string, name: string): string {
  * - a `function` or `symbol` value throws — a signable transaction is data
  *   only, and live code must not ride along into the signed result;
  * - a circular reference throws, and nesting past a fixed depth cap throws
- *   (a getter can defeat cycle detection by minting fresh objects), so
- *   hostile shapes fail loudly instead of overflowing the stack;
+ *   (a getter can return a new object on every read, which cycle detection
+ *   alone does not catch);
  * - the total number of values copied is capped as well: a shared subtree is
  *   duplicated, never aliased, so a small DAG can expand exponentially inside
  *   the depth cap — it throws instead of exhausting memory.
@@ -134,7 +134,7 @@ function cloneValue(
 
   try {
     if (Array.isArray(value)) {
-      // Read `length` once; hostile index getters are pinned per element.
+      // Read `length` once, and each element once.
       const length = value.length
       const clone = new Array(length)
       for (let i = 0; i < length; i++)

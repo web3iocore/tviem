@@ -35,8 +35,7 @@ test('converts sun to trx', () => {
   expect(formatTrx(-1n)).toMatchInlineSnapshot('"-0.000001"')
 })
 
-// .claude/docs/02-v0.1a-任务清单.md §2.4 units vectors, asserted verbatim.
-test('§2.4 vectors', () => {
+test('reference vectors', () => {
   expect(formatTrx(1000000n) === '1').toBe(true)
   expect(formatTrx(1n) === '0.000001').toBe(true)
 })

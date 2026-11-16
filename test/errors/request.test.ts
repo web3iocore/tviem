@@ -30,10 +30,9 @@ test('HttpRequestError strips basic-auth credentials from the URL in metaMessage
   const err = new HttpRequestError({
     url: 'https://user:pass@node.example/wallet/getaccount',
   })
-  // The public `url` property must not leak credentials either — it is easy
-  // to forward an error object into logs/telemetry wholesale.
+  // The public `url` property has no credentials either.
   expect(err.url).toBe('https://node.example/wallet/getaccount')
-  // The rendered message never leaks the `user:pass@` credentials.
+  // The rendered message has no `user:pass@` credentials.
   expect(err.message).toContain('URL: https://node.example/wallet/getaccount')
   expect(err.message).not.toContain('user:pass')
   expect(err.message).not.toContain('pass@')

@@ -34,9 +34,8 @@ export type HttpTransportConfig = {
   fetchFn?: typeof fetch | undefined
   /**
    * Extra request options passed to `fetch` (merged; headers are extended).
-   * `redirect` defaults to `'error'` so a cross-origin 30x cannot receive
-   * the `TRON-PRO-API-KEY` header; passing `redirect: 'follow'` is a
-   * security opt-in.
+   * `redirect` defaults to `'error'`, so a 30x response is not followed;
+   * pass `redirect: 'follow'` to follow redirects.
    */
   fetchOptions?: Omit<RequestInit, 'body' | 'method' | 'signal'> | undefined
   /** The key of the HTTP transport. */
@@ -328,10 +327,8 @@ export function http(
     // The config `apiKey` is the documented channel and wins over any header
     // spelling of the same key, so exactly one key is ever sent.
     if (apiKey) headers.set('TRON-PRO-API-KEY', apiKey)
-    // fetch's default redirect mode (`follow`) re-sends custom headers —
-    // including `TRON-PRO-API-KEY` — to the target a 30x names, which may be
-    // another origin. Redirects are off unless the caller opts in via
-    // `fetchOptions.redirect`.
+    // Redirects are not followed unless `fetchOptions.redirect` says so;
+    // fetch's own default is `follow`.
     const mergedFetchOptions = {
       ...fetchOptions,
       redirect: fetchOptions?.redirect ?? 'error',

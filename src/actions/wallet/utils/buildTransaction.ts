@@ -77,8 +77,8 @@ export type BuildTransactionParameters = {
    * Optional memo, written to `raw_data.data` (`0x` hex or bytes). Enters the
    * signed bytes. The chain charges a memo fee on top of the transaction's
    * normal costs (`getMemoFee` chain parameter — 1 TRX on mainnet and Nile).
-   * An empty memo is rejected: zero bytes serialize to no field at all, which
-   * would silently build a memo-less transaction.
+   * An empty memo is rejected: proto3 omits an empty `data` field, so zero
+   * bytes would serialize as a transaction without a memo.
    */
   memo?: MemoInput | undefined
   /**

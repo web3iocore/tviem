@@ -41,9 +41,7 @@ export class HttpRequestError extends BaseError {
     this.body = body
     this.headers = headers
     this.status = status
-    // Store the credential-stripped form: error objects routinely get
-    // forwarded to logs/telemetry, so the instance must not retain the
-    // `user:pass@` part any more than the message does.
+    // The URL without its username and password, as in the message.
     this.url = getUrl(url)
   }
 }

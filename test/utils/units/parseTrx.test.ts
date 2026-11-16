@@ -42,8 +42,7 @@ test('drops digits past six decimals', () => {
   expect(parseTrx('-1.23456791234522')).toMatchInlineSnapshot(`-1234567n`)
 })
 
-// .claude/docs/02-v0.1a-任务清单.md §2.4 units vectors, asserted verbatim.
-test('§2.4 vectors', () => {
+test('reference vectors', () => {
   expect(parseTrx('1') === 1000000n).toBe(true)
   expect(parseTrx('0.000001') === 1n).toBe(true)
 })
