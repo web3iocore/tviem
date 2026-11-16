@@ -216,6 +216,61 @@ describe('encodePacked (malformed input)', () => {
     expect(encodePacked(['bytes1', 'bytes1'], ['0x01', '0xff'])).toBe('0x01ff')
     expect(encodePacked(['bytes', 'uint8'], ['0x01', 1n])).toBe('0x0101')
   })
+
+  test.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a number', 123],
+    ['a bigint', 123n],
+    ['a boolean', true],
+    ['an object', {}],
+    ['an array', ['a']],
+    ['a byte array', new Uint8Array([0x61])],
+    ['a String object', new String('a')],
+  ])('rejects %s as a `string` value', (_, value) => {
+    expect(() => encodePacked(['string'], [value as never])).toThrow(
+      InvalidAbiParameterValueError,
+    )
+    // The same value in the middle of a packed message.
+    expect(() =>
+      encodePacked(['uint8', 'string', 'uint8'], [1n, value as never, 2n]),
+    ).toThrow(InvalidAbiParameterValueError)
+  })
+
+  test('a `string` value that is not a string fails as it does in encodeAbiParameters', () => {
+    for (const value of [undefined, null, 123, true, {}]) {
+      const packed = (() => {
+        try {
+          encodePacked(['string'], [value as never])
+        } catch (e) {
+          return e as InvalidAbiParameterValueError
+        }
+        return undefined
+      })()
+      const standard = (() => {
+        try {
+          encodeAbiParameters([{ type: 'string' }], [value as never])
+        } catch (e) {
+          return e as InvalidAbiParameterValueError
+        }
+        return undefined
+      })()
+      expect(packed).toBeInstanceOf(InvalidAbiParameterValueError)
+      expect(standard).toBeInstanceOf(InvalidAbiParameterValueError)
+      expect(packed?.shortMessage).toBe(standard?.shortMessage)
+    }
+  })
+
+  test('string values still encode as their UTF-8 bytes', () => {
+    expect(encodePacked(['string'], [''])).toBe('0x')
+    expect(encodePacked(['string'], ['123'])).toBe('0x313233')
+    expect(encodePacked(['string'], ['null'])).toBe('0x6e756c6c')
+    expect(encodePacked(['string'], ['undefined'])).toBe('0x756e646566696e6564')
+    expect(encodePacked(['string'], ['中文'])).toBe('0xe4b8ade69687')
+    expect(encodePacked(['uint8', 'string', 'uint8'], [1n, 'ab', 2n])).toBe(
+      '0x01616202',
+    )
+  })
 })
 
 test('an unsafe-integer number throws an InvalidParameterError', () => {

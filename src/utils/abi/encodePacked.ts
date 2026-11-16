@@ -138,7 +138,9 @@ function encode(
   }
   if (type === 'string') {
     if (isArray) throw new UnsupportedPackedAbiTypeError(`${type}[]`)
-    return stringToHex(value as string)
+    if (typeof value !== 'string')
+      throw new InvalidAbiParameterValueError({ type, value })
+    return stringToHex(value)
   }
   if (type === 'bytes') {
     if (isArray) throw new UnsupportedPackedAbiTypeError(`${type}[]`)
