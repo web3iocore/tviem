@@ -119,6 +119,53 @@ test('getBlock reports an invalid block number as an InvalidParameterError', asy
   )
 })
 
+test('getBlock rejects a null block number without calling the node', async () => {
+  // The node would answer a request for height 0 with the genesis block.
+  const { transport, calls } = createMockTransport({
+    responses: {
+      getblockbynum: {
+        response: {
+          blockID:
+            '00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc',
+          block_header: { raw_data: {} },
+        },
+      },
+    },
+  })
+  const client = createPublicClient({ transport })
+
+  const err = (await client
+    .getBlock({ blockNumber: null as never })
+    .catch((e) => e)) as InvalidParameterError
+  expect(err).toBeInstanceOf(InvalidParameterError)
+  expect(err.param).toBe('blockNumber')
+  expect(err.reason).toBe('type')
+  expect(err.shortMessage).toBe(
+    'Invalid blockNumber: null. Expected a non-negative safe-integer block height.',
+  )
+  expect(calls).toEqual([])
+})
+
+test('getBlock requests height 0 for the numbers 0 and 0n', async () => {
+  for (const blockNumber of [0, 0n]) {
+    const { transport, bodyOf } = createMockTransport({
+      responses: {
+        getblockbynum: {
+          response: {
+            blockID:
+              '00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc',
+            block_header: { raw_data: {} },
+          },
+        },
+      },
+    })
+    const client = createPublicClient({ transport })
+    const block = await client.getBlock({ blockNumber })
+    expect(bodyOf('getblockbynum')).toEqual({ num: 0 })
+    expect(block.number).toBe(0n)
+  }
+})
+
 test('getBlock rejects block numbers above MAX_SAFE_INTEGER without calling the node', async () => {
   const { transport, calls } = createMockTransport({
     responses: { getblockbynum: { response: rpc('getblockbynum') } },
