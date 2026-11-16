@@ -802,7 +802,6 @@ export type { Block } from './types/block.js'
 export type {
   Chain,
   ChainConfig,
-  ExtendChain,
   TronContract,
   TronNativeCurrency,
   TronRpcEndpoint,
