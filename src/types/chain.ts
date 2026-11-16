@@ -6,7 +6,6 @@
  */
 
 import type { Address } from './address.js'
-import type { Assign } from './utils.js'
 
 /**
  * TRON native currency. Always TRX with 6 decimals (1 TRX = 1e6 SUN).
@@ -117,9 +116,3 @@ export type Chain<
       }
     | undefined
 } & ChainConfig<extendSchema>
-
-/** Merge a chain with an `.extend` overlay, preferring the overlay's fields. */
-export type ExtendChain<
-  chain extends Chain,
-  extended extends Record<string, unknown>,
-> = Assign<chain, extended>

@@ -1,7 +1,6 @@
 export type {
   Chain,
   ChainConfig,
-  ExtendChain,
   TronContract,
   TronNativeCurrency,
   TronRpcEndpoint,
