@@ -203,6 +203,21 @@ describe('toAccount', () => {
       'signTypedData',
       'signTransaction',
     ] as const) {
+      test(`pins the validated \`${method}\` from its first read`, () => {
+        const source = fullSource()
+        const signer = vi.fn(function (this: TronCustomSource) {
+          return this.address
+        })
+        const getter = vi.fn().mockReturnValueOnce(signer)
+        Object.defineProperty(source, method, { get: getter })
+
+        const account = toAccount(source)
+        const parameters = {} as never
+        expect(account[method](parameters)).toBe(pk1Address)
+        expect(getter).toHaveBeenCalledTimes(1)
+        expect(signer).toHaveBeenCalledExactlyOnceWith(parameters)
+      })
+
       test(`missing \`${method}\` throws naming the method`, () => {
         const { [method]: _omitted, ...rest } = fullSource()
         expect(() => toAccount(rest as TronCustomSource)).toThrow(

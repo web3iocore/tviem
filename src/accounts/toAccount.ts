@@ -62,12 +62,18 @@ export function toAccount(
     )
   // A custom source provides all three signing methods; an address-only
   // account is created from the address string instead.
+  // Snapshot the methods so validation and binding use the same values.
+  const signingMethods = {
+    signMessage: source.signMessage,
+    signTypedData: source.signTypedData,
+    signTransaction: source.signTransaction,
+  }
   for (const method of [
     'signMessage',
     'signTypedData',
     'signTransaction',
   ] as const)
-    if (typeof source[method] !== 'function')
+    if (typeof signingMethods[method] !== 'function')
       throw new InvalidParameterError(
         `Invalid account source: \`${method}\` must be a function. For an address-only account, pass the address string instead.`,
         { param: `source.${method}`, reason: 'type' },
@@ -83,9 +89,9 @@ export function toAccount(
   return {
     address,
     publicKey: source.publicKey,
-    signMessage: bindTo(source, source.signMessage),
-    signTypedData: bindTo(source, source.signTypedData),
-    signTransaction: bindTo(source, source.signTransaction),
+    signMessage: bindTo(source, signingMethods.signMessage),
+    signTypedData: bindTo(source, signingMethods.signTypedData),
+    signTransaction: bindTo(source, signingMethods.signTransaction),
     ...(multiSign !== undefined ? { multiSign } : {}),
     source: 'custom',
     type: 'local',
