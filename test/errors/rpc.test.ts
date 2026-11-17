@@ -167,6 +167,37 @@ test('ContractFunctionRevertedError decodes a custom error found on the ABI', ()
   ])
 })
 
+test.each([
+  { name: 'Error', type: 'uint256', args: [7n], formattedArgs: '(7)' },
+  { name: 'Panic', type: 'string', args: ['17'], formattedArgs: '(17)' },
+] as const)('ContractFunctionRevertedError formats custom $name($type) as a custom error', ({
+  name,
+  type,
+  args,
+  formattedArgs,
+}) => {
+  const abi = [
+    { type: 'error', name, inputs: [{ name: 'value', type }] },
+  ] as const
+  const data = encodeErrorResult({ abi, errorName: name, args })
+  const err = new ContractFunctionRevertedError({
+    abi,
+    data,
+    functionName: 'transfer',
+  })
+
+  expect(err.reason).toBeUndefined()
+  expect(err.data).toEqual({ abiItem: abi[0], errorName: name, args })
+  expect(err.raw).toBe(data)
+  expect(err.signature).toBeUndefined()
+  expect(err.cause).toBeUndefined()
+  expect(err.shortMessage).toBe('The contract function "transfer" reverted.')
+  expect(err.metaMessages).toEqual([
+    `Error: ${name}(${type} value)`,
+    `            ${formattedArgs}`,
+  ])
+})
+
 test('ContractFunctionRevertedError reports the selector of an error missing from the ABI', () => {
   const data = `0xdeadbeef${'00'.repeat(32)}` as const
   const err = new ContractFunctionRevertedError({

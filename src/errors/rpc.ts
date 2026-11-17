@@ -183,9 +183,11 @@ export class ContractFunctionRevertedError extends BaseError {
       try {
         decodedData = decodeErrorResult({ abi, data })
         const { abiItem, errorName, args: errorArgs } = decodedData
-        if (errorName === 'Error') {
+        // Custom errors can share a built-in name with different inputs.
+        const errorSignature = formatAbiItem(abiItem)
+        if (errorSignature === 'Error(string)') {
           reason = (errorArgs as [string])[0]
-        } else if (errorName === 'Panic') {
+        } else if (errorSignature === 'Panic(uint256)') {
           const [firstArg] = errorArgs as [bigint]
           reason = panicReasons[Number(firstArg) as keyof typeof panicReasons]
         } else {
