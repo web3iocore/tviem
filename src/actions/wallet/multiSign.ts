@@ -107,13 +107,13 @@ export async function multiSign(
   const account = parseAccount(source)
   assertSigningAccount(account)
   // Optional on a custom account: a caller-supplied signer may not co-sign.
-  const coSign = account.multiSign?.bind(account)
+  const coSign = account.multiSign
   if (typeof coSign !== 'function')
     throw new InvalidParameterError(
       `The account (${account.address}) does not implement \`multiSign\`.`,
       { param: 'account.multiSign', reason: 'type' },
     )
   return signWithCheck(transaction, (unsigned) =>
-    coSign(unsigned, { permissionId }),
+    coSign.call(account, unsigned, { permissionId }),
   )
 }

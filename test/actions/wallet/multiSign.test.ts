@@ -386,7 +386,14 @@ test("delegates to a custom account's own multiSign", async () => {
   expect(signed.signature).toHaveLength(1)
 })
 
-test('refuses a custom account that does not implement multiSign', async () => {
+test.each([
+  undefined,
+  null,
+  7,
+  'invalid',
+  false,
+  {},
+])('refuses a custom account with a non-function multiSign (%j)', async (invalidMultiSign) => {
   const { client } = silentClient()
   const inner = privateKeyToAccount(pk2)
   const account = toAccount({
@@ -395,6 +402,7 @@ test('refuses a custom account that does not implement multiSign', async () => {
     signMessage: inner.signMessage,
     signTypedData: inner.signTypedData,
     signTransaction: inner.signTransaction,
+    multiSign: invalidMultiSign as never,
   })
 
   const err = (await multiSign(client, {
