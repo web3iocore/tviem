@@ -28,7 +28,7 @@
 
 - Abstractions over the TRON [HTTP API](https://developers.tron.network/reference) (fullnode / solidity / event) so you never hand-assemble a request
 - First-class APIs for reading and writing [smart contracts](https://developers.tron.network/docs/smart-contracts) (TRC-20 and beyond)
-- **Full TronWeb `transactionBuilder` parity** — all 34 system contracts (TRX/TRC-10 transfers, staking v2, resource delegation, voting, proposals, exchanges, permissions…) as standalone, tree-shakable actions
+- **Full TronWeb `transactionBuilder` parity** — 33 system contracts (TRX/TRC-10 transfers, staking v2, resource delegation, voting, proposals, exchanges, permissions…) as standalone, tree-shakable actions
 - **Trustless local signing** — the signer verifies the full `txID` + `raw_data` + `raw_data_hex` triple before signing; blind signing is impossible by construction
 - TRON-native protocol layer: Base58Check (`T…`) addresses, `SUN` (6-decimal) units, energy/bandwidth accounting, protobuf serialization with `sha256` transaction IDs
 - Browser-native [BigInt](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt) — no BigNumber libraries

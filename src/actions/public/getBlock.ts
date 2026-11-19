@@ -61,7 +61,7 @@ export async function getBlock(
   // `NaN` and infinities before anything reaches the node. `isSafeInteger`
   // (not `isInteger`) also rejects anything past 2^53 - 1, where `Number()`
   // rounds — a bigint that loses precision always lands on an unsafe integer,
-  // so the node can never be asked for a different height than the caller gave.
+  // so the height sent to the node is exactly the caller's `blockNumber`.
   // `Number(null)` is 0, the genesis height; `null` is not a block number.
   if (blockNumber === null)
     throw new InvalidParameterError(
