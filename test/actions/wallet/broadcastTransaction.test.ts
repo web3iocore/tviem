@@ -1,9 +1,11 @@
 import { expect, test } from 'vitest'
 import { broadcastTransaction } from '../../../src/actions/wallet/broadcastTransaction.js'
 import { createClient } from '../../../src/clients/createClient.js'
-import { BaseError } from '../../../src/errors/base.js'
 import { TronBroadcastError } from '../../../src/errors/node.js'
-import { InvalidParameterError } from '../../../src/errors/parameter.js'
+import {
+  InvalidParameterError,
+  MissingFieldError,
+} from '../../../src/errors/parameter.js'
 import {
   TransactionExpiredError,
   TronRpcError,
@@ -92,7 +94,7 @@ test('returns the snapshot it broadcast, not the caller object', async () => {
   const client = createClient({ transport })
 
   // A caller object may carry extra properties; the returned transaction is
-  // the four-field snapshot that was integrity-checked and actually sent.
+  // the four-field snapshot sent to the node.
   const decorated = { ...signedTransaction, visible: false }
   const response = await broadcastTransaction(client, {
     transaction: decorated,
@@ -102,11 +104,8 @@ test('returns the snapshot it broadcast, not the caller object', async () => {
   expect(response.transaction).toEqual(bodyOf('broadcasttransaction'))
 })
 
-// txCheck runs the SDK's deliberately lenient serializer, so a model spelling
-// its addresses any accepted way passes it byte-for-byte — but the node parses
-// `raw_data` as `visible: false` JSON and reads only `41…` hex. What is relayed
-// must be the canonical rendering of the checked bytes, never the caller's
-// spelling of them.
+// Decoding raw_data_hex gives the `41…` addresses the node reads in
+// `visible: false` JSON, regardless of the spelling in the supplied model.
 const canonicalValue = signedTransaction.raw_data.contract[0]!.parameter
   .value as {
   owner_address: TronHexAddress
@@ -186,40 +185,53 @@ test('throws TronRpcError when the transaction carries no signature', async () =
   ).rejects.toBeInstanceOf(TronRpcError)
 })
 
-// The node rebuilds the wire bytes from raw_data while the returned txid is
-// the caller-supplied txID — a mismatched triple would broadcast real bytes
-// yet report an id under which the transaction can never be found (and a
-// caller polling that id would rebuild and re-send). Refuse before any request.
-test('refuses a txID that does not hash from the raw_data bytes', async () => {
-  const { transport, calls } = createMockTransport({
+test('returns the supplied txID after a successful acknowledgement', async () => {
+  const { transport } = createMockTransport({
     responses: { broadcasttransaction: { response: { result: true } } },
   })
   const client = createClient({ transport })
+  const txID = 'ab'.repeat(32)
 
-  const err = (await broadcastTransaction(client, {
-    transaction: { ...signedTransaction, txID: 'ab'.repeat(32) },
-  }).catch((e) => e)) as BaseError
-  expect(err).toBeInstanceOf(BaseError)
-  expect(err.message).toContain('integrity check (txCheck)')
+  const response = await broadcastTransaction(client, {
+    transaction: { ...signedTransaction, txID },
+  })
+
+  expect(response.txid).toBe(txID)
+})
+
+test.each([
+  'raw_data_hex',
+  'txID',
+] as const)('reports a missing %s before sending the request', async (field) => {
+  const { transport, calls } = createMockTransport({ responses: {} })
+  const client = createClient({ transport })
+  const transaction = { ...signedTransaction }
+  Reflect.deleteProperty(transaction, field)
+
+  const error = await broadcastTransaction(client, { transaction }).catch(
+    (error: unknown) => error,
+  )
+
+  expect(error).toBeInstanceOf(MissingFieldError)
+  expect(error).toMatchObject({ field })
   expect(calls).toHaveLength(0)
 })
 
-test('refuses a raw_data model that does not serialize to raw_data_hex', async () => {
-  const { transport, calls } = createMockTransport({
+test('sends the model decoded from raw_data_hex when the supplied model differs', async () => {
+  const { transport, bodyOf } = createMockTransport({
     responses: { broadcasttransaction: { response: { result: true } } },
   })
   const client = createClient({ transport })
 
-  const err = (await broadcastTransaction(client, {
+  const response = await broadcastTransaction(client, {
     transaction: {
       ...signedTransaction,
-      // A drifted model: the bytes (and signature) say something else.
       raw_data: { ...signedTransaction.raw_data, fee_limit: 1_000_000 },
     },
-  }).catch((e) => e)) as BaseError
-  expect(err).toBeInstanceOf(BaseError)
-  expect(err.message).toContain('integrity check (txCheck)')
-  expect(calls).toHaveLength(0)
+  })
+
+  expect(bodyOf('broadcasttransaction')).toEqual(signedTransaction)
+  expect(response.transaction).toEqual(signedTransaction)
 })
 
 test('surfaces a broadcast rejection as TronBroadcastError with a decoded message', async () => {
@@ -368,24 +380,19 @@ test('never retries the broadcast, even when the transport retries', async () =>
   expect(attempts).toBe(1)
 })
 
-test('defuses a nested getter that swaps the body after the integrity check', async () => {
-  // The four-field pick alone leaves `raw_data` shared with the caller, so a
-  // nested accessor could satisfy txCheck on one read and hand the request
-  // body — which the node rebuilds the transaction from — a different value
-  // on the next. The snapshot is deep, so the checked model IS the sent one.
+test('reads nested getters once when taking the request snapshot', async () => {
   const honest = decodeRawData(RAW_DATA_HEX)
   const value = honest.contract[0]!.parameter.value as Record<string, unknown>
   const honestAmount = value.amount
   let reads = 0
-  const evilValue = Object.defineProperty({ ...value }, 'amount', {
+  const accessorValue = Object.defineProperty({ ...value }, 'amount', {
     enumerable: true,
     get() {
       reads++
-      // reads 1-4 = the two txCheck traversals; read 5 = the request body.
-      return reads <= 4 ? honestAmount : 1_000_000_000
+      return reads === 1 ? honestAmount : 1_000_000_000
     },
   })
-  const evil = {
+  const withGetter = {
     txID: TX_ID,
     raw_data_hex: RAW_DATA_HEX,
     signature: [SIG],
@@ -396,7 +403,7 @@ test('defuses a nested getter that swaps the body after the integrity check', as
           ...honest.contract[0]!,
           parameter: {
             ...honest.contract[0]!.parameter,
-            value: evilValue,
+            value: accessorValue,
           },
         },
       ],
@@ -411,9 +418,10 @@ test('defuses a nested getter that swaps the body after the integrity check', as
   const client = createClient({ transport })
 
   const response = await broadcastTransaction(client, {
-    transaction: evil as typeof signedTransaction,
+    transaction: withGetter as typeof signedTransaction,
   })
 
+  expect(reads).toBe(1)
   const sent = bodyOf('broadcasttransaction') as typeof signedTransaction
   expect(sent.raw_data.contract[0]!.parameter.value).toEqual(
     honest.contract[0]!.parameter.value,

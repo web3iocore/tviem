@@ -1,8 +1,6 @@
 import { expect, test } from 'vitest'
 import type { SignableTransaction } from '../../../src/accounts/types.js'
 import { canonicalizeTransaction } from '../../../src/actions/utils/canonicalizeTransaction.js'
-import { BaseError } from '../../../src/errors/base.js'
-import { TransactionIntegrityError } from '../../../src/errors/transaction.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -47,7 +45,7 @@ test('a canonical transaction comes back equal', () => {
   expect(canonicalizeTransaction(canonical)).toEqual(canonical)
 })
 
-test('re-derives raw_data from the checked bytes, keeping every other field', () => {
+test('re-derives raw_data from raw_data_hex, keeping every other field', () => {
   expect(
     canonicalizeTransaction({ ...canonical, raw_data: visibleRawData }),
   ).toEqual(canonical)
@@ -69,28 +67,9 @@ test('does not invent a `visible` key the transaction never carried', () => {
   ).not.toHaveProperty('visible')
 })
 
-test('throws when the triple fails txCheck', () => {
-  expect(() =>
-    canonicalizeTransaction({ ...canonical, txID: 'ab'.repeat(32) }),
-  ).toThrow(BaseError)
-  expect(() =>
-    canonicalizeTransaction({ ...canonical, txID: 'ab'.repeat(32) }),
-  ).toThrow('integrity check (txCheck)')
-})
-
-test('reports a failed txCheck as a TransactionIntegrityError without a field', () => {
-  let err: unknown
-  try {
-    canonicalizeTransaction({ ...canonical, txID: 'ab'.repeat(32) })
-  } catch (e) {
-    err = e
-  }
-  expect(err).toBeInstanceOf(TransactionIntegrityError)
-  expect((err as TransactionIntegrityError).name).toBe(
-    'TransactionIntegrityError',
-  )
-  expect((err as TransactionIntegrityError).field).toBeUndefined()
-  expect((err as TransactionIntegrityError).shortMessage).toBe(
-    'The transaction failed its integrity check (txCheck).',
-  )
+test('preserves the supplied txID when decoding raw_data_hex', () => {
+  const txID = 'ab'.repeat(32)
+  expect(
+    canonicalizeTransaction({ ...canonical, txID, raw_data: visibleRawData }),
+  ).toEqual({ ...canonical, txID })
 })

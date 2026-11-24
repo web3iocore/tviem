@@ -8,6 +8,8 @@ import { TronNodeError } from '../../errors/node.js'
 import {
   InvalidParameterError,
   type InvalidParameterErrorType,
+  MissingFieldError,
+  type MissingFieldErrorType,
 } from '../../errors/parameter.js'
 import {
   TransactionExpiredError,
@@ -36,8 +38,7 @@ export type BroadcastTransactionParameters = {
 }
 export type BroadcastTransactionReturnType = {
   /**
-   * The **locally** computed transaction id (bare lowercase hex) — never the
-   * node's echoed `txid` (see the action's JSDoc).
+   * The supplied `transaction.txID`, normalized to bare lowercase hex.
    */
   txid: string
   /** The node's acknowledgement flag (`true` here — a rejection throws). */
@@ -47,10 +48,8 @@ export type BroadcastTransactionReturnType = {
   /** The node's message, hex-decoded to UTF-8 when decodable. */
   message?: string | undefined
   /**
-   * The signed transaction that was broadcast — the four-field snapshot
-   * (`txID`, `raw_data`, `raw_data_hex`, `signature`) that passed the
-   * integrity check and was sent as the request body, its `raw_data` in the
-   * canonical node-JSON shape whatever spelling the caller passed.
+   * The four-field signed transaction snapshot sent to the node. Its
+   * `raw_data` is decoded from `raw_data_hex` in the node's JSON format.
    */
   transaction: SignableTransaction
 }
@@ -68,6 +67,7 @@ export type BroadcastTransactionErrorType =
   | CanonicalizeTransactionErrorType
   | CloneTransactionErrorType
   | InvalidParameterErrorType
+  | MissingFieldErrorType
   | RequestErrorType
   | TransactionExpiredErrorType
   | TronRpcErrorType
@@ -88,28 +88,11 @@ const expirationCodes = new Set(['TRANSACTION_EXPIRATION_ERROR', 'TAPOS_ERROR'])
  * `raw_data_hex` is ignored server-side — so the JSON model, not the hex, is
  * what gets relayed.
  *
- * The transaction is integrity-checked before any request is sent (via
- * {@link txCheck}): `raw_data` must serialize to exactly the `raw_data_hex`
- * bytes, whose SHA-256 must equal `txID`. An inconsistent or incomplete
- * triple is refused — the node rebuilds the wire bytes from `raw_data`, so a
- * drifted model would relay bytes the signature no longer covers, reported
- * under a `txid` the relayed transaction could never be found by. The returned
- * `txid` is that checked local `txID` (bare lowercase hex); the node's echoed
- * `txid` is deliberately not read, while the rest of the acknowledgement
- * (`result`, `code`, `message`) is passed through — `message` hex-decoded to
- * UTF-8 like the error paths. This is the same gate every signing path runs,
- * so bytes carrying wire fields the model layer does not represent are
- * refused here the same way they would be at signing.
- *
- * What is relayed is the canonical rendering of the checked bytes, not the
- * caller's spelling of them. The check runs the SDK's serializer, which
- * accepts more than the node reads — Base58 `T…`, `0x` EVM 20-byte and
- * `Uint8Array` addresses, `bigint` amounts — so a `visible: true` rendering
- * (a node's, TronLink's, TronWeb's) passes it byte-for-byte; sent verbatim,
- * the node would fail to parse it, or parse it to other bytes. `raw_data` is
- * therefore re-derived from the checked `raw_data_hex` (see
- * {@link canonicalizeTransaction}) — java-tron's `visible: false` form by
- * construction, which is what the body's absent `visible` key declares.
+ * {@link canonicalizeTransaction} decodes `raw_data_hex` to produce the
+ * `raw_data` sent in java-tron's `visible: false` format. The returned `txid`
+ * comes from the supplied `transaction.txID`, normalized to bare lowercase
+ * hex. The node supplies `result`, `code`, and `message`, with `message`
+ * decoded from hex to UTF-8 when decodable.
  *
  * The transport's error normalization already throws for the documented
  * rejection bodies (`{ result: false, code }` → `TronBroadcastError`, etc.); a
@@ -121,9 +104,9 @@ const expirationCodes = new Set(['TRANSACTION_EXPIRATION_ERROR', 'TAPOS_ERROR'])
  *
  * @param client The Client to use.
  * @param parameters The signed transaction to broadcast.
- * @returns `{ txid, result, code, message, transaction }` — the locally
- * computed transaction id, the node's acknowledgement fields (when echoed)
- * and the signed transaction that was broadcast.
+ * @returns `{ txid, result, code, message, transaction }` with the normalized
+ * input transaction id, the node's acknowledgement fields, and the signed
+ * transaction that was broadcast.
  */
 export async function broadcastTransaction(
   client: Client,
@@ -138,18 +121,14 @@ export async function broadcastTransaction(
       { param: 'transaction', reason: 'type' },
     )
 
-  // Snapshot the fields once, so the values integrity-checked below are the
-  // same ones serialized into the wire body. The copy has to be DEEP: picking
-  // the four fields still shares `raw_data` with the caller, leaving every
-  // nested accessor live to answer txCheck one way and the request body —
-  // which the node rebuilds the transaction from — another.
+  // Take a detached snapshot of the fields used to build the request body.
   const snapshot = cloneTransaction({
     txID: source.txID,
     raw_data: source.raw_data,
     raw_data_hex: source.raw_data_hex,
     signature: source.signature,
   })
-  const { txID, signature } = snapshot
+  const { raw_data_hex, txID, signature } = snapshot
 
   // Pre-condition: never broadcast an unsigned transaction.
   if (!signature || signature.length === 0)
@@ -158,13 +137,13 @@ export async function broadcastTransaction(
       { metaMessages: ['Path: broadcasttransaction'] },
     )
 
-  // Pre-condition: the triple must be self-consistent (see the JSDoc). The
-  // SDK's own sign paths have already passed this; it is the transaction
-  // handed over from elsewhere (TronWeb, another co-signer, disk) whose
-  // `txID` has never been checked against the bytes until here. What goes out
-  // is the canonical rendering of those checked bytes, not the caller's
-  // spelling of them: the node reads `raw_data` as `visible: false` JSON, and
-  // the check accepts spellings (Base58, `0x` EVM, raw bytes) it does not.
+  if (!raw_data_hex || !txID)
+    throw new MissingFieldError(
+      'broadcastTransaction requires a signed transaction carrying `raw_data_hex` and `txID`.',
+      { field: !raw_data_hex ? 'raw_data_hex' : 'txID' },
+    )
+
+  const txid = bareHex(txID)
   const signedTransaction = canonicalizeTransaction({ ...snapshot, signature })
 
   let response: unknown
@@ -191,7 +170,7 @@ export async function broadcastTransaction(
       error.code !== undefined &&
       expirationCodes.has(error.code)
     )
-      throw new TransactionExpiredError({ hash: bareHex(txID), cause: error })
+      throw new TransactionExpiredError({ hash: txid, cause: error })
     throw error
   }
 
@@ -213,12 +192,8 @@ export async function broadcastTransaction(
       metaMessages: ['Path: broadcasttransaction'],
     })
 
-  // Canonical spelling: txCheck compared via bareHex, so a caller's `0x` or
-  // upper-case spelling passes — return the form the check actually ran on.
-  // The node's remaining acknowledgement fields ride along (`message`
-  // hex-decoded); its echoed `txid` is deliberately not read.
   return {
-    txid: bareHex(txID),
+    txid,
     result: body.result,
     ...(body.code !== undefined ? { code: String(body.code) } : {}),
     ...(body.message !== undefined

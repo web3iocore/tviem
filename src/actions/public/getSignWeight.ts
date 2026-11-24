@@ -136,12 +136,8 @@ export function formatPermission(
  * {@link TransactionMismatchError} on any mismatch — and always returns the
  * **local** transaction, never the node's copy.
  *
- * The node rebuilds the transaction from the `raw_data` JSON, read as
- * java-tron's `visible: false` rendering, so the triple is integrity-checked
- * first and `raw_data` is sent as the canonical rendering of the checked bytes
- * (see {@link canonicalizeTransaction}) — a `visible: true` rendering, which
- * signing accepts, is weighed like any other, and an inconsistent triple is
- * refused before any request.
+ * {@link canonicalizeTransaction} decodes `raw_data_hex` to produce the
+ * `raw_data` sent in java-tron's `visible: false` format.
  *
  * A failure verdict — `PERMISSION_ERROR` (a key outside the permission, a
  * wrong `Permission_id`), `SIGNATURE_FORMAT_ERROR`, `COMPUTE_ADDRESS_ERROR`,
@@ -171,12 +167,6 @@ export async function getSignWeight(
       { field: !snapshot.raw_data_hex ? 'raw_data_hex' : 'txID' },
     )
 
-  // The same relay boundary as broadcast: the node rebuilds the transaction
-  // from `raw_data`, read as `visible: false` JSON. The triple is checked and
-  // `raw_data` re-derived from the checked bytes, so a spelling the signing
-  // paths accept but the node does not (Base58, `0x` EVM, raw bytes) is never
-  // sent verbatim — and an inconsistent model is refused here rather than
-  // sent to the node.
   const transaction = canonicalizeTransaction(snapshot)
 
   // `NOT_ENOUGH_PERMISSION` is a normal collecting state. A real node reports

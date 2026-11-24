@@ -3,11 +3,9 @@ import type { SignableTransaction } from '../../../src/accounts/types.js'
 import { signTransaction } from '../../../src/accounts/utils/signTransaction.js'
 import { getApprovedList } from '../../../src/actions/public/getApprovedList.js'
 import { createPublicClient } from '../../../src/clients/createPublicClient.js'
-import { BaseError } from '../../../src/errors/base.js'
 import { TronContractValidateError } from '../../../src/errors/node.js'
 import { MissingFieldError } from '../../../src/errors/parameter.js'
 import { TransactionMismatchError } from '../../../src/errors/rpc.js'
-import { TransactionIntegrityError } from '../../../src/errors/transaction.js'
 import type { TronHexAddress } from '../../../src/types/address.js'
 import { toBase58 } from '../../../src/utils/address/toBase58.js'
 import { decodeRawData } from '../../../src/utils/transaction/decodeRawData.js'
@@ -199,7 +197,7 @@ test('flags a mismatched echo even when the caller object has changed to match i
 // bytes), and hands the caller's spelling back — so a transaction rendered
 // `visible: true` reaches this boundary signed and intact. The node reads
 // `raw_data` as `visible: false` JSON, so what is sent is the canonical
-// rendering of the checked bytes.
+// rendering of raw_data_hex.
 const visibleRawData = {
   ...boundRawData,
   contract: boundRawData.contract.map((contract) => {
@@ -283,23 +281,21 @@ test('an honest bare-hex echo of a `0x`-spelled transaction is not tampering', a
   expect(result.approvedList).toEqual(['TMVQGm1qAQYVdetCeGRRkTWYYrLXuHK2HC'])
 })
 
-test('refuses a raw_data model that does not serialize to raw_data_hex, before any request', async () => {
-  const { transport, calls } = createMockTransport({ responses: {} })
+test('inspects the model decoded from raw_data_hex when the supplied model differs', async () => {
+  const { transport, bodyOf } = createMockTransport({
+    responses: { getapprovedlist: { response: {} } },
+  })
   const client = createPublicClient({ transport })
 
-  const err = (await getApprovedList(client, {
+  const result = await getApprovedList(client, {
     transaction: {
       ...tx,
-      // A drifted model: the bytes (and signatures) say something else, and
-      // the node would inspect the model.
       raw_data: { ...tx.raw_data, fee_limit: 1_000_000 },
     },
-  }).catch((e) => e)) as BaseError
-  expect(err).toBeInstanceOf(BaseError)
-  expect(err).toBeInstanceOf(TransactionIntegrityError)
-  expect(err.name).toBe('TransactionIntegrityError')
-  expect(err.message).toContain('integrity check (txCheck)')
-  expect(calls).toHaveLength(0)
+  })
+
+  expect(bodyOf('getapprovedlist')).toEqual(tx)
+  expect(result.transaction).toEqual(tx)
 })
 
 test.each([

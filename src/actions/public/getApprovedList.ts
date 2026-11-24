@@ -73,9 +73,9 @@ type RawApprovedList = {
  * Node echo: like {@link getSignWeight}, the node's echoed transaction is
  * asserted to match the local one byte-for-byte (throwing
  * {@link TransactionMismatchError} otherwise), and the returned `transaction`
- * is always the local copy — never the node's. Also like it, the triple is
- * integrity-checked first and `raw_data` is sent as the canonical rendering of
- * the checked bytes (see {@link canonicalizeTransaction}).
+ * is always the local copy. {@link canonicalizeTransaction} decodes
+ * `raw_data_hex` to produce the `raw_data` sent in java-tron's `visible: false`
+ * format.
  *
  * A failure verdict — `SIGNATURE_FORMAT_ERROR`, `COMPUTE_ADDRESS_ERROR`,
  * `OTHER_ERROR` — throws the transport's `TronContractValidateError`,
@@ -104,12 +104,6 @@ export async function getApprovedList(
       { field: !snapshot.raw_data_hex ? 'raw_data_hex' : 'txID' },
     )
 
-  // The same relay boundary as broadcast: the node rebuilds the transaction
-  // from `raw_data`, read as `visible: false` JSON. The triple is checked and
-  // `raw_data` re-derived from the checked bytes, so a spelling the signing
-  // paths accept but the node does not (Base58, `0x` EVM, raw bytes) is never
-  // sent verbatim — and an inconsistent model is refused here rather than
-  // sent to the node.
   const transaction = canonicalizeTransaction(snapshot)
 
   // A real node reports `SUCCESS` as `code` alone (or omits it), which the
