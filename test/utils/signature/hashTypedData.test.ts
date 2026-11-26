@@ -7,10 +7,16 @@ import { describe, expect, test } from 'vitest'
 import { BytesSizeMismatchError } from '../../../src/errors/abi.js'
 import { IntegerOutOfRangeError } from '../../../src/errors/encoding.js'
 import { InvalidParameterError } from '../../../src/errors/parameter.js'
-import { TypedDataError } from '../../../src/errors/typedData.js'
+import {
+  InvalidStructTypeError,
+  TypedDataError,
+} from '../../../src/errors/typedData.js'
 import type { AddressInput, EvmAddress } from '../../../src/types/address.js'
 import { concat } from '../../../src/utils/data/concat.js'
-import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
+import {
+  hexToBytes,
+  stringToBytes,
+} from '../../../src/utils/encoding/toBytes.js'
 import { keccak256 } from '../../../src/utils/hash/keccak256.js'
 import {
   hashDomain,
@@ -158,6 +164,25 @@ describe('hashTypedData', () => {
         message: sink,
       }),
     ).toBe('0x323068fb563c40983e7966ebbe74ad221a0b090a483e143ad682d2e764934a03')
+  })
+
+  test('includes struct dependencies for a multidimensional array with no items', () => {
+    const typeHash = keccak256(
+      stringToBytes('Batch(Item[][1] items)Item(uint256 id)'),
+    )
+    const itemsHash = keccak256(keccak256('0x'))
+    const batchHash = keccak256(concat([typeHash, itemsHash]))
+
+    expect(
+      hashTypedData({
+        types: {
+          Batch: [{ name: 'items', type: 'Item[][1]' }],
+          Item: [{ name: 'id', type: 'uint256' }],
+        },
+        primaryType: 'Batch',
+        message: { items: [[]] },
+      }),
+    ).toBe(keccak256(concat(['0x1901', hashDomain({}), batchHash])))
   })
 
   // `validateField` accepts a `Uint8Array` for `bytesN` (it size-checks it),
@@ -906,6 +931,32 @@ describe('hashTypedData validation', () => {
         message: { t: { value: 'hijacked' } },
       }),
     ).toThrow('Struct type "trcToken" is invalid')
+  })
+
+  test.each([
+    'bytes32[]',
+    'bytes32[2]',
+    'Item[][2]',
+  ])('rejects an array type used as a struct name (%s)', (type) => {
+    expect(() =>
+      hashTypedData({
+        types: { Batch: [], [type]: [] },
+        primaryType: 'Batch',
+      }),
+    ).toThrow(InvalidStructTypeError)
+  })
+
+  test('hashDomain rejects an array type declared as a struct', () => {
+    expect(() =>
+      hashDomain(
+        { items: {} },
+        {
+          EIP712Domain: [{ name: 'items', type: 'Item[]' }],
+          Item: [],
+          'Item[]': [],
+        },
+      ),
+    ).toThrow(InvalidStructTypeError)
   })
 
   test('rejects a non-object domain', () => {

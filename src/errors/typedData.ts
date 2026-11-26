@@ -37,7 +37,9 @@ export type InvalidStructTypeErrorType = InvalidStructTypeError & {
 export class InvalidStructTypeError extends BaseError {
   constructor({ type }: { type: string }) {
     super(`Struct type "${type}" is invalid.`, {
-      metaMessages: ['Struct type must not be a Solidity type or `trcToken`.'],
+      metaMessages: [
+        'Use a valid identifier for the struct name. Primitive type names and array syntax are reserved.',
+      ],
       name: 'InvalidStructTypeError',
     })
   }

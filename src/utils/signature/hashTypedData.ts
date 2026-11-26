@@ -36,7 +36,7 @@ import {
   numberToHex,
 } from '../encoding/toHex.js'
 import { keccak256 } from '../hash/keccak256.js'
-import { bytesRegex, integerRegex } from '../regex.js'
+import { arrayRegex, bytesRegex, integerRegex } from '../regex.js'
 import {
   type CloneTransactionErrorType,
   cloneTransaction,
@@ -93,6 +93,8 @@ const DOMAIN_FIELDS: readonly { name: string; type: string }[] = [
   { name: 'salt', type: 'bytes32' },
 ]
 
+const structNameRegex = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/
+
 /**
  * The effective `EIP712Domain` struct: the caller's `types.EIP712Domain`
  * declaration when present (declared fields, order, and types), else the
@@ -119,7 +121,7 @@ function findDependencies(
   if (found.has(primaryType) || !types[primaryType]) return found
   found.add(primaryType)
   for (const field of types[primaryType]) {
-    const base = field.type.replace(/\[.*\]$/, '')
+    const base = field.type.split('[', 1)[0]!
     if (types[base]) findDependencies(base, types, found)
   }
   return found
@@ -148,12 +150,16 @@ function hashType(primaryType: string, types: TypedDataTypes): Hex {
 /** Encodes one field value to its 32-byte EIP-712 word. */
 function encodeField(types: TypedDataTypes, type: string, value: unknown): Hex {
   // Nested struct → hashStruct.
-  if (types[type])
+  if (types[type]) {
+    // The public hashDomain helper also reaches this encoder directly.
+    assertValidStructType(type)
     return keccak256(encodeData(type, types, value as Record<string, unknown>))
+  }
 
   // Array → keccak256 of the concatenated element words.
-  if (type.endsWith(']')) {
-    const base = type.replace(/\[\d*\]$/, '')
+  const array = type.match(arrayRegex)
+  if (array) {
+    const base = array[1]!
     const items = (value as unknown[]).map((item) =>
       encodeField(types, base, item),
     )
@@ -217,12 +223,12 @@ function hashStruct(
 }
 
 /**
- * Throws for a struct name that is also a primitive type name (including the
- * TRON-specific `trcToken`): `encodeField` checks for a struct first, so such
- * a struct would be used for every field of that type.
+ * Struct names are identifiers. Square brackets are reserved for array
+ * dimensions, and primitive names (including `trcToken`) are reserved types.
  */
-function assertStructNotShadowing(type: string): void {
+function assertValidStructType(type: string): void {
   if (
+    !structNameRegex.test(type) ||
     type === 'address' ||
     type === 'bool' ||
     type === 'string' ||
@@ -274,7 +280,6 @@ function validateField(
   path: string,
 ): void {
   if (types[type]) {
-    assertStructNotShadowing(type)
     // A non-object struct value would slip through the per-field checks (its
     // fields all read as `undefined`) and only surface as a raw TypeError —
     // or a wrong digest — deep inside encoding.
@@ -287,16 +292,13 @@ function validateField(
     return
   }
 
-  if (type.endsWith(']')) {
-    const base = type.replace(/\[\d*\]$/, '')
-    // A fixed-size `T[N]` must have exactly `N` elements: `encodeField` hashes
-    // the concatenated element words, so a short/long array silently produces a
-    // digest for a different value than the declared type. (`$` anchors the
-    // outer dimension, so multi-dimensional arrays check each level in turn.)
-    const fixed = type.match(/\[(\d+)\]$/)
-    if (fixed && (!Array.isArray(value) || value.length !== Number(fixed[1])))
+  const array = type.match(arrayRegex)
+  if (array) {
+    const [, base, length] = array
+    // Check the outer dimension here. Recursion checks each inner dimension.
+    if (length && (!Array.isArray(value) || value.length !== Number(length)))
       throw new TypedDataError(
-        `Invalid ${type} value: expected an array of length ${fixed[1]}, got ${
+        `Invalid ${type} value: expected an array of length ${length}, got ${
           Array.isArray(value) ? value.length : typeof value
         }.`,
         { path },
@@ -310,7 +312,7 @@ function validateField(
       )
     let index = 0
     for (const item of value)
-      validateField(types, base, item, `${path}[${index++}]`)
+      validateField(types, base!, item, `${path}[${index++}]`)
     return
   }
 
@@ -430,10 +432,10 @@ function validateField(
 
 /**
  * Validates typed-data parameters before any hashing: `primaryType` must be
- * a defined struct (or `EIP712Domain`), no declared struct — referenced or
- * not — may shadow a primitive type, the domain must be an object whose
- * fields all belong to the effective `EIP712Domain` struct and match its
- * types, `bool`/`string` values must be a real boolean/string, integer
+ * a defined struct (or `EIP712Domain`), every declared struct name must be
+ * a valid identifier distinct from primitive types, and the domain must be
+ * an object whose fields match the effective `EIP712Domain` struct.
+ * `bool`/`string` values must be a real boolean/string, integer
  * values must fit their declared width, and `bytes`/`bytesN` values must be
  * whole-byte hex or a `Uint8Array` — a `bytesN` exactly `N` bytes — so
  * malformed input fails loudly instead of producing a silently wrong digest.
@@ -445,11 +447,7 @@ function validateTypedData(parameters: HashTypedDataParameters): void {
   if (primaryType !== 'EIP712Domain' && !types_[primaryType])
     throw new InvalidPrimaryTypeError({ primaryType, types: types_ })
 
-  // Every declared struct name, not only those the walk from `primaryType`
-  // reaches: the derived domain has `string` / `uint256` / `address` /
-  // `bytes32` fields of its own, so a shadowing struct the message tree never
-  // touches would go unseen here and still be in scope when hashing.
-  for (const type of Object.keys(types_)) assertStructNotShadowing(type)
+  for (const type of Object.keys(types_)) assertValidStructType(type)
 
   if (domain !== undefined) {
     if (typeof domain !== 'object' || domain === null || Array.isArray(domain))
@@ -490,10 +488,8 @@ function validateTypedData(parameters: HashTypedDataParameters): void {
     }
   }
 
-  if (primaryType !== 'EIP712Domain') {
-    assertStructNotShadowing(primaryType)
+  if (primaryType !== 'EIP712Domain')
     validateStruct(types_, primaryType, message ?? {}, primaryType)
-  }
 }
 
 /**
@@ -534,8 +530,8 @@ export function hashDomain(
  * without a slot in the struct throws rather than silently dropping out of
  * the hash.
  *
- * Parameters are validated before hashing (unknown `primaryType`, primitive-
- * shadowing struct names, malformed domain, out-of-width integers, wrong-size
+ * Parameters are validated before hashing (unknown `primaryType`, invalid
+ * struct names, malformed domain, out-of-width integers, wrong-size
  * `bytesN` values), so bad input throws instead of yielding a wrong digest.
  *
  * @param parameters `domain`, `types`, `primaryType`, `message`.

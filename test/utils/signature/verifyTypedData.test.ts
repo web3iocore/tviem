@@ -119,6 +119,17 @@ describe('verifyTypedData', () => {
     ).toBe(false)
   })
 
+  test('rejects a schema that declares an array type as a struct', () => {
+    expect(
+      verifyTypedData({
+        ...typedData,
+        types: { ...types, 'bytes32[]': [] },
+        signature: mailSignature,
+        address: pk1Base58,
+      }),
+    ).toBe(false)
+  })
+
   test('rejects a tampered signature', () => {
     // Flip the first byte of r (3e -> 00); recovery still yields a point, but
     // a different address.
