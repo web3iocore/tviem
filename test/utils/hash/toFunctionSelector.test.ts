@@ -23,6 +23,15 @@ test('creates function signature', () => {
   expect(toFunctionSelector('function claimed()')).toEqual('0xe834a834')
 })
 
+test('creates function selectors with whitespace after the opening parenthesis', () => {
+  expect(toFunctionSelector('function balance( address account)')).toBe(
+    toFunctionSelector('balance(address)'),
+  )
+  expect(
+    toFunctionSelector('function transfer( address to, uint256 amount)'),
+  ).toBe('0xa9059cbb')
+})
+
 // keccak256('a$int(uint256)') — the name is a valid Solidity identifier and
 // must reach the hash as written, not as `a$int256`.
 test('a name containing `$` next to int hashes as written', () => {

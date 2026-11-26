@@ -2,6 +2,14 @@ import { expect, test } from 'vitest'
 
 import { toEventSelector } from '../../../src/utils/hash/toEventSelector.js'
 
+test('creates an event topic with whitespace after the opening parenthesis', () => {
+  expect(
+    toEventSelector(
+      'event Transfer( address indexed from, address indexed to, uint256 amount)',
+    ),
+  ).toBe('0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef')
+})
+
 // keccak256('$uint(address)') — the name must reach the hash as written, not
 // as `$uint256`, or the topic0 filter never matches the contract's logs.
 test('a name containing `$` next to uint hashes as written', () => {

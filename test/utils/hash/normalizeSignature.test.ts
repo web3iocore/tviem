@@ -70,6 +70,18 @@ test('function bar(uint foo, address baz)', () => {
   )
 })
 
+test.each([
+  ['function balance( address account)', 'balance(address)'],
+  ['function transfer(  address to, uint amount)', 'transfer(address,uint256)'],
+  ['event Balance( address indexed account)', 'Balance(address)'],
+  [
+    'function submit( ( ( uint id,\n\taddress owner)[] items, bool flag) data)',
+    'submit(((uint256,address)[],bool))',
+  ],
+])('normalizes whitespace before parameter types in %s', (input, expected) => {
+  expect(normalizeSignature(input)).toBe(expected)
+})
+
 test('event Barry(uint foo)', () => {
   expect(normalizeSignature('event Barry(uint foo)')).toBe('Barry(uint256)')
 })
@@ -215,4 +227,13 @@ test('error: invalid signatures throw an InvalidParameterError', () => {
     param: 'signature',
     reason: 'format',
   })
+})
+
+test.each([
+  'foo( , uint256)',
+  'foo(uint256, , address)',
+  'foo(uint256, )',
+  'foo((uint256, ))',
+])('rejects missing parameter types in %s', (signature) => {
+  expect(() => normalizeSignature(signature)).toThrow(InvalidParameterError)
 })
