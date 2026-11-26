@@ -9,6 +9,7 @@ import {
   symlinkSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { inspect } from 'node:util'
 
 console.log('Setting up packages for development.')
 
@@ -40,6 +41,7 @@ function leafPaths(node) {
 }
 
 // Link exports to dist locations.
+let failed = false
 for (const [key, exports] of Object.entries(packageJson.exports)) {
   if (/package\.json$/.test(key)) continue
 
@@ -53,8 +55,14 @@ for (const [key, exports] of Object.entries(packageJson.exports)) {
     mkdirSync(distDir, { recursive: true })
     try {
       symlinkSync(srcFilePath, distFilePath, 'file')
-    } catch {}
+    } catch (error) {
+      failed = true
+      process.stderr.write(
+        `Failed to create symlink at ${distFilePath}\n${inspect(error)}\n`,
+      )
+    }
   }
 }
 
-console.log('Done.')
+if (failed) process.exitCode = 1
+else console.log('Done.')
