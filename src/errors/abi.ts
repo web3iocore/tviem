@@ -342,10 +342,12 @@ export class AbiFunctionNotFoundError extends BaseError {
     { docsPath }: { docsPath?: string | undefined } = {},
   ) {
     super(
-      [
-        `Function ${functionName ? `"${functionName}" ` : ''}not found on ABI.`,
-        'Make sure you are using the correct ABI and that the function exists on it.',
-      ].join('\n'),
+      functionName
+        ? [
+            `Function "${functionName}" not found on ABI.`,
+            'Make sure you are using the correct ABI and that the function exists on it.',
+          ].join('\n')
+        : 'Pass a function name or 4-byte selector as `functionName`.',
       {
         docsPath,
         name: 'AbiFunctionNotFoundError',

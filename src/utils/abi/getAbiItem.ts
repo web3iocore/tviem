@@ -64,6 +64,8 @@ const ARRAY_SUFFIX = /\[([0-9]*)\]$/
  * {@link AbiItemAmbiguityError}, regardless of their order in `abi`. Empty
  * arrays cannot distinguish their element types. Duplicate signatures and
  * canonical aliases such as `uint`/`uint256` share a selector and are allowed.
+ * Returns `undefined` when no candidate is found, or when several candidates
+ * are found and none match `args`.
  * Passing the 4-byte selector as `name`, or an `abi` holding the single
  * overload, selects one of them.
  *
@@ -159,9 +161,7 @@ export function getAbiItem<
     }
   }
 
-  if (matchedAbiItem)
-    return matchedAbiItem as GetAbiItemReturnType<abi, name, args>
-  return abiItems[0] as GetAbiItemReturnType<abi, name, args>
+  return matchedAbiItem as GetAbiItemReturnType<abi, name, args>
 }
 
 /**

@@ -32,53 +32,40 @@ const docsPath = '/docs/contract/decodeFunctionResult'
 
 export type DecodeFunctionResultParameters<
   abi extends Abi | readonly unknown[] = Abi,
-  functionName extends ContractFunctionName<abi> | undefined =
-    | ContractFunctionName<abi>
-    | undefined,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
   args extends ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   > = ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   >,
 > = {
   abi: abi
   args?: args | readonly unknown[] | undefined
-  functionName?: functionName | ContractFunctionName<abi> | undefined
+  /** The function name or its 4-byte selector. */
+  functionName: functionName | ContractFunctionName<abi> | Hex
   data: Hex | ByteArray
 }
 
 export type DecodeFunctionResultReturnType<
   abi extends Abi | readonly unknown[] = Abi,
-  functionName extends ContractFunctionName<abi> | undefined =
-    | ContractFunctionName<abi>
-    | undefined,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
   args extends ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   > = ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   >,
 > = ContractFunctionReturnType<
   abi,
   'nonpayable' | 'payable' | 'pure' | 'view',
-  functionName extends ContractFunctionName<abi>
-    ? functionName
-    : ContractFunctionName<abi>,
+  functionName,
   args
 >
 
@@ -106,19 +93,15 @@ export type DecodeFunctionResultErrorType =
  */
 export function decodeFunctionResult<
   const abi extends Abi | readonly unknown[],
-  functionName extends ContractFunctionName<abi> | undefined = undefined,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
   const args extends ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   > = ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   >,
 >(
   parameters: DecodeFunctionResultParameters<abi, functionName, args>,
@@ -126,20 +109,18 @@ export function decodeFunctionResult<
   const { abi, args, functionName, data } = parameters as {
     abi: Abi
     args?: readonly unknown[]
-    functionName?: string
+    functionName: string
     data: Hex | ByteArray
   }
 
-  let abiItem = abi[0]
-  if (functionName) {
-    const item = getAbiItem({ abi, args, name: functionName })
-    if (!item) throw new AbiFunctionNotFoundError(functionName, { docsPath })
-    abiItem = item
-  }
-
-  if (!abiItem) throw new AbiFunctionNotFoundError(undefined, { docsPath })
-  if (abiItem.type !== 'function')
-    throw new AbiFunctionNotFoundError(undefined, { docsPath })
+  if (!functionName) throw new AbiFunctionNotFoundError(undefined, { docsPath })
+  const abiItem = getAbiItem({
+    abi: abi.filter((item) => item.type === 'function'),
+    args,
+    name: functionName,
+  })
+  if (abiItem?.type !== 'function')
+    throw new AbiFunctionNotFoundError(functionName, { docsPath })
   if (!abiItem.outputs)
     throw new AbiFunctionOutputsNotFoundError(abiItem.name, { docsPath })
 

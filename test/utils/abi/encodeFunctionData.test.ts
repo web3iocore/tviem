@@ -1,5 +1,6 @@
 import type { Abi } from 'abitype'
 import { expect, test } from 'vitest'
+import { AbiFunctionNotFoundError } from '../../../src/errors/abi.js'
 import { encodeFunctionData } from '../../../src/utils/abi/encodeFunctionData.js'
 import { prepareEncodeFunctionData } from '../../../src/utils/abi/prepareEncodeFunctionData.js'
 import { slice } from '../../../src/utils/data/slice.js'
@@ -103,7 +104,7 @@ test('overloads select the right selector by args', () => {
   ).toBe(four.calldata)
 })
 
-test('a prepared result re-encodes without re-resolving', () => {
+test('a prepared result re-encodes with the selected ABI item', () => {
   const fixture = loadFunctionFixtures().find(
     (f) => f.name === 'trc20-transfer',
   )!
@@ -116,4 +117,11 @@ test('a prepared result re-encodes without re-resolving', () => {
     args: ['TA5DvvvmYbS75o3DKtgy2ATAGVHhpFkRLe', 1000000n],
   })
   expect(calldata).toBe(fixture.calldata)
+  expect(() =>
+    encodeFunctionData({ ...prepared, functionName: '0xdeadbeef' }),
+  ).toThrowError(AbiFunctionNotFoundError)
+  expect(() =>
+    // @ts-expect-error functionName is required.
+    encodeFunctionData({ abi: prepared.abi }),
+  ).toThrowError(AbiFunctionNotFoundError)
 })

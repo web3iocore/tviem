@@ -1,6 +1,9 @@
 import type { Abi } from 'abitype'
 import { expect, test } from 'vitest'
-import { AbiFunctionOutputsNotFoundError } from '../../../src/errors/abi.js'
+import {
+  AbiFunctionNotFoundError,
+  AbiFunctionOutputsNotFoundError,
+} from '../../../src/errors/abi.js'
 import { decodeFunctionResult } from '../../../src/utils/abi/decodeFunctionResult.js'
 import {
   type FixtureValue,
@@ -42,6 +45,13 @@ test('single uint256 output unwraps to a bigint', () => {
     data: fixture.result!.returnData,
   })
   expect(result).toBe(123456789000000000000000000n)
+  expect(() =>
+    // @ts-expect-error functionName is required.
+    decodeFunctionResult({
+      abi: fixture.abi as unknown as Abi,
+      data: fixture.result!.returnData,
+    }),
+  ).toThrowError(AbiFunctionNotFoundError)
 })
 
 test('single address output decodes to Base58Check', () => {

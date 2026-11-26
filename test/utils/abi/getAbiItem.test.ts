@@ -1,7 +1,10 @@
 import type { Abi, AbiFunction, AbiParameter } from 'abitype'
 import { describe, expect, test } from 'vitest'
 
-import { AbiItemAmbiguityError } from '../../../src/errors/abi.js'
+import {
+  AbiFunctionNotFoundError,
+  AbiItemAmbiguityError,
+} from '../../../src/errors/abi.js'
 import { decodeFunctionResult } from '../../../src/utils/abi/decodeFunctionResult.js'
 import { encodeFunctionData } from '../../../src/utils/abi/encodeFunctionData.js'
 import { formatAbiItem } from '../../../src/utils/abi/formatAbiItem.js'
@@ -104,6 +107,24 @@ test('disambiguates overloads: bigint selects the uint256 overload', () => {
     (item as unknown as { inputs: readonly { type: string }[] }).inputs[0]!
       .type,
   ).toBe('uint256')
+})
+
+test('rejects a named overload when no candidate matches the arguments', () => {
+  for (const abi of [overloaded, [...overloaded].reverse()]) {
+    const args = [true]
+    const parameters = { abi, functionName: 'foo', args } as const
+    expect(getAbiItem({ abi, name: 'foo' })).toBeUndefined()
+    expect(getAbiItem({ abi, name: 'foo', args })).toBeUndefined()
+    expect(() => prepareEncodeFunctionData(parameters)).toThrowError(
+      AbiFunctionNotFoundError,
+    )
+    expect(() => encodeFunctionData(parameters)).toThrowError(
+      AbiFunctionNotFoundError,
+    )
+    expect(() =>
+      decodeFunctionResult({ ...parameters, data: '0x' }),
+    ).toThrowError(AbiFunctionNotFoundError)
+  }
 })
 
 test('disambiguates arity-only overloads by argument count', () => {
@@ -209,8 +230,16 @@ describe('empty arrays cannot disambiguate overloads', () => {
   const args = [[]]
 
   test('the reported call has two encodable selectors and throws in either ABI order', () => {
-    const numericData = encodeFunctionData({ abi: [numeric], args })
-    const textualData = encodeFunctionData({ abi: [textual], args })
+    const numericData = encodeFunctionData({
+      abi: [numeric],
+      functionName: 'f',
+      args,
+    })
+    const textualData = encodeFunctionData({
+      abi: [textual],
+      functionName: 'f',
+      args,
+    })
     expect(numericData.slice(0, 10)).toBe('0x047d9e3a')
     expect(textualData.slice(0, 10)).toBe('0x5bd0c532')
     expect(numericData.slice(10)).toBe(textualData.slice(10))
@@ -305,7 +334,9 @@ describe('empty arrays cannot disambiguate overloads', () => {
     // Both candidates really encode the argument; ambiguity cannot depend
     // on whether any scalar element exists to compare.
     for (const item of items)
-      expect(() => encodeFunctionData({ abi: [item], args })).not.toThrow()
+      expect(() =>
+        encodeFunctionData({ abi: [item], functionName: 'f', args }),
+      ).not.toThrow()
     for (const abi of [items, [...items].reverse()]) {
       expect(() => getAbiItem({ abi, name: 'f', args })).toThrowError(
         AbiItemAmbiguityError,
@@ -320,7 +351,11 @@ describe('empty arrays cannot disambiguate overloads', () => {
     for (const type of ['uint', 'int']) {
       const alias = fn({ type: `${type}[][2][]` })
       const explicit = fn({ type: `${type}256[][2][]` })
-      const expected = encodeFunctionData({ abi: [explicit], args })
+      const expected = encodeFunctionData({
+        abi: [explicit],
+        functionName: 'f',
+        args,
+      })
       for (const abi of [
         [alias, explicit, explicit],
         [explicit, alias, alias],
@@ -397,8 +432,16 @@ describe('object tuples with reordered components', () => {
     // Object values are matched by name, so both layouts encode this value.
     // Reading it positionally during ambiguity detection used to miss that
     // they select different functions and encode the fields in reverse order.
-    const numericData = encodeFunctionData({ abi: [numericFirst], args })
-    const booleanData = encodeFunctionData({ abi: [booleanFirst], args })
+    const numericData = encodeFunctionData({
+      abi: [numericFirst],
+      functionName: 'f',
+      args,
+    })
+    const booleanData = encodeFunctionData({
+      abi: [booleanFirst],
+      functionName: 'f',
+      args,
+    })
     expect(numericData.slice(0, 10)).toBe('0xc5cba275')
     expect(booleanData.slice(0, 10)).toBe('0xdcab2784')
     expect(numericData.slice(10)).not.toBe(booleanData.slice(10))
@@ -554,15 +597,13 @@ const nullVsTupleAbi = [
 
 test('a null arg does not crash the tuple overload branch', () => {
   expect(isArgOfType(null, nullVsTupleAbi[1]!.inputs[0] as never)).toBe(false)
-  // null matches no overload, so getAbiItem falls back to the first candidate
-  // rather than throwing a raw TypeError from Object.values(null).
-  expect(() =>
+  expect(
     getAbiItem({
       abi: nullVsTupleAbi as unknown as Abi,
       name: 'foo',
       args: [null],
     }),
-  ).not.toThrow()
+  ).toBeUndefined()
 })
 
 // F-7D3: `trcToken` encodes to the same 32-byte word as `uint256`, so a
@@ -865,8 +906,12 @@ describe('array-form tuples with metadata', () => {
     const wide = fn(numericTuple, { type: 'uint256' })
     const args = [Object.assign([1n], { metadata: true }), 1n]
     for (const item of [narrow, wide])
-      expect(encodeFunctionData({ abi: [item], args })).toBe(
-        encodeFunctionData({ abi: [item], args: [[1n], 1n] }),
+      expect(encodeFunctionData({ abi: [item], functionName: 'f', args })).toBe(
+        encodeFunctionData({
+          abi: [item],
+          functionName: 'f',
+          args: [[1n], 1n],
+        }),
       )
     for (const abi of [
       [narrow, wide],
@@ -897,7 +942,11 @@ describe('array-form tuples with metadata', () => {
     const textual = fn(wrap('string'))
     const tuple = Object.assign([1n], { metadata: true })
     const arg = shape === 'tuple' ? tuple : [tuple]
-    const expected = encodeFunctionData({ abi: [numeric], args: [arg] })
+    const expected = encodeFunctionData({
+      abi: [numeric],
+      functionName: 'f',
+      args: [arg],
+    })
     for (const abi of [
       [numeric, textual],
       [textual, numeric],

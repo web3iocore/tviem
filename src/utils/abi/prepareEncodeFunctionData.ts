@@ -1,4 +1,4 @@
-import type { Abi } from 'abitype'
+import type { Abi, AbiFunction } from 'abitype'
 
 import {
   AbiFunctionNotFoundError,
@@ -10,7 +10,8 @@ import type {
   ContractFunctionName,
 } from '../../types/contract.js'
 import type { Hex } from '../../types/misc.js'
-import type { IsNarrowable, UnionEvaluate } from '../../types/utils.js'
+import type { UnionEvaluate } from '../../types/utils.js'
+import { isHex } from '../data/isHex.js'
 import {
   type ToFunctionSelectorErrorType,
   toFunctionSelector,
@@ -20,50 +21,36 @@ import { type GetAbiItemErrorType, getAbiItem } from './getAbiItem.js'
 
 export type PrepareEncodeFunctionDataParameters<
   abi extends Abi | readonly unknown[] = Abi,
-  functionName extends
-    | ContractFunctionName<abi>
-    | undefined = ContractFunctionName<abi>,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
   args extends ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   > = ContractFunctionArgs<
     abi,
     'nonpayable' | 'payable' | 'pure' | 'view',
-    functionName extends ContractFunctionName<abi>
-      ? functionName
-      : ContractFunctionName<abi>
+    functionName
   >,
 > = {
   abi: abi
-  functionName?: functionName | ContractFunctionName<abi> | undefined
+  /** The function name or its 4-byte selector. */
+  functionName: functionName | ContractFunctionName<abi> | Hex
   args?: args | readonly unknown[] | undefined
 }
 
 export type PrepareEncodeFunctionDataReturnType<
   abi extends Abi | readonly unknown[] = Abi,
-  functionName extends
-    | ContractFunctionName<abi>
-    | undefined = ContractFunctionName<abi>,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
 > = UnionEvaluate<{
-  abi: IsNarrowable<abi, Abi> extends true
-    ? readonly [ExtractAbiFunctionForName<abi, functionName>]
-    : abi
+  abi: readonly [
+    abi extends Abi
+      ? Abi extends abi
+        ? AbiFunction
+        : Extract<abi[number], { type: 'function'; name: functionName }>
+      : AbiFunction,
+  ]
   functionName: Hex
 }>
-
-type ExtractAbiFunctionForName<
-  abi extends Abi | readonly unknown[],
-  functionName extends ContractFunctionName<abi> | undefined,
-> = abi extends Abi
-  ? functionName extends ContractFunctionName<abi>
-    ? Extract<abi[number], { type: 'function'; name: functionName }>
-    : abi[number]
-  : abi extends readonly unknown[]
-    ? abi[number]
-    : never
 
 export type PrepareEncodeFunctionDataErrorType =
   | AbiFunctionNotFoundErrorType
@@ -73,8 +60,8 @@ export type PrepareEncodeFunctionDataErrorType =
 
 /**
  * Precomputes the function selector and resolved ABI item for
- * {@link encodeFunctionData}, so the selector is derived (and any overload
- * disambiguated) once and reused across many encode calls.
+ * {@link encodeFunctionData}, so later calls can use the narrowed ABI and
+ * selector to identify the chosen overload.
  *
  * The selector is `toFunctionSelector` of the resolved item's signature; the
  * signature keeps `trcToken` verbatim (e.g. `transferToken(address,trcToken,
@@ -89,37 +76,30 @@ export type PrepareEncodeFunctionDataErrorType =
  */
 export function prepareEncodeFunctionData<
   const abi extends Abi | readonly unknown[],
-  functionName extends ContractFunctionName<abi> | undefined = undefined,
+  functionName extends ContractFunctionName<abi> = ContractFunctionName<abi>,
 >(
   parameters: PrepareEncodeFunctionDataParameters<abi, functionName>,
 ): PrepareEncodeFunctionDataReturnType<abi, functionName> {
   const { abi, args, functionName } = parameters as {
     abi: Abi
     args?: readonly unknown[]
-    functionName?: string
+    functionName: string
   }
 
-  let abiItem = abi[0]
-  if (functionName) {
-    const item = getAbiItem({ abi, args, name: functionName })
-    if (!item)
-      throw new AbiFunctionNotFoundError(functionName, {
-        docsPath: '/docs/contract/encodeFunctionData',
-      })
-    abiItem = item
-  }
-
-  if (!abiItem)
-    throw new AbiFunctionNotFoundError(undefined, {
-      docsPath: '/docs/contract/encodeFunctionData',
-    })
-  if (abiItem.type !== 'function')
-    throw new AbiFunctionNotFoundError(undefined, {
-      docsPath: '/docs/contract/encodeFunctionData',
-    })
+  const docsPath = '/docs/contract/encodeFunctionData'
+  if (!functionName) throw new AbiFunctionNotFoundError(undefined, { docsPath })
+  const abiItem = getAbiItem({
+    abi: abi.filter((item) => item.type === 'function'),
+    args,
+    name: functionName,
+  })
+  if (abiItem?.type !== 'function')
+    throw new AbiFunctionNotFoundError(functionName, { docsPath })
 
   return {
-    abi: [abiItem],
-    functionName: toFunctionSelector(formatAbiItem(abiItem)),
+    abi: [abiItem] as const,
+    functionName: isHex(functionName, { strict: false })
+      ? functionName
+      : toFunctionSelector(formatAbiItem(abiItem)),
   } as PrepareEncodeFunctionDataReturnType<abi, functionName>
 }

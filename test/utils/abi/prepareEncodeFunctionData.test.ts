@@ -28,14 +28,14 @@ test('works for a no-argument function', () => {
   expect(functionName).toBe('0x18160ddd')
 })
 
-test('defaults to the sole item when functionName is omitted', () => {
+test('requires functionName even for a single function', () => {
   const fixture = loadFunctionFixtures().find(
     (f) => f.name === 'trc20-balanceOf',
   )!
-  const { functionName } = prepareEncodeFunctionData({
-    abi: fixture.abi as unknown as Abi,
-  })
-  expect(functionName).toBe('0x70a08231')
+  expect(() =>
+    // @ts-expect-error functionName is required.
+    prepareEncodeFunctionData({ abi: fixture.abi as unknown as Abi }),
+  ).toThrowError(AbiFunctionNotFoundError)
 })
 
 test('throws when the function is absent', () => {
@@ -59,7 +59,7 @@ test('throws when the resolved item is not a function', () => {
       anonymous: false,
     },
   ] as const satisfies Abi
-  expect(() => prepareEncodeFunctionData({ abi: eventOnly })).toThrowError(
-    AbiFunctionNotFoundError,
-  )
+  expect(() =>
+    prepareEncodeFunctionData({ abi: eventOnly, functionName: 'Transfer' }),
+  ).toThrowError(AbiFunctionNotFoundError)
 })
