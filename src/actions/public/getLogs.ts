@@ -299,6 +299,8 @@ let requestId = 0
  * @param parameters The log filter: `address` / `event`(`s`) / `args` /
  *   `topics` plus a `fromBlock`/`toBlock` range or a `blockHash`.
  * @returns The matching logs, decoded where possible.
+ * @throws {TronRpcError} If the node rejects the request or the response lacks
+ *   a `result` array.
  *
  * @example
  * const logs = await getLogs(client, {
@@ -384,7 +386,7 @@ export async function getLogs(
     ...(blockHash ? { blockHash } : {}),
   }
 
-  const response = await client.request<JsonRpcResponse>({
+  const response = await client.request<JsonRpcResponse | null>({
     path: '/jsonrpc',
     method: 'POST',
     body: {
@@ -394,18 +396,22 @@ export async function getLogs(
       params: [filter],
     },
   })
-  if (response.error)
+  const error = response?.error
+  if (error)
     throw new TronRpcError(
-      response.error.message ?? 'The eth_getLogs request was rejected.',
+      error.message ?? 'The eth_getLogs request was rejected.',
       {
         metaMessages:
-          response.error.code !== undefined
-            ? [`Code: ${response.error.code}`]
-            : undefined,
+          error.code !== undefined ? [`Code: ${error.code}`] : undefined,
       },
     )
 
-  const rpcLogs = response.result ?? []
+  const rpcLogs = response?.result
+  if (!Array.isArray(rpcLogs))
+    throw new TronRpcError(
+      'Malformed eth_getLogs response. Expected a `result` array.',
+    )
+
   if (!events) return rpcLogs.map((log) => formatLog(log))
 
   // Decode the raw logs (a node can omit `topics`), then format the kept ones.

@@ -450,9 +450,25 @@ test('a log without blockTimestamp omits the field', async () => {
   expect(log && 'blockTimestamp' in log).toBe(false)
 })
 
-test('an absent result formats to an empty log list', async () => {
-  const { client } = mock(undefined)
-  expect(await getLogs(client)).toEqual([])
+test.each([
+  { name: 'an empty object', response: {} },
+  { name: 'a missing result', response: { jsonrpc: '2.0', id: 1 } },
+  { name: 'a null result', response: { result: null } },
+  { name: 'a non-array result', response: { result: {} } },
+  { name: 'a null response body', response: null },
+])('throws a TronRpcError for $name', async ({ response }) => {
+  const { transport } = createMockTransport({
+    responses: { '/jsonrpc': { response } },
+  })
+  const client = createPublicClient({ transport })
+  await expect(
+    getLogs(client, { fromBlock: 100n, toBlock: 200n }),
+  ).rejects.toThrow(TronRpcError)
+})
+
+test('returns an empty log list for an explicit empty result array', async () => {
+  const { client } = mock([])
+  expect(await getLogs(client, { fromBlock: 100n, toBlock: 200n })).toEqual([])
 })
 
 test('a log without topics is dropped by an event filter and kept without one', async () => {
