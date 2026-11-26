@@ -482,6 +482,22 @@ describe('events sharing one selector', () => {
   ] as const
   const modes = [undefined, true, false] as const
 
+  test.each([
+    undefined,
+    'Transfer',
+  ] as const)('matches a mixed-case topic0 with eventName %s', (eventName) => {
+    const topic0 =
+      `0x${selector.slice(2, 8).toUpperCase()}${selector.slice(8)}` as const
+    expect(
+      decodeEventLog({
+        abi: [trc20Event, trc721Event],
+        ...trc721Log,
+        topics: [topic0, ...trc721Log.topics.slice(1)],
+        eventName,
+      }),
+    ).toStrictEqual(trc721Decoded)
+  })
+
   describe.each(orders)('%s', (_order, abi) => {
     test.each(
       modes,

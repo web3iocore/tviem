@@ -5,6 +5,7 @@ import type { ContractEventName } from '../../types/contract.js'
 import type { EventCandidates, ParsedEvent } from '../../types/log.js'
 import type { Hex } from '../../types/misc.js'
 import type { InferProperty, Prettify } from '../../types/utils.js'
+import { isHex } from '../data/isHex.js'
 import {
   type ToEventSelectorErrorType,
   toEventSelector,
@@ -155,8 +156,11 @@ export function parseEventLogs<
 
   const parsedLogs: (EventLogData & DecodeEventLogReturnType)[] = []
   for (const log of logs) {
+    const topic0 = log.topics[0]
+    if (!isHex(topic0, { strict: false })) continue
+    const logSelector = topic0.toLowerCase()
     const candidates = decodable
-      .filter(({ selector }) => selector === log.topics[0])
+      .filter(({ selector }) => selector === logSelector)
       .map(({ abiEvent }) => abiEvent)
     // A selector outside the considered events is dropped in both modes.
     if (candidates.length === 0) continue

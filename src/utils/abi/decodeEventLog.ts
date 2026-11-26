@@ -23,6 +23,7 @@ import type {
 } from '../../types/log.js'
 import type { Hex } from '../../types/misc.js'
 import type { InferProperty } from '../../types/utils.js'
+import { isHex } from '../data/isHex.js'
 import { size } from '../data/size.js'
 import {
   type ToEventSelectorErrorType,
@@ -357,17 +358,20 @@ function filterBySelector(
   events: readonly AbiEvent[],
   selector: Hex,
 ): readonly AbiEvent[] {
+  const normalizedSelector = isHex(selector, { strict: false })
+    ? selector.toLowerCase()
+    : selector
   const matched: AbiEvent[] = []
   for (const event of events) {
     if (event.anonymous) continue
     if (matched.length === 0) {
-      if (toEventSelector(formatAbiItem(event)) === selector)
+      if (toEventSelector(formatAbiItem(event)) === normalizedSelector)
         matched.push(event)
       continue
     }
     if (event.name !== matched[0]!.name) continue
     try {
-      if (toEventSelector(formatAbiItem(event)) === selector)
+      if (toEventSelector(formatAbiItem(event)) === normalizedSelector)
         matched.push(event)
     } catch {
       // No signature to compare — not an event of this selector.

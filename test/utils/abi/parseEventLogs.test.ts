@@ -94,6 +94,23 @@ const truncatedLog: Log = { ...transferLog, data: '0x' }
 const unknownLog: Log = { ...transferLog, topics: [`0x${'ab'.repeat(32)}`] }
 
 describe('decodes the logs of getLogs', () => {
+  test.each([
+    true,
+    false,
+  ])('matches uppercase topic0 with strict %s', (strict) => {
+    const topic0 = `0x${transferTopic.slice(2).toUpperCase()}` as const
+    const log = {
+      ...transferLog,
+      topics: [topic0, fromTopic, toTopic] as const,
+    }
+
+    expect(
+      parseEventLogs({ abi: [transferEvent], logs: [log], strict }),
+    ).toStrictEqual([
+      { ...log, eventName: 'Transfer', args: { from, to, value: 7_561_729n } },
+    ])
+  })
+
   test('keeps the log fields and adds eventName / args', () => {
     const logs = parseEventLogs({ abi: [transferEvent], logs: [transferLog] })
     expect(logs).toStrictEqual([

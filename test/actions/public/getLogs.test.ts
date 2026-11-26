@@ -255,6 +255,24 @@ test('events: filters on a topic0 OR-list and decodes per log', async () => {
   expect(logs[0]?.args).toEqual({ from, to, value: 7_561_729n })
 })
 
+test.each([
+  ['event', { event: transferEvent }],
+  ['events', { events: [transferEvent, approvalEvent], strict: true }],
+] as const)('decodes an uppercase RPC topic0 with the %s filter', async (_name, filter) => {
+  const topic0 = `0x${transferTopic.slice(2).toUpperCase()}`
+  const topics = [topic0, ...rawLog.topics.slice(1)]
+  const { client } = mock([{ ...rawLog, topics }])
+
+  const logs = await getLogs(client, filter)
+
+  expect(logs).toHaveLength(1)
+  expect(logs[0]).toMatchObject({
+    topics,
+    eventName: 'Transfer',
+    args: { from, to, value: 7_561_729n },
+  })
+})
+
 test('passes a raw topics filter through unchanged', async () => {
   const { client, calls } = mock([])
   const topics = [null, [transferTopic, approvalTopic]] as const
