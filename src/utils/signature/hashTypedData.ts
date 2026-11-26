@@ -66,6 +66,7 @@ export type HashTypedDataParameters = {
    * The struct type definitions. `EIP712Domain` may be declared to override
    * the canonical domain struct (custom fields, order, or types); when
    * omitted it is derived from the domain value's present canonical fields.
+   * Field names must be unique within each struct.
    */
   types: TypedData | TypedDataTypes
   /** The struct being signed (or `'EIP712Domain'` for a domain-only signature). */
@@ -237,6 +238,28 @@ function assertValidStructType(type: string): void {
     integerRegex.test(type)
   )
     throw new InvalidStructTypeError({ type })
+}
+
+function assertValidFieldNames(
+  type: string,
+  fields: readonly TypedDataParameter[],
+): void {
+  const names = new Set<string>()
+  for (const [index, field] of fields.entries()) {
+    // JS coerces other values into property keys when accessing the message.
+    const name = field?.name
+    if (typeof name !== 'string')
+      throw new TypedDataError(
+        `Invalid field name in struct "${type}": expected a string.`,
+        { path: `types.${type}[${index}].name` },
+      )
+    if (names.has(name))
+      throw new TypedDataError(
+        `Duplicate field name "${name}" in struct "${type}".`,
+        { path: `${type}.${name}` },
+      )
+    names.add(name)
+  }
 }
 
 /** Human name of a value's kind, for validation error messages. */
@@ -447,7 +470,12 @@ function validateTypedData(parameters: HashTypedDataParameters): void {
   if (primaryType !== 'EIP712Domain' && !types_[primaryType])
     throw new InvalidPrimaryTypeError({ primaryType, types: types_ })
 
-  for (const type of Object.keys(types_)) assertValidStructType(type)
+  // Check the schema before walking values: duplicate fields would cause the
+  // validator and encoder to revisit the same value at each nesting level.
+  for (const [type, fields] of Object.entries(types_)) {
+    assertValidStructType(type)
+    assertValidFieldNames(type, fields)
+  }
 
   if (domain !== undefined) {
     if (typeof domain !== 'object' || domain === null || Array.isArray(domain))
@@ -501,6 +529,20 @@ export function hashDomain(
   domain: TypedDataDomain & Record<string, unknown>,
   types?: TypedDataTypes | undefined,
 ): Hex {
+  // Check and encode the same definitions when called directly.
+  const schema = types?.EIP712Domain
+    ? cloneTransaction(types, 'types')
+    : undefined
+  if (schema?.EIP712Domain)
+    for (const type of findDependencies('EIP712Domain', schema))
+      assertValidFieldNames(type, schema[type]!)
+  return hashDomainStruct(domain, schema)
+}
+
+function hashDomainStruct(
+  domain: TypedDataDomain & Record<string, unknown>,
+  types: TypedDataTypes | undefined,
+): Hex {
   // A declared domain struct is hashed against the caller's `types`, so its
   // fields may reference a struct. A derived one is the canonical struct of
   // bare primitives and is hashed against nothing else — exactly as it is
@@ -531,8 +573,8 @@ export function hashDomain(
  * the hash.
  *
  * Parameters are validated before hashing (unknown `primaryType`, invalid
- * struct names, malformed domain, out-of-width integers, wrong-size
- * `bytesN` values), so bad input throws instead of yielding a wrong digest.
+ * struct names, duplicate field names, malformed domain, out-of-width
+ * integers, wrong-size `bytesN` values).
  *
  * @param parameters `domain`, `types`, `primaryType`, `message`.
  * @returns The `0x`-prefixed 32-byte digest.
@@ -548,7 +590,7 @@ export function hashTypedData(parameters_: HashTypedDataParameters): Hex {
   validateTypedData(parameters)
   const { domain = {}, types, primaryType, message = {} } = parameters
   const parts: Hex[] = ['0x1901']
-  parts.push(hashDomain(domain, types as TypedDataTypes))
+  parts.push(hashDomainStruct(domain, types as TypedDataTypes))
   if (primaryType !== 'EIP712Domain')
     parts.push(hashStruct(primaryType, types as TypedDataTypes, message))
   return keccak256(concat(parts))

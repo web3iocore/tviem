@@ -303,6 +303,23 @@ describe('caller-supplied EIP712Domain types', () => {
     )
   })
 
+  test('rejects duplicate field names in a custom domain dependency', () => {
+    const types = {
+      EIP712Domain: [{ name: 'apps', type: 'App[]' }],
+      App: [
+        { name: 'name', type: 'string' },
+        { name: 'name', type: 'string' },
+      ],
+    }
+    const domain = { apps: [] }
+    const error = 'Duplicate field name "name" in struct "App".'
+
+    expect(() => hashDomain(domain, types)).toThrow(error)
+    expect(() =>
+      hashTypedData({ domain, types, primaryType: 'EIP712Domain' }),
+    ).toThrow(error)
+  })
+
   test('matches the viem oracle digest for a custom domain (domain-only)', () => {
     expect(
       hashTypedData({
@@ -1102,6 +1119,40 @@ describe('TypedDataError', () => {
     }
     return undefined
   }
+
+  test('rejects duplicate field names in a nested schema before validating values', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        types: {
+          Mail: [{ name: 'to', type: 'Person' }],
+          Person: [
+            { name: 'name', type: 'string' },
+            { name: 'name', type: 'bytes32' },
+          ],
+        },
+        primaryType: 'Mail',
+      }),
+    )
+
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({
+      path: 'Person.name',
+      shortMessage: 'Duplicate field name "name" in struct "Person".',
+    })
+  })
+
+  test('rejects a non-string field name', () => {
+    const error = errorOf(() =>
+      hashTypedData({
+        types: { Item: [{ name: 123, type: 'string' }] } as never,
+        primaryType: 'Item',
+        message: { 123: 'value' },
+      }),
+    )
+
+    expect(error).toBeInstanceOf(TypedDataError)
+    expect(error).toMatchObject({ path: 'types.Item[0].name' })
+  })
 
   /** Hashes `{ f: value }` against a one-field struct `T { <type> f }`. */
   const hashField = (type: string, value: unknown) => () =>

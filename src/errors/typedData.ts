@@ -51,13 +51,14 @@ export type TypedDataErrorType = TypedDataError & {
 /**
  * Typed data does not pass TIP-712 validation: a value does not match its
  * declared type, a declared field has no value, a field has no declared
- * type, or a declared type is not a supported TIP-712 type.
+ * type, a field name is invalid or duplicated within a struct, or a declared
+ * type is not a supported TIP-712 type.
  */
 export class TypedDataError extends BaseError {
   /**
-   * Where the value sits in the typed data, when known: the struct type name
-   * followed by the field names leading to it (e.g. `Mail.to.wallet`), with
-   * array elements as `[index]`.
+   * The location of the offending value or declaration, when known. Value
+   * paths start with the struct type name (e.g. `Mail.to.wallet`) and use
+   * `[index]` for array elements.
    */
   path?: string | undefined
 

@@ -130,6 +130,23 @@ describe('verifyTypedData', () => {
     ).toBe(false)
   })
 
+  test('rejects a schema with duplicate field names even for a valid signature', () => {
+    expect(
+      verifyTypedData({
+        ...typedData,
+        types: {
+          ...types,
+          Extra: [
+            { name: 'label', type: 'string' },
+            { name: 'label', type: 'string' },
+          ],
+        },
+        signature: mailSignature,
+        address: pk1Base58,
+      }),
+    ).toBe(false)
+  })
+
   test('rejects a tampered signature', () => {
     // Flip the first byte of r (3e -> 00); recovery still yields a point, but
     // a different address.
