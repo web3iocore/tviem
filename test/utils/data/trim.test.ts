@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import { trim } from '../../../src/utils/data/trim.js'
+import { hexToBytes } from '../../../src/utils/encoding/toBytes.js'
 
 test('default', () => {
   expect(trim('0x000000')).toMatchInlineSnapshot('"0x00"')
@@ -90,7 +91,22 @@ describe('hex', () => {
         '0x1a4e12a450000000000000000000000000000000000000000000000000000000',
         { dir: 'right' },
       ),
-    ).toMatchInlineSnapshot('"0x01a4e12a45"')
+    ).toMatchInlineSnapshot('"0x1a4e12a450"')
+  })
+
+  test.each([
+    ['0x1230', '0x1230'],
+    ['0x12300000', '0x1230'],
+    ['0x00A00000', '0x00A0'],
+    ['0x23000', '0x0230'],
+    ['0x100', '0x01'],
+    ['0xf', '0x0f'],
+    ['0x000', '0x00'],
+    ['0x', '0x'],
+  ] as const)('right trim of %s returns %s', (hex, expected) => {
+    const result = trim(hex, { dir: 'right' })
+    expect(result).toBe(expected)
+    expect(hexToBytes(result)).toEqual(trim(hexToBytes(hex), { dir: 'right' }))
   })
 })
 

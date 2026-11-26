@@ -14,25 +14,32 @@ export function trim<value extends ByteArray | Hex>(
   hexOrBytes: value,
   { dir = 'left' }: TrimOptions = {},
 ): TrimReturnType<value> {
-  let data: any =
-    typeof hexOrBytes === 'string' ? hexOrBytes.replace('0x', '') : hexOrBytes
-
-  let sliceLength = 0
-  for (let i = 0; i < data.length - 1; i++) {
-    if (data[dir === 'left' ? i : data.length - i - 1].toString() === '0')
-      sliceLength++
-    else break
-  }
-  data =
-    dir === 'left'
-      ? data.slice(sliceLength)
-      : data.slice(0, data.length - sliceLength)
-
   if (typeof hexOrBytes === 'string') {
-    if (data.length === 1 && dir === 'right') data = `${data}0`
-    return `0x${
-      data.length % 2 === 1 ? `0${data}` : data
-    }` as TrimReturnType<value>
+    let hex = hexOrBytes.replace('0x', '')
+
+    if (dir === 'right') {
+      let end = hex.length
+      while (end > 2 && hex.slice(end - 2, end) === '00') end -= 2
+      hex = hex.slice(0, end)
+    } else {
+      let start = 0
+      while (start < hex.length - 1 && hex[start] === '0') start++
+      hex = hex.slice(start)
+    }
+
+    return `0x${hex.length % 2 === 1 ? `0${hex}` : hex}` as TrimReturnType<value>
   }
-  return data as TrimReturnType<value>
+
+  const bytes = hexOrBytes
+  let sliceLength = 0
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (bytes[dir === 'left' ? i : bytes.length - i - 1] !== 0) break
+    sliceLength++
+  }
+
+  return (
+    dir === 'left'
+      ? bytes.slice(sliceLength)
+      : bytes.slice(0, bytes.length - sliceLength)
+  ) as TrimReturnType<value>
 }
