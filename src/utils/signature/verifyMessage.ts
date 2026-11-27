@@ -177,22 +177,21 @@ export type VerifyMessageErrorType =
 /**
  * Verifies that `address` produced the TIP-191 signature over `message`.
  *
- * Recovers the signer with {@link recoverMessageAddress} and compares it to
- * `address` across all TRON address forms. Returns `false` (never throws) if
- * the signature is malformed or does not match.
+ * Recovers the signer and compares it to `address` across all TRON address
+ * forms. Returns `false` if the signature is malformed or does not match.
  *
  * @returns `true` if the signature is valid for `address`, otherwise `false`.
+ * @throws If the message cannot be hashed, including when `message.raw` is malformed.
  */
 export function verifyMessage({
   message,
   signature,
   address,
 }: VerifyMessageParameters): boolean {
+  const hash = hashMessage(message, 'bytes')
   try {
-    return isAddressEqual(
-      recoverMessageAddress({ message, signature }),
-      address,
-    )
+    const publicKey = recoverPublicKey({ hash, signature })
+    return isAddressEqual(publicKeyToAddress(publicKey), address)
   } catch {
     return false
   }

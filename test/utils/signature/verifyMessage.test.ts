@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest'
+import { InvalidHexValueError } from '../../../src/errors/encoding.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { InvalidSignatureError } from '../../../src/errors/signature.js'
 import { hashMessage } from '../../../src/utils/signature/hashMessage.js'
 import { parseSignature } from '../../../src/utils/signature/sign.js'
@@ -108,10 +110,30 @@ describe('verifyMessage', () => {
     expect(verifyMessage({ message, signature: tampered, address })).toBe(false)
   })
 
-  test('returns false (never throws) on a malformed signature', () => {
+  test('returns false on a malformed signature', () => {
     expect(verifyMessage({ message, signature: '0xdeadbeef', address })).toBe(
       false,
     )
+  })
+
+  test('throws an input error on malformed raw bytes', () => {
+    expect(() =>
+      verifyMessage({
+        message: { raw: new Uint16Array([256]) as never },
+        signature: messageSignature,
+        address,
+      }),
+    ).toThrow(InvalidParameterError)
+  })
+
+  test('throws an input error on raw hex with an odd nibble count', () => {
+    expect(() =>
+      verifyMessage({
+        message: { raw: '0x123' },
+        signature: messageSignature,
+        address,
+      }),
+    ).toThrow(InvalidHexValueError)
   })
 })
 

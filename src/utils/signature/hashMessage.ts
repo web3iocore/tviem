@@ -35,8 +35,9 @@ export type HashMessageErrorType =
  * `keccak256("\x19TRON Signed Message:\n" ++ len ++ message)`,
  * where `len` is the decimal byte-length of `message` as ASCII.
  *
- * A `string` is encoded as UTF-8 (length measured in bytes, not code points);
- * pass `{ raw }` to hash arbitrary bytes as-is.
+ * A `string` is encoded as UTF-8, with length measured in bytes.
+ * Pass `{ raw }` to hash arbitrary bytes as-is. Each byte must be an integer
+ * from 0 to 255.
  *
  * @param message The message to hash — a UTF-8 string or `{ raw: Hex | bytes }`.
  * @returns The `0x`-prefixed 32-byte digest.
@@ -70,18 +71,36 @@ export function hashMessage<to extends 'hex' | 'bytes' = 'hex'>(
       assertHexBytes(raw)
       return hexToBytes(raw)
     }
-    if (
-      typeof raw !== 'object' ||
-      raw === null ||
-      typeof (raw as { length?: unknown }).length !== 'number'
-    )
+    const length =
+      typeof raw === 'object' && raw !== null ? raw.length : undefined
+    if (typeof length !== 'number')
       throw new InvalidParameterError(
         'Invalid raw message: expected a 0x-prefixed hex string or bytes.',
         { param: 'message.raw', reason: 'type' },
       )
-    // Copy the bytes: the length prefix and the hashed bytes are both taken
-    // from this one array.
-    return Uint8Array.from(raw)
+    if (!Number.isSafeInteger(length) || length < 0)
+      throw new InvalidParameterError(
+        'Raw message length must be a non-negative safe integer.',
+        { param: 'message.raw', reason: 'range' },
+      )
+
+    const bytes = new Uint8Array(length)
+    for (let index = 0; index < length; index++) {
+      // Validate and copy the same value, including for accessor properties.
+      const byte = Object.hasOwn(raw, index) ? raw[index] : undefined
+      if (
+        typeof byte !== 'number' ||
+        !Number.isInteger(byte) ||
+        byte < 0 ||
+        byte > 255
+      )
+        throw new InvalidParameterError(
+          `Raw message byte at index ${index} must be an integer from 0 to 255.`,
+          { param: 'message.raw', reason: 'format' },
+        )
+      bytes[index] = byte
+    }
+    return bytes
   })()
   const prefixBytes = stringToBytes(
     `${presignMessagePrefix}${messageBytes.length}`,

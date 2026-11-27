@@ -133,6 +133,27 @@ describe('hashMessage with { raw } bytes', () => {
     expect(hashMessage({ raw: new Uint8Array(0) })).toBe(hashMessage(''))
   })
 
+  test('takes a single snapshot of the length and indexed bytes', () => {
+    let lengthReads = 0
+    let byteReads = 0
+    const raw = {
+      get length() {
+        return lengthReads++ === 0 ? 1 : 0
+      },
+      get 0() {
+        return byteReads++ === 0 ? 1 : 256
+      },
+      get [Symbol.iterator]() {
+        throw new Error('Expected indexed byte reads')
+      },
+    }
+    expect(hashMessage({ raw: raw as never })).toBe(
+      hashMessage({ raw: '0x01' }),
+    )
+    expect(lengthReads).toBe(1)
+    expect(byteReads).toBe(1)
+  })
+
   test("the caller's array is not modified and later changes to it do not matter", () => {
     const raw = new Uint8Array([1, 2, 3, 250, 255])
     const before = hashMessage({ raw })
@@ -187,5 +208,40 @@ describe('hashMessage with { raw } bytes', () => {
     }
     expect(err).toBeInstanceOf(InvalidParameterError)
     expect((err as InvalidParameterError).param).toBe('message.raw')
+  })
+
+  test.each([
+    -1,
+    1.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])('rejects a raw byte length of %s', (length) => {
+    expect(() => hashMessage({ raw: { length } as never })).toThrow(
+      expect.objectContaining({
+        name: 'InvalidParameterError',
+        param: 'message.raw',
+        reason: 'range',
+      }),
+    )
+  })
+
+  test.each([
+    ['a sparse array', new Array(1)],
+    ['a missing array-like index', { length: 2, 0: 1 }],
+    ['a byte above 255', new Uint16Array([256])],
+    ['a negative byte', [-1]],
+    ['a fractional byte', [1.5]],
+    ['a numeric string', ['1']],
+    ['an undefined element', [undefined]],
+    ['NaN', [NaN]],
+  ])('rejects %s in raw bytes', (_, raw) => {
+    expect(() => hashMessage({ raw: raw as never })).toThrow(
+      expect.objectContaining({
+        name: 'InvalidParameterError',
+        param: 'message.raw',
+        reason: 'format',
+      }),
+    )
   })
 })

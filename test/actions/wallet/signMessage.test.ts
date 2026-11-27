@@ -12,6 +12,7 @@ import {
   type Transport,
 } from '../../../src/clients/transports/createTransport.js'
 import { BaseError } from '../../../src/errors/base.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import {
   AccountNotFoundError,
   UserRejectedRequestError,
@@ -41,6 +42,16 @@ test('signs a message identically to account.signMessage', async () => {
     message: 'gm tviem',
   })
   expect(viaClient).toEqual(viaAccount)
+})
+
+test('rejects malformed raw bytes when signing with a local account', async () => {
+  const client = createWalletClient({
+    account: privateKeyToAccount(pk1),
+    transport,
+  })
+  await expect(
+    client.signMessage({ message: { raw: ['1'] as never } }),
+  ).rejects.toBeInstanceOf(InvalidParameterError)
 })
 
 test('a per-call account overrides the hoisted one', async () => {
