@@ -31,7 +31,7 @@ export type WithRetryParameters = {
 export type WithRetryErrorType = ErrorType
 
 /** Retries `fn` up to `retryCount` times with a configurable backoff `delay`. */
-export function withRetry<data>(
+export async function withRetry<data>(
   fn: () => Promise<data>,
   {
     delay: delay_ = 100,
@@ -39,48 +39,24 @@ export function withRetry<data>(
     shouldRetry = () => true,
     signal,
   }: WithRetryParameters = {},
-) {
-  return new Promise<data>((resolve, reject) => {
-    const attemptRetry = async ({ count = 0 } = {}) => {
-      if (signal?.aborted) {
-        reject(getAbortError(signal))
-        return
-      }
+): Promise<data> {
+  for (let count = 0; ; count++) {
+    if (signal?.aborted) throw getAbortError(signal)
 
-      const retry = async ({ error }: { error: Error }) => {
-        const delay =
-          typeof delay_ === 'function' ? delay_({ count, error }) : delay_
-        if (delay) {
-          try {
-            await wait(delay, { signal })
-          } catch (err) {
-            reject(err)
-            return
-          }
-        }
-        attemptRetry({ count: count + 1 })
-      }
+    try {
+      return await fn()
+    } catch (err) {
+      if (signal?.aborted) throw getAbortError(signal)
+      if (isAbortError(err)) throw err
 
-      try {
-        const data = await fn()
-        resolve(data)
-      } catch (err) {
-        if (signal?.aborted) {
-          reject(getAbortError(signal))
-          return
-        }
-        if (isAbortError(err)) {
-          reject(err)
-          return
-        }
-        if (
-          count < retryCount &&
-          (await shouldRetry({ count, error: err as Error }))
-        )
-          return retry({ error: err as Error })
-        reject(err)
-      }
+      const error = err as Error
+      const canRetry =
+        count < retryCount && (await shouldRetry({ count, error }))
+      if (!canRetry) throw err
+
+      const delay =
+        typeof delay_ === 'function' ? delay_({ count, error }) : delay_
+      if (delay) await wait(delay, { signal })
     }
-    attemptRetry()
-  })
+  }
 }
