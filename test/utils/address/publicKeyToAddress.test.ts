@@ -72,4 +72,33 @@ describe('publicKeyToAddress error classes', () => {
       reason: 'format',
     })
   })
+
+  test.each([
+    ['a point off the curve', `${v1PublicKey.slice(4, -2)}b9`],
+    ['zero coordinates', '00'.repeat(64)],
+    [
+      'an x coordinate outside the field',
+      // x = p + 1 and this y coordinate would be valid at x = 1.
+      'fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc30' +
+        '4218f20ae6c646b363db68605822fb14264ca8d2587fdd6fbc750d587e76a7ee',
+    ],
+  ])('%s throws an InvalidParameterError in all supported forms', (_, body) => {
+    const prefixed = `0x04${body}` as const
+    const coordinates = `0x${body}` as const
+    for (const key of [
+      prefixed,
+      coordinates,
+      hexToBytes(prefixed),
+      hexToBytes(coordinates),
+    ]) {
+      const error = errorOf(() => publicKeyToAddress(key))
+      expect(error).toBeInstanceOf(InvalidParameterError)
+      expect(error).toMatchObject({
+        param: 'publicKey',
+        reason: 'format',
+        shortMessage:
+          'Invalid public key. Expected a valid secp256k1 curve point.',
+      })
+    }
+  })
 })
