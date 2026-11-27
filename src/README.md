@@ -44,7 +44,7 @@
 npm i @tronweb3/tviem
 ```
 
-Requires **Node.js 22+**.
+Requires Node.js **24.22.3 or later within 24.x**, or **26.13.1 or later within 26.x**.
 
 ## Overview
 
