@@ -7,7 +7,7 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22",
+    "node": "^24.22.3 || ^26.13.1",
     "pnpm": ">=10"
   },
   "keywords": [
