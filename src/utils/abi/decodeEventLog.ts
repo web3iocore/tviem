@@ -94,10 +94,11 @@ const docsPath = '/docs/abi/decodeEventLog'
 
 /**
  * Decodes an event log into its parameter values, per the Solidity ABI event
- * model (the inverse of `encodeEventTopics` + `encodeAbiParameters`): the
- * event is resolved from `topics[0]` (the selector) or from `eventName`,
- * indexed parameters are read from `topics`, and non-indexed parameters are
- * decoded from `data`.
+ * model (the inverse of `encodeEventTopics` + `encodeAbiParameters`). For a
+ * non-anonymous event, `topics[0]` must match the event selector in both
+ * strict and lenient mode. `eventName` restricts the candidates by name and
+ * is required for anonymous events. Indexed parameters are read from
+ * `topics`, and non-indexed parameters are decoded from `data`.
  *
  * Several events of `abi` can share one selector and differ only in which
  * inputs are indexed (TRC-20 vs TRC-721 `Transfer`). Each of them is tried in
@@ -307,11 +308,10 @@ function decodeEvent(
 }
 
 /**
- * The events of `abi` a log can decode against, in ABI order: the
- * non-anonymous events whose selector is `topic0`, restricted to the events
- * named `eventName` when it is given. With no selector to go by — a log
- * without topics, or events of that name that are all anonymous — the first
- * event named `eventName` is the only candidate.
+ * Selects non-anonymous events whose selector is `topic0`, in ABI order,
+ * restricted to `eventName` when given. With `eventName` and no topics, only
+ * the first anonymous event of that name can match. When all events of that
+ * name are anonymous, the first matches even if topics are present.
  */
 function selectEvents(
   abi: Abi | readonly unknown[],
@@ -338,7 +338,9 @@ function selectEvents(
       if (named.every((event) => event.anonymous)) return [named[0]!]
       throw new AbiEventSignatureNotFoundError(topic0, { docsPath })
     }
-    return [named[0]!]
+    const anonymous = named.find((event) => event.anonymous)
+    if (anonymous) return [anonymous]
+    throw new AbiEventSignatureEmptyTopicsError({ docsPath })
   }
 
   if (!topic0) throw new AbiEventSignatureEmptyTopicsError({ docsPath })

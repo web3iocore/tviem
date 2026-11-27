@@ -1,6 +1,7 @@
 import type { Abi } from 'abitype'
 import { describe, expect, test } from 'vitest'
 import {
+  AbiEventSignatureEmptyTopicsError,
   AbiEventSignatureNotFoundError,
   DecodeLogDataMismatchError,
   DecodeLogTopicsMismatchError,
@@ -357,6 +358,42 @@ describe('eventName is validated against topic0 (the log identity)', () => {
     })
     expect(decoded.eventName).toBe('Transfer')
     expect((decoded.args as { value: bigint }).value).toBe(123n)
+  })
+
+  test.each([
+    undefined,
+    true,
+    false,
+  ])('requires a selector for named non-anonymous events with strict=%s', (strict) => {
+    const abi = [
+      { type: 'event', name: 'Ping', inputs: [] },
+      {
+        type: 'event',
+        name: 'Value',
+        inputs: [{ name: 'value', type: 'uint256', indexed: false }],
+      },
+    ] as const
+    expect(() =>
+      decodeEventLog({ abi, eventName: 'Ping', topics: [], strict }),
+    ).toThrow(AbiEventSignatureEmptyTopicsError)
+    expect(() =>
+      decodeEventLog({ abi, eventName: 'Value', topics: [], data, strict }),
+    ).toThrow(AbiEventSignatureEmptyTopicsError)
+  })
+
+  test('an empty topics array selects the same-name anonymous event', () => {
+    const abi = [
+      { type: 'event', name: 'Value', inputs: [] },
+      {
+        type: 'event',
+        name: 'Value',
+        anonymous: true,
+        inputs: [{ name: 'value', type: 'uint256', indexed: false }],
+      },
+    ] as const
+    expect(
+      decodeEventLog({ abi, eventName: 'Value', topics: [], data }),
+    ).toEqual({ eventName: 'Value', args: { value: 123n } })
   })
 })
 
