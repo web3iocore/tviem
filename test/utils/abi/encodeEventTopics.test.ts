@@ -1,22 +1,28 @@
 import type { Abi } from 'abitype'
 import { describe, expect, test } from 'vitest'
-import { AbiEventNotFoundError } from '../../../src/errors/abi.js'
+import {
+  AbiEventNotFoundError,
+  AbiEventOverloadError,
+} from '../../../src/errors/abi.js'
 import { FilterTypeNotSupportedError } from '../../../src/errors/log.js'
+import { InvalidParameterError } from '../../../src/errors/parameter.js'
 import { encodeEventTopics } from '../../../src/utils/abi/encodeEventTopics.js'
+import { toEventSelector } from '../../../src/utils/hash/toEventSelector.js'
 import { loadEventFixtures, reviveValue } from '../../fixtures/abi/loader.js'
 
 const fixtures = loadEventFixtures()
 
-/** Builds a name-keyed args object from a fixture's positional args. */
-function namedArgs(
+/** Builds named filters for the indexed inputs in a fixture. */
+function namedIndexedArgs(
   fixture: (typeof fixtures)[number],
 ): Record<string, unknown> {
   const inputs = fixture.abi[0]!.inputs
   return Object.fromEntries(
-    inputs.map((input, i) => [
-      input.name!,
-      reviveValue(input, fixture.args[i]!),
-    ]),
+    inputs.flatMap((input, i) =>
+      input.indexed
+        ? [[input.name!, reviveValue(input, fixture.args[i]!)] as const]
+        : [],
+    ),
   )
 }
 
@@ -27,7 +33,7 @@ describe('encodeEventTopics (gold fixtures)', () => {
     const topics = encodeEventTopics({
       abi: fixture.abi as unknown as Abi,
       eventName: fixture.eventName,
-      args: namedArgs(fixture),
+      args: namedIndexedArgs(fixture),
     })
     expect(topics).toEqual(fixture.topics)
   })
@@ -44,7 +50,7 @@ describe('encodeEventTopics (units)', () => {
     const topics = encodeEventTopics({
       abi: transfer.abi as unknown as Abi,
       eventName: 'Transfer',
-      args: namedArgs(transfer),
+      args: namedIndexedArgs(transfer),
     })
     expect(topics[0]).toBe(
       '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
@@ -91,7 +97,7 @@ describe('encodeEventTopics (units)', () => {
     const topics = encodeEventTopics({
       abi: anon.abi as unknown as Abi,
       eventName: 'Ping',
-      args: namedArgs(anon),
+      args: namedIndexedArgs(anon),
     })
     expect(topics).toEqual(anon.topics)
     expect(topics[0]).not.toBe(
@@ -106,6 +112,70 @@ describe('encodeEventTopics (units)', () => {
         eventName: 'Nope',
       }),
     ).toThrow(AbiEventNotFoundError)
+  })
+})
+
+describe('event selection and named filters', () => {
+  const changed = {
+    type: 'event',
+    name: 'Changed',
+    inputs: [
+      { name: 'value', type: 'uint256', indexed: true },
+      { name: 'previousValue', type: 'uint256', indexed: false },
+    ],
+  } as const
+  const overloaded = {
+    type: 'event',
+    name: 'Changed',
+    inputs: [{ name: 'enabled', type: 'bool', indexed: true }],
+  } as const
+  const cleared = { type: 'event', name: 'Cleared', inputs: [] } as const
+
+  test('rejects overloaded event names regardless of ABI order', () => {
+    for (const abi of [
+      [changed, overloaded],
+      [overloaded, changed],
+    ]) {
+      expect(() =>
+        encodeEventTopics({
+          abi,
+          eventName: 'Changed',
+          args: { enabled: true },
+        }),
+      ).toThrow(AbiEventOverloadError)
+    }
+  })
+
+  test('requires an event name when multiple events are present', () => {
+    expect(() => encodeEventTopics({ abi: [cleared, changed] })).toThrow(
+      InvalidParameterError,
+    )
+  })
+
+  test('encodes topics for a uniquely selected event', () => {
+    const args = { enabled: true }
+    const topics = [
+      toEventSelector('Changed(bool)'),
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+    ]
+    expect(
+      encodeEventTopics({
+        abi: [cleared, overloaded],
+        eventName: 'Changed',
+        args,
+      }),
+    ).toEqual(topics)
+    expect(encodeEventTopics({ abi: [overloaded], args })).toEqual(topics)
+  })
+
+  test.each([
+    { event: changed, key: 'enabled' },
+    { event: changed, key: 'previousValue' },
+    { event: cleared, key: 'value' },
+  ])('rejects $key as a named filter for $event.name', ({ event, key }) => {
+    expect(() =>
+      encodeEventTopics({ abi: [event], args: { [key]: 1n } }),
+    ).toThrow(InvalidParameterError)
   })
 })
 

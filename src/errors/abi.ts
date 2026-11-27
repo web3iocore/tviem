@@ -314,7 +314,11 @@ export type AbiEventOverloadErrorType = AbiEventOverloadError & {
   name: 'AbiEventOverloadError'
 }
 export class AbiEventOverloadError extends BaseError {
-  constructor(eventName: string, signatures: readonly string[]) {
+  constructor(
+    eventName: string,
+    signatures: readonly string[],
+    hint = 'Call `getLogs` with the specific `event` definition instead.',
+  ) {
     super(
       [
         `Event "${eventName}" is overloaded on the ABI.`,
@@ -325,7 +329,7 @@ export class AbiEventOverloadError extends BaseError {
           'Overloads:',
           ...signatures.map((signature) => `  ${signature}`),
           '',
-          'Call `getLogs` with the specific `event` definition instead.',
+          hint,
         ],
         name: 'AbiEventOverloadError',
       },

@@ -3,11 +3,17 @@ import type { Abi, AbiEvent, AbiParameter } from 'abitype'
 import {
   AbiEventNotFoundError,
   type AbiEventNotFoundErrorType,
+  AbiEventOverloadError,
+  type AbiEventOverloadErrorType,
 } from '../../errors/abi.js'
 import {
   FilterTypeNotSupportedError,
   type FilterTypeNotSupportedErrorType,
 } from '../../errors/log.js'
+import {
+  InvalidParameterError,
+  type InvalidParameterErrorType,
+} from '../../errors/parameter.js'
 import type { ErrorType } from '../../errors/utils.js'
 import type { Hex, LogTopic } from '../../types/misc.js'
 import { type StringToHexErrorType, stringToHex } from '../encoding/toHex.js'
@@ -26,11 +32,15 @@ import { formatAbiItem } from './formatAbiItem.js'
 export type EncodeEventTopicsParameters = {
   /** ABI containing the event definition. */
   abi: Abi | readonly unknown[]
-  /** Name of the event to encode topics for (optional if the ABI has one). */
+  /**
+   * Name of the event. May be omitted when the ABI contains exactly one event.
+   * For an overloaded name, pass only the desired event definition in `abi`.
+   */
   eventName?: string | undefined
   /**
-   * Indexed argument values, positional over the indexed inputs or keyed by
-   * name. A `null`/`undefined` entry leaves that topic as a wildcard.
+   * Argument values, positional over the indexed inputs or keyed by their
+   * names. Each key must match a named indexed input. A `null`/`undefined`
+   * entry leaves that topic as a wildcard.
    */
   args?: readonly unknown[] | Record<string, unknown> | undefined
 }
@@ -39,8 +49,10 @@ export type EncodeEventTopicsReturnType = LogTopic[]
 
 export type EncodeEventTopicsErrorType =
   | AbiEventNotFoundErrorType
+  | AbiEventOverloadErrorType
   | EncodeAbiParametersErrorType
   | FilterTypeNotSupportedErrorType
+  | InvalidParameterErrorType
   | Keccak256ErrorType
   | StringToHexErrorType
   | ToEventSelectorErrorType
@@ -80,18 +92,31 @@ export function encodeEventTopics(
   const { abi, eventName, args } = parameters
 
   const abiItem = selectEvent(abi, eventName)
-  const inputs = (abiItem.inputs ?? []) as readonly AbiParameter[]
-  const indexedInputs = inputs.filter(
-    (input) => 'indexed' in input && input.indexed,
-  )
+  const indexedInputs = (abiItem.inputs ?? []).filter((input) => input.indexed)
 
   const argTopics: LogTopic[] = []
-  if (args && indexedInputs.length > 0) {
+  if (args) {
+    const positionalArgs = Array.isArray(args) ? args : undefined
+    const namedArgs = positionalArgs
+      ? undefined
+      : (args as Record<string, unknown>)
+    if (namedArgs) {
+      for (const name of Object.getOwnPropertyNames(namedArgs)) {
+        if (!name || !indexedInputs.some((input) => input.name === name))
+          throw new InvalidParameterError(
+            `Event "${abiItem.name}" has no indexed input named "${name}".`,
+            { param: name, reason: 'unknown-field' },
+          )
+      }
+    }
+
     for (let i = 0; i < indexedInputs.length; i++) {
       const param = indexedInputs[i]!
-      const value = Array.isArray(args)
-        ? args[i]
-        : (args as Record<string, unknown>)[param.name ?? '']
+      const name = param.name ?? ''
+      const value =
+        namedArgs && Object.hasOwn(namedArgs, name)
+          ? namedArgs[name]
+          : positionalArgs?.[i]
       if (value === undefined || value === null) {
         argTopics.push(null)
         continue
@@ -135,7 +160,17 @@ function selectEvent(
     throw new AbiEventNotFoundError(eventName, {
       docsPath: '/docs/abi/encodeEventTopics',
     })
-  return abiItem
+  if (events.length === 1) return abiItem
+  if (!eventName)
+    throw new InvalidParameterError(
+      'Specify `eventName` when the ABI contains multiple events, or pass only the desired event definition in `abi`.',
+      { param: 'eventName', reason: 'conflict' },
+    )
+  throw new AbiEventOverloadError(
+    eventName,
+    events.map((event) => formatAbiItem(event)),
+    'Pass only the desired event definition in `abi`.',
+  )
 }
 
 /** Encodes a single indexed argument into its 32-byte topic word. */
