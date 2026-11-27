@@ -87,7 +87,7 @@ export type HttpTransport = Transport<
 /** Resolves a request's absolute URL from a node base, role and path. */
 function resolveUrl(base: string, node: TronNode, path: string): string {
   const b = base.replace(/\/+$/, '')
-  // A leading `/` is a host-root absolute escape (e.g. `/jsonrpc`, `/v1/*`).
+  // A leading `/` skips the node prefix and keeps the base URL's path.
   if (path.startsWith('/')) return `${b}${path}`
   const prefix = node === 'solidity' ? '/walletsolidity/' : '/wallet/'
   return `${b}${prefix}${path}`

@@ -64,7 +64,7 @@ test('solidity node routes to the /walletsolidity prefix', async () => {
   expect(url).toBe(`${HOST}/walletsolidity/getaccount`)
 })
 
-test('event node routes a /v1 path to the event host root (no wallet prefix)', async () => {
+test('event node appends a /v1 path directly to the event base URL', async () => {
   const t = transport({ eventUrl: 'https://event.example' })
   await t.config.request({
     node: 'event',

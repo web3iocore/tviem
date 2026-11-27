@@ -15,10 +15,12 @@ export type TronNode = 'full' | 'solidity' | 'event'
  * - `node` — `'full'` (FullNode `/wallet/*`), `'solidity'`
  *   (SolidityNode `/walletsolidity/*`), or `'event'` (TronGrid `/v1/*` event
  *   index host). Defaults to `'full'`.
- * - `path` — endpoint path **without** host or node prefix (e.g. `getaccount`).
- *   A path starting with `/` is treated as a host-root absolute escape
- *   (e.g. `/jsonrpc`, `/v1/*`) and bypasses the node prefix — event reads use
- *   this with a `/v1/...` path.
+ * - `path` — endpoint path without a host. The HTTP transport adds the node
+ *   prefix to paths without a leading `/` (e.g. `getaccount`). Paths starting
+ *   with `/` (e.g. `/jsonrpc` and `/v1/...`) skip the node prefix and are
+ *   appended directly to the selected node's base URL, including its path
+ *   prefix. For example, `/jsonrpc` with `https://gateway.example/node`
+ *   resolves to `https://gateway.example/node/jsonrpc`.
  * - `body` — JSON request body (omitted for `GET`).
  * - `method` — HTTP verb. Defaults to `'POST'`.
  */
