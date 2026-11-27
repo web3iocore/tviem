@@ -222,19 +222,16 @@ function serializeContract(
     fBytes(2, valueBytes),
   ])
   const parts = [fInt(1, typeInt), fBytes(2, any, { emitDefault: true })]
-  // `Permission_id` is `int32` (Tron.proto), and unlike the contract body it
-  // sits in `raw_data` itself — an over-wide value re-serializes differently
-  // node-side and dies as an opaque signature error rather than corrupting.
-  // Routed through the int64 parser so only primitives reach the writer: a
-  // BigNumber-style object would otherwise convert via `valueOf` here after
-  // passing the truthiness read above as something else.
-  if (contract.Permission_id)
+  // Validate every supplied Permission_id. The int32 writer omits zero
+  // after validation and enforces the protobuf field's range.
+  const permissionId = contract.Permission_id
+  if (permissionId !== undefined)
     parts.push(
       fInt32(
         5,
         int64InputToBigInt(
           'Permission_id',
-          contract.Permission_id,
+          permissionId,
           'contract.Permission_id',
         ),
       ),

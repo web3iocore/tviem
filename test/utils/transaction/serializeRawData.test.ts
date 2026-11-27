@@ -257,9 +257,7 @@ test('Permission_id is bounded to int32', () => {
     IntegerOutOfRangeError,
   )
 
-  // Primitives only: an object Permission_id would pass the truthiness read
-  // and then convert via `valueOf` into the signed bytes — a second,
-  // different read of the same field.
+  // A Permission_id object must be rejected before any valueOf coercion.
   expect(() =>
     toRawDataHex(withPermission({ valueOf: () => 2 } as unknown as number)),
   ).toThrow(
@@ -612,7 +610,11 @@ test('a contract type / type URL mismatch throws a TransactionIntegrityError', (
 
 test.each([
   ['a fractional number', 1.5, 'range'],
+  ['NaN', Number.NaN, 'range'],
   ['a non-primitive', [2], 'type'],
+  ['false', false, 'type'],
+  ['null', null, 'type'],
+  ['an empty string', '', 'format'],
   ['a non-decimal string', '0x02', 'format'],
 ])('a Permission_id that is %s reports `contract.Permission_id`', (_, id, reason) => {
   const serialize = () =>

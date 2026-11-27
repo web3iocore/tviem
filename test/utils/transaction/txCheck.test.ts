@@ -122,13 +122,19 @@ test('txCheck fails contract:[] even when other fields serialize to bytes', () =
   )
 })
 
-test('txCheck ignores model content that never reaches the wire', () => {
-  // The bytes are authoritative and are what a signature covers. Model
-  // content the serializer never encodes cannot change the verdict: a
-  // proto3-default `Permission_id: 0` leaves the bytes untouched.
-  const withDefault = canonicalTx()
-  withDefault.raw_data.contract[0]!.Permission_id = 0
-  expect(txCheck(withDefault)).toBe(true)
+test.each([
+  undefined,
+  0,
+])('txCheck accepts the default Permission_id value %s', (permissionId) => {
+  const tx = canonicalTx()
+  tx.raw_data.contract[0]!.Permission_id = permissionId
+  expect(txCheck(tx)).toBe(true)
+})
+
+test('txCheck rejects an empty string Permission_id', () => {
+  const tx = canonicalTx()
+  tx.raw_data.contract[0]!.Permission_id = '' as never
+  expect(txCheck(tx)).toBe(false)
 })
 
 test('txCheck returns false (does not throw) on structurally broken input', () => {

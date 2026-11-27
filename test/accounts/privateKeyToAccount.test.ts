@@ -265,6 +265,18 @@ describe('privateKeyToAccount', () => {
     ).toThrow(txCheckError)
   })
 
+  test('signTransaction refuses an empty string Permission_id', () => {
+    const account = privateKeyToAccount(pk1)
+    const transaction = structuredClone(canonicalTransaction())
+    transaction.raw_data.contract[0]!.Permission_id = '' as never
+    expect(() => account.signTransaction(transaction)).toThrow(
+      expect.objectContaining({
+        name: 'TransactionIntegrityError',
+        shortMessage: txCheckError,
+      }),
+    )
+  })
+
   test('signTransaction does not mutate its input', () => {
     const account = privateKeyToAccount(pk1)
     const transaction = {
