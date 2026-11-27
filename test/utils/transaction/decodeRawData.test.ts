@@ -142,6 +142,47 @@ const to = '41928c9af0651632157ef27a2cf17ca72c575a4d21'
 const transferTypeUrl = 'type.googleapis.com/protocol.TransferContract'
 const transferBody = `0x0a15${v1}1215${to}18c0843d`
 
+test('merges duplicate owner messages in an account permission update', () => {
+  const typeUrl = 'type.googleapis.com/protocol.AccountPermissionUpdateContract'
+  const ownerAddress = hexToBytes(`0x${v1}`)
+  const firstKey = concatBytes([fBytes(1, ownerAddress), fInt(2, 1)])
+  const secondKey = concatBytes([fBytes(1, hexToBytes(`0x${to}`)), fInt(2, 2)])
+  const firstOwner = concatBytes([
+    fBytes(3, stringToBytes('owner')),
+    fInt(4, 3),
+    fMessage(7, firstKey),
+  ])
+  const secondOwner = concatBytes([
+    fBytes(3, stringToBytes('updated owner')),
+    fMessage(7, secondKey),
+  ])
+  const body = concatBytes([
+    fBytes(1, ownerAddress),
+    fMessage(2, firstOwner),
+    fMessage(2, secondOwner),
+  ])
+  const any = concatBytes([fBytes(1, stringToBytes(typeUrl)), fBytes(2, body)])
+  const raw = fMessage(11, concatBytes([fInt(1, 46), fMessage(2, any)]))
+
+  expect(decodeRawData(raw).contract[0]).toStrictEqual({
+    type: 'AccountPermissionUpdateContract',
+    parameter: {
+      type_url: typeUrl,
+      value: {
+        owner_address: v1,
+        owner: {
+          permission_name: 'updated owner',
+          threshold: 3,
+          keys: [
+            { address: v1, weight: 1 },
+            { address: to, weight: 2 },
+          ],
+        },
+      },
+    },
+  })
+})
+
 test('tolerates contract-level provider/ContractName fields without throwing', () => {
   const any = concatBytes([
     fBytes(1, new TextEncoder().encode(transferTypeUrl)),

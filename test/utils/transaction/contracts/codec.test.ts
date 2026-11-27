@@ -206,9 +206,32 @@ test('decodeMessage: strictness propagates through nested messages', () => {
   )
 })
 
-test('decodeMessage: duplicated non-repeated field follows last-one-wins', () => {
+test('decodeMessage: duplicated scalar field follows last-one-wins', () => {
   const decoded = decodeMessage(spec, hexToBytes('0x18051807'))
   expect(decoded.amount).toBe(7)
+})
+
+test('decodeMessage: merges singular messages recursively', () => {
+  const nestedSpec: MessageSpec = [
+    {
+      no: 1,
+      name: 'outer',
+      kind: 'message',
+      spec: [{ no: 1, name: 'inner', kind: 'message', spec }],
+    },
+  ]
+  const initial = fMessage(1, encodeMessage(spec, { note: 'hi', amount: 5 }))
+  // Field 3 explicitly sets amount to zero on the wire.
+  const update = fMessage(1, hexToBytes('0x1800'))
+  const bytes = concatBytes([
+    fMessage(1, initial),
+    fMessage(1, new Uint8Array(0), { emitDefault: true }),
+    fMessage(1, update),
+  ])
+
+  expect(decodeMessage(nestedSpec, bytes)).toStrictEqual({
+    outer: { inner: { note: 'hi', amount: 0 } },
+  })
 })
 
 test("negative int64 round-trips through two's-complement encoding", () => {

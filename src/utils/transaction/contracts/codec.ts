@@ -236,12 +236,13 @@ export type DecodeMessageErrorType =
  *   to the number for values outside the table — the one divergence from
  *   JsonFormat, which still knows names our narrowed tables dropped (e.g.
  *   `ResourceCode` 2 decodes here as `2`, not `'TRON_POWER'`).
- * - proto3 defaults are omitted: a field absent from the wire is absent
- *   from the result (JsonFormat prints only set fields).
+ * - A field absent from the wire is absent from the result. Explicitly
+ *   encoded default values are preserved.
  * - Strict by design: a wire field outside the schema (or with an
  *   unexpected wire type) throws — bytes the schema cannot represent must
- *   never decode to a model that misrepresents them. Duplicated
- *   non-repeated fields follow last-one-wins.
+ *   never decode to a model that misrepresents them.
+ * - Singular embedded messages merge recursively. Later scalar values
+ *   replace earlier ones, and repeated fields append in wire order.
  *
  * @param spec Message field schema.
  * @param bytes Encoded message body.
@@ -251,7 +252,14 @@ export function decodeMessage(
   spec: MessageSpec,
   bytes: ByteArray,
 ): Record<string, unknown> {
-  const message: Record<string, unknown> = {}
+  return decodeMessageInto(spec, bytes, {})
+}
+
+function decodeMessageInto(
+  spec: MessageSpec,
+  bytes: ByteArray,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
   const specByNo = new Map<number, FieldSpec>()
   for (const field of spec) specByNo.set(field.no, field)
 
@@ -292,9 +300,15 @@ export function decodeMessage(
       case 'string':
         message[field.name] = bytesToString(wire.value as ByteArray)
         break
-      case 'message':
-        message[field.name] = decodeMessage(field.spec, wire.value as ByteArray)
+      case 'message': {
+        const nested = (message[field.name] ?? {}) as Record<string, unknown>
+        message[field.name] = decodeMessageInto(
+          field.spec,
+          wire.value as ByteArray,
+          nested,
+        )
         break
+      }
       case 'repeated-message': {
         const list = (message[field.name] as unknown[] | undefined) ?? []
         list.push(decodeMessage(field.spec, wire.value as ByteArray))
